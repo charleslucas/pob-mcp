@@ -109,6 +109,10 @@ Install scripts (in this repo):
 
 Some build data cannot be retrieved from the PoE API and requires a brief conversation with the user. Proactively raise these after the relevant operations rather than waiting for the user to notice something is wrong.
 
+### Read the Notes tab first
+
+`lua_import_character` automatically writes an import summary to PoB's Notes tab (the `set_notes` Lua action) recording bandit choice, quest passive status, and pantheon. At the start of a session involving an imported character, call `get_build_notes` or the `get_notes` Lua action to read this — you may already have the answers and won't need to ask the user again.
+
 ### After `lua_import_character`
 
 **1. Bandit choice (always ask)**

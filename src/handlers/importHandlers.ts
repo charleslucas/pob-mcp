@@ -521,6 +521,29 @@ export async function handleImportCharacter(
       }
     }
 
+    // 5c. Append an import summary to the Notes tab so future sessions can
+    //     read back bandit choice, quest status, and other non-API data
+    //     without having to ask the user again.
+    try {
+      const existingNotes = await luaClient.getNotes();
+      const importDate = new Date().toISOString().slice(0, 10);
+      const banditLine = bandit !== null
+        ? `Bandit: ${bandit === 'None' ? 'Kill All (None)' : bandit}`
+        : 'Bandit: NOT SET — ask user (Kill All / Alira / Kraityn / Oak)';
+      const newSection =
+        `\n--- Imported from PoE API: ${importDate} ---\n` +
+        `Character: ${charDataForLua.name} (Level ${charDataForLua.level} ${baseClassFor(charMeta)}` +
+          (ascendancyLabel(charMeta) !== 'None' ? ` / ${ascendancyLabel(charMeta)}` : '') +
+          `, ${charDataForLua.league})\n` +
+        `${banditLine}\n` +
+        `Quest passives: Verify in-game (24 pts from quests across Acts in PoE1)\n` +
+        `Pantheon: NOT SET — configure in PoB Config tab\n` +
+        `---`;
+      await luaClient.setNotes((existingNotes + newSection).trim());
+    } catch {
+      // Non-fatal — notes are a convenience, don't fail the import.
+    }
+
     // 6. Snapshot AFTER and compute the diff.
     const after = await captureBuildSnapshot(luaClient);
 

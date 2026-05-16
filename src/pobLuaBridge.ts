@@ -207,6 +207,17 @@ abstract class PoBApiBase {
     return res.config;
   }
 
+  async getNotes(): Promise<string> {
+    const res = await this.send({ action: "get_notes" });
+    if (!res.ok) throw new Error(res.error || "get_notes failed");
+    return res.notes as string ?? '';
+  }
+
+  async setNotes(text: string): Promise<void> {
+    const res = await this.send({ action: "set_notes", params: { text } });
+    if (!res.ok) throw new Error(res.error || "set_notes failed");
+  }
+
   async createSocketGroup(params?: { label?: string; slot?: string; enabled?: boolean; includeInFullDPS?: boolean }): Promise<any> {
     const res = await this.send({ action: "create_socket_group", params: params || {} });
     if (!res.ok) throw new Error(res.error || "create_socket_group failed");
