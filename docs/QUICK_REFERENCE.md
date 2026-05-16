@@ -1,449 +1,261 @@
-# PoB MCP Server Quick Reference
+# PoB MCP Server — Quick Reference
 
-## Environment Variables Cheat Sheet
+## Environment Variables
 
 ### Required
 ```bash
 POB_DIRECTORY="/path/to/Path of Building/Builds"
 ```
 
-### Lua Bridge (Optional)
+### Lua Bridge
 ```bash
-POB_LUA_ENABLED="true"                              # Enable Lua bridge
-POB_FORK_PATH="/path/to/PathOfBuilding/src"        # Path of Building src location
-POB_CMD="luajit"                                    # LuaJIT command
-POB_TIMEOUT_MS="10000"                              # Request timeout (10s)
+POB_LUA_ENABLED="true"
+POB_FORK_PATH="/path/to/PathOfBuilding/src"   # charleslucas/PathOfBuilding, api-stdio branch
+POB_CMD="luajit"                               # or full path on Windows
+POB_TIMEOUT_MS="30000"                         # default 30 s; bridge auto-restarts on timeout
 ```
 
-### Trade API (Optional)
+### Trade API
 ```bash
-POE_TRADE_ENABLED="true"                           # Enable Trade API tools
+POE_TRADE_ENABLED="true"
+POE_SESSION_ID="<32-hex-POESESSID>"           # private profiles + weighted trade queries
+POE_ACCOUNT_NAME="account#1234"               # default account for lua_list_characters / lua_import_character
 ```
+
+---
 
 ## Tool Quick Reference
 
 ### XML Tools (Always Available)
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `list_builds` | List all builds | "Show me my builds" |
-| `analyze_build` | Full build analysis | "Analyze MyBuild.xml" |
-| `compare_builds` | Compare two builds | "Compare Build1.xml and Build2.xml" |
-| `get_build_stats` | Get stats only | "What are the stats for MyBuild.xml?" |
-| `start_watching` | Monitor for changes | "Start watching builds" |
-| `stop_watching` | Stop monitoring | "Stop watching" |
-| `watch_status` | Check watch status | "Watch status" |
-| `get_recent_changes` | Show recent changes | "What changed recently?" |
-| `refresh_tree_data` | Refresh cached tree data | "Refresh tree data" |
+| Tool | Purpose |
+|------|---------|
+| `list_builds` | List all `.xml` build files |
+| `analyze_build` | Full build analysis (class, stats, skills, items, tree) |
+| `compare_builds` | Side-by-side comparison of two builds |
+| `get_build_stats` | Extract specific stats from build XML |
+| `get_build_notes` | Read build notes |
+| `set_build_notes` | Write build notes |
+| `start_watching` | Monitor builds directory for file changes |
+| `stop_watching` | Stop file monitoring |
+| `watch_status` | Show watcher state and cache info |
+| `get_recent_changes` | List recently modified builds |
+| `refresh_tree_data` | Clear passive tree data cache |
 
-### Lua Bridge Tools (When Enabled)
+### Tree Analysis (Always Available)
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `lua_start` | Initialize bridge | "Start the Lua bridge" |
-| `lua_stop` | Stop bridge | "Stop the Lua bridge" |
-| `lua_load_build` | Load build XML | "Load MyBuild.xml into Lua" |
-| `lua_get_stats` | Get calculated stats | "Get stats from Lua" |
-| `lua_get_tree` | Get tree data | "Show me the tree" |
-| `lua_set_tree` | Update tree | "Set tree to nodes [list]" |
+| Tool | Purpose |
+|------|---------|
+| `compare_trees` | Show node differences between two builds |
+| `get_nearby_nodes` | Find notables/keystones reachable from current allocation |
+| `find_path_to_node` | Shortest path to a target node ID |
+| `get_passive_upgrades` | Suggest passive tree upgrades |
+| `suggest_masteries` | Suggest mastery choices for allocated clusters |
 
-### Phase 3 Tools (Require Lua Bridge)
+### Lua Bridge — Core (Requires `POB_LUA_ENABLED=true`)
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `compare_trees` | Compare builds' trees | "Compare BuildA.xml and BuildB.xml" |
-| `test_allocation` | What-if analysis | "Test allocating Point Blank" |
-| `plan_tree` | Plan from goals | "Plan crit bow Deadeye pathing" |
-| `get_nearby_nodes` | Discover nearby notables | "Nearby life notables within 5" |
-| `find_path_to_node` | Shortest path to node | "Path to node 26725" |
-| `allocate_nodes` | Apply node IDs and diff stats | "Allocate [12345,23456] on MyBuild.xml" |
+| Tool | Purpose |
+|------|---------|
+| `lua_start` | Start the PoB calculation engine |
+| `lua_stop` | Stop and free the engine |
+| `lua_new_build` | Create a blank build for a class/ascendancy |
+| `lua_load_build` | Load a build file into the engine |
+| `lua_save_build` | Save in-memory build to an `.xml` file |
+| `lua_reload_build` | Reload current build from disk |
+| `lua_get_build_info` | Build metadata: class, level, tree version |
+| `set_character_level` | Set level and recalculate all stats |
+| `lua_get_stats` | Calculated stats (`category`: offense / defense / all) |
+| `lua_get_tree` | View class, ascendancy, and all allocated node IDs |
+| `lua_set_tree` | Replace full tree allocation |
+| `update_tree_delta` | Add or remove individual nodes |
+| `search_tree_nodes` | Search passive tree by name or stat text |
+| `list_specs` | List all tree specs in the build |
+| `select_spec` | Switch active tree spec |
+| `create_spec` | Create a new tree spec |
+| `delete_spec` | Delete a tree spec |
+| `rename_spec` | Rename a tree spec |
+| `list_item_sets` | List all item sets |
+| `select_item_set` | Switch active item set |
+| `get_mastery_options` | List mastery cluster options in the current tree |
+| `plan_leveling` | Generate a leveling plan |
+| `lua_list_characters` | List PoE account characters via the official API |
+| `lua_import_character` | Import live tree/items/gems from PoE API into the loaded build |
 
-### Phase 4 Tools (Require Lua Bridge)
+**Class IDs**: 0=Scion 1=Marauder 2=Ranger 3=Witch 4=Duelist 5=Templar 6=Shadow
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `add_item` | Add item from text | "Add this weapon: [item text]" |
-| `get_equipped_items` | View equipped items | "What items do I have equipped?" |
-| `toggle_flask` | Activate/deactivate flask | "Activate flask 1" |
-| `get_skill_setup` | View skill configuration | "Show me my skill setup" |
-| `set_main_skill` | Change main skill | "Set main skill to socket group 2" |
+### Lua Bridge — Items & Skills
 
-### Phase 6 Tools (Require Lua Bridge)
+| Tool | Purpose |
+|------|---------|
+| `add_item` | Add item from PoE clipboard text |
+| `add_multiple_items` | Add multiple items at once |
+| `get_equipped_items` | List all equipped gear |
+| `toggle_flask` | Activate/deactivate flask 1–5 |
+| `get_skill_setup` | Show all socket groups with gems |
+| `set_main_skill` | Set DPS calculation source (group/gem) |
+| `create_socket_group` | Create a new socket group |
+| `add_gem` | Add a gem (name, level, quality) |
+| `set_gem_level` | Set gem level by group + gem index |
+| `set_gem_quality` | Set gem quality type (Default/Anomalous/Divergent/Phantasmal) |
+| `remove_gem` | Remove a gem |
+| `remove_skill` | Remove an entire socket group |
+| `setup_skill_with_gems` | Create group with active + supports in one call |
+| `toggle_socket_group` | Enable or disable a socket group |
+| `toggle_gem` | Enable or disable a single gem |
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `analyze_defenses` | Identify defensive gaps | "Analyze defenses for MyBuild.xml" |
-| `suggest_optimal_nodes` | Rank best nodes for a goal | "Suggest nodes to maximize life" |
-| `optimize_tree` | Full reallocation optimizer | "Optimize tree for balanced goals" |
+### Lua Bridge — Build Optimization
+
+| Tool | Purpose |
+|------|---------|
+| `analyze_defenses` | 3-layer defensive audit (avoidance/mitigation/recovery) |
+| `suggest_optimal_nodes` | Archetype-aware node suggestions by goal |
+| `optimize_tree` | Recommend nearby nodes for a goal |
+| `analyze_items` | Slot-by-slot item analysis with upgrade priorities |
+| `optimize_skill_links` | Audit support gems for gaps |
+| `create_budget_build` | Generate a starter build plan |
+| `get_build_issues` | Prioritized list of problems and suggestions |
+| `check_boss_readiness` | Evaluate boss encounter readiness |
+| `suggest_watchers_eye` | Suggest Watcher's Eye mods for the build's auras |
+| `find_best_anointment` | Rank all anointable notables by DPS/EHP impact |
+
+**`suggest_optimal_nodes` goals**: `damage` `defense` `life` `es` `resist` `speed`
+
+### Configuration & Enemy Settings
+
+| Tool | Purpose |
+|------|---------|
+| `get_config` | View bandit, pantheon, enemy settings |
+| `set_config` | Toggle charges, buffs, boss mode, conditions |
+| `set_enemy_stats` | Set enemy level/resistances for DPS scenarios |
+| `save_config_preset` | Save current config as a named preset |
+| `load_config_preset` | Load a saved config preset |
+| `list_config_presets` | List all saved config presets |
+
+### Build Validation
+
+| Tool | Purpose |
+|------|---------|
+| `validate_build` | Full health check — resistances, life, mana, defenses, immunities, accuracy |
+
+Returns critical issues, warnings, and info with 0–10 health score. Uses Lua engine when available.
+
+### Skill Gem Analysis
+
+| Tool | Purpose |
+|------|---------|
+| `analyze_skill_links` | Evaluate supports and detect build archetype |
+| `suggest_support_gems` | Ranked support recommendations with DPS estimates |
+| `validate_gem_quality` | Find gems needing quality, awakened paths, corruption |
+| `compare_gem_setups` | Side-by-side structural comparison |
+| `find_optimal_links` | Best support combo for a 4/5/6-link and budget |
+| `gem_upgrade_path` | Upgrade path (awakened variants, quality tiers) |
+
+**Budget tiers**: `league_start` `mid_league` `endgame`
+
+### Build Export & Persistence
+
+| Tool | Purpose |
+|------|---------|
+| `export_build` | Copy build to a new XML file with optional notes |
+| `save_tree` | Write passive tree back to an existing build file |
+| `snapshot_build` | Create a versioned snapshot |
+| `list_snapshots` | List all snapshots for a build |
+| `restore_snapshot` | Restore from a snapshot |
+| `export_build_summary` | Export a human-readable build summary |
+
+### Currency & Market Data (poe.ninja)
+
+| Tool | Purpose |
+|------|---------|
+| `get_currency_rates` | Live exchange rates (Chaos Orb equivalent) |
+| `find_arbitrage` | Detect profitable currency trading loops |
+| `calculate_trading_profit` | Evaluate a specific trading chain |
+
+### Trade API (Requires `POE_TRADE_ENABLED=true`)
+
+| Tool | Purpose |
+|------|---------|
+| `search_trade_items` | Search with stat/rarity filters, price, links, `online_status` |
+| `get_item_price` | Price stats (min/max/median/avg) from recent listings |
+| `get_leagues` | List available leagues |
+| `search_stats` | Look up Trade API stat IDs |
+| `find_item_upgrades` | Best upgrade candidates for your build |
+| `find_resistance_gear` | Affordable gear to cap specific resistances |
+| `compare_trade_items` | Compare multiple trade listings |
+| `search_cluster_jewels` | Search cluster jewels by notable |
+| `analyze_build_cluster_jewels` | Evaluate cluster jewel setups for a build |
+| `generate_shopping_list` | Prioritized shopping list from build analysis |
+| `find_weighted_trade_items` | BIS search using PoB's internal stat weights (needs `POE_SESSION_ID`) |
+
+---
 
 ## Common Workflows
 
-### Workflow 1: Quick Build Check
+### Quick build check (XML only)
 ```
-1. "Show me my builds"
-2. "Analyze CritBow.xml"
-```
-
-### Workflow 2: High-Fidelity Stats
-```
-1. "Start Lua bridge"
-2. "Load MyBuild.xml into Lua"
-3. "Get stats from Lua"
-4. "Stop Lua bridge"
+list_builds → analyze_build → validate_build
 ```
 
-### Workflow 3: Tree Optimization
+### High-fidelity stats
 ```
-1. "Start Lua bridge"
-2. "Load MyBuild.xml"
-3. "Nearby life notables within 5"
-4. "Path to node 26725"
-5. "Allocate [<path node ids>] on MyBuild.xml"
-6. "Test allocating Point Blank" (what-if)
-7. "Stop bridge"
+lua_start → lua_load_build → lua_get_stats (category: defense) → validate_build
 ```
 
-### Workflow 4: Build Planning
+### Import live character
 ```
-1. "Help me plan a [archetype] [class/ascendancy]"
-2. [Review recommendations]
-3. "Start Lua bridge"
-4. "Load a template build"
-5. "Set tree to recommended nodes"
-6. "Get stats to verify"
+lua_start → lua_list_characters → lua_new_build → lua_import_character → lua_save_build
 ```
 
-### Workflow 5: Build Comparison with Modifications
+### Passive tree optimization
 ```
-1. "Start Lua bridge"
-2. "Load BuildA.xml"
-3. "Get stats"
-4. "Compare BuildA.xml and BuildB.xml"
-5. "Test allocating [list] on BuildA.xml"
-6. "Stop bridge"
+lua_load_build → suggest_optimal_nodes (goal: life) → search_tree_nodes →
+update_tree_delta → lua_get_stats → lua_save_build
 ```
 
-### Workflow 6: Test Gear Upgrade (Phase 4)
+### Find best anointment
 ```
-1. "Start bridge and load build"
-2. "What items do I have equipped?"
-3. "Get current DPS"
-4. "Add this weapon: [item text from trade]"
-5. "Activate diamond flask"
-6. "Get new DPS"
-7. "Calculate upgrade value"
+lua_load_build → find_best_anointment (slot: Amulet, focus: both)
 ```
 
-### Workflow 7: Complete Build Creation (Phase 4)
+### Weighted BIS search
 ```
-1. "Start bridge, load template"
-2. "Set tree to [optimized nodes]"
-3. "Add items: [paste all gear]"
-4. "Set main skill to group 1"
-5. "Activate damage flasks"
-6. "Get final stats"
-7. "Export as [BuildName.xml]"
+lua_load_build → find_weighted_trade_items (league: Mirage, slot: Belt)
 ```
 
-## Class and Ascendancy IDs
-
-### Class IDs
-- 0: Scion
-- 1: Marauder
-- 2: Ranger
-- 3: Witch
-- 4: Duelist
-- 5: Templar
-- 6: Shadow
-
-### Ascendancy IDs (by Class)
-
-#### Scion (0)
-- 0: None
-- 1: Ascendant
-
-#### Marauder (1)
-- 0: None
-- 1: Juggernaut
-- 2: Berserker
-- 3: Chieftain
-
-#### Ranger (2)
-- 0: None
-- 1: Raider
-- 2: Deadeye
-- 3: Pathfinder
-
-#### Witch (3)
-- 0: None
-- 1: Occultist
-- 2: Elementalist
-- 3: Necromancer
-
-#### Duelist (4)
-- 0: None
-- 1: Slayer
-- 2: Gladiator
-- 3: Champion
-
-#### Templar (5)
-- 0: None
-- 1: Inquisitor
-- 2: Hierophant
-- 3: Guardian
-
-#### Shadow (6)
-- 0: None
-- 1: Assassin
-- 2: Trickster
-- 3: Saboteur
-
-## Notable Keystone Node IDs
-
-Common keystones you might reference:
-
-| Keystone | Node ID | Effect Summary |
-|----------|---------|----------------|
-| Acrobatics | 29017 | +30% Spell Dodge, -30% Armour/ES |
-| Ancestral Bond | 26725 | +1 Totem, you deal no damage |
-| Avatar of Fire | 58833 | 50% phys → fire, deal no non-fire |
-| Blood Magic | 61259 | Spend life instead of mana |
-| Chaos Inoculation | 61834 | 1 max life, immune to chaos |
-| Conduit | 43988 | Share charges with party |
-| Crimson Dance | 60783 | +100% bleed DPS, 8 stacks, no move multiplier |
-| Eldritch Battery | 36949 | ES protects mana instead of life |
-| Elemental Equilibrium | 54307 | -50% res to hit types, +25% others |
-| Elemental Overload | 24970 | +40% ele damage, no crits |
-| Ghost Reaver | 48410 | Leech to ES instead of life |
-| Glancing Blows | 59585 | Double block, 65% damage taken when block |
-| Iron Grip | 6910 | STR bonus to projectile attack damage |
-| Iron Reflexes | 23852 | Evasion → armour |
-| Mind Over Matter | 41536 | 30% damage taken from mana |
-| Minion Instability | 43688 | Minions explode at low life |
-| Pain Attunement | 37984 | 30% more spell damage on low life |
-| Perfect Agony | 42148 | Crits don't multiply ailment damage, +50% multi as DoT multi |
-| Phase Acrobatics | 31703 | +30% spell dodge |
-| Point Blank | 33753 | More proj damage close, less far |
-| Resolute Technique | 59859 | Never crit, always hit |
-| Runebinder | 55503 | +1 Brand, brands attach to rare/unique |
-| Unwavering Stance | 20551 | Cannot evade, cannot be stunned |
-| Vaal Pact | 28127 | Instant leech, no regen |
-| Zealot's Oath | 3655 | Regen to ES instead of life |
-
-## Equipment Slot Names (Phase 4)
-
-Use these exact slot names with `add_item`:
-
-### Weapons & Shields
-- `"Weapon 1"`, `"Weapon 2"` - Main hand / off hand
-- `"Weapon 1 Swap"`, `"Weapon 2 Swap"` - Weapon swap set
-
-### Armour
-- `"Helmet"`
-- `"Body Armour"`
-- `"Gloves"`
-- `"Boots"`
-
-### Accessories
-- `"Amulet"`
-- `"Ring 1"`, `"Ring 2"`
-- `"Belt"`
-
-### Flasks
-- `"Flask 1"` through `"Flask 5"`
-
-### Jewels
-- `"Jewel 1"`, `"Jewel 2"`, etc. (based on tree allocation)
-- Abyssal sockets in items
-
-### Example Usage
+### Boss DPS scenario
 ```
-"Add this ring to Ring 2: [item text]"
-"Add this flask to Flask 1: [item text]"
+lua_load_build → set_enemy_stats (level: 84, resistances...) →
+set_config (enemyIsBoss: true) → lua_get_stats (category: offense)
 ```
 
-## Common Node Clusters
+---
 
-### Life/Defense Clusters
+## Common Stat Keys for `lua_get_stats`
 
-| Cluster | Starting Node | Notes |
-|---------|---------------|-------|
-| Constitution | 26725 | Major life wheel, Marauder area |
-| Devotion | 2491 | Life wheel, Templar area |
-| Heart of Oak | 36858 | Life/regen, Ranger area |
-| Quick Recovery | 12613 | Life/regen, Scion area |
-| Sanctity | 6230 | Life/ES, Templar area |
-| Thick Skin | 18865 | Life/Evasion, Shadow area |
+| Key | Description |
+|-----|-------------|
+| `TotalDPS` / `CombinedDPS` | Total / combined skill DPS |
+| `MinionTotalDPS` | Minion DPS (for summoner builds) |
+| `Life` / `EnergyShield` / `Mana` | Pool sizes |
+| `TotalEHP` | Effective hit pool |
+| `Armour` / `Evasion` / `Ward` | Mitigation/avoidance ratings |
+| `FireResist` / `ColdResist` / `LightningResist` / `ChaosResist` | Resistances |
+| `BlockChance` / `SpellBlockChance` | Block chances |
+| `EffectiveSpellSuppressionChance` | Spell suppression |
+| `CritChance` / `CritMultiplier` | Crit stats |
+| `Speed` | Attack/cast speed |
 
-### Damage Clusters
+---
 
-| Cluster | Starting Node | Notes |
-|---------|---------------|-------|
-| Assassination | 43988 | Crit multi, Shadow area |
-| Berserking | 32325 | Attack speed, Duelist area |
-| Devastating Devices | 44169 | Trap/mine damage |
-| Essence Surge | 11186 | ES/ES regen, Witch area |
-| Force Shaper | 19968 | Weapon ele damage, Shadow area |
-| Lava Lash | 58370 | Fire weapon damage, Marauder area |
-| Twin Terrors | 56370 | Dual wield damage, Shadow area |
+## Error Quick Guide
 
-## Common Stat Field Names
-
-Use these with `lua_get_stats` to request specific stats:
-
-### Offense
-- `TotalDPS` - Total damage per second
-- `CombinedDPS` - Combined skill DPS
-- `CritChance` - Critical strike chance
-- `CritMultiplier` - Critical strike multiplier
-- `HitChance` - Chance to hit
-- `Speed` - Attack/cast speed
-- `ManaCost` - Skill mana cost
-
-### Defense
-- `Life` - Maximum life
-- `EnergyShield` - Maximum ES
-- `Mana` - Maximum mana
-- `Armour` - Armour rating
-- `Evasion` - Evasion rating
-- `Ward` - Maximum ward
-- `LifeRegen` - Life regeneration per second
-- `ManaRegen` - Mana regeneration per second
-- `ESRegen` - ES regeneration per second
-
-### Resistances
-- `FireResist` - Fire resistance
-- `ColdResist` - Cold resistance
-- `LightningResist` - Lightning resistance
-- `ChaosResist` - Chaos resistance
-- `FireResistOverCap` - Fire resist over cap
-- `ColdResistOverCap` - Cold resist over cap
-- `LightningResistOverCap` - Lightning resist over cap
-
-### Block/Dodge
-- `BlockChance` - Attack block chance
-- `SpellBlockChance` - Spell block chance
-- `DodgeChance` - Attack dodge chance (if available)
-- `SpellDodgeChance` - Spell dodge chance (if available)
-
-### Misc
-- `Str` - Strength
-- `Dex` - Dexterity
-- `Int` - Intelligence
-- `EffectiveMovementSpeedMod` - Movement speed modifier
-
-## Error Messages Quick Guide
-
-| Error | Meaning | Solution |
-|-------|---------|----------|
-| "luajit command not found" | LuaJIT not installed | Install LuaJIT: `brew install luajit` |
-| "Failed to find valid ready banner" | Fork path incorrect | Check POB_FORK_PATH setting |
-| "Timed out waiting for response" | Process hung or slow | Increase POB_TIMEOUT_MS |
-| "build not initialized" | No build loaded | Use lua_load_build first |
-| "Process not started" | Bridge not running | Use lua_start first |
-| "Concurrent request not supported" | Two requests at once | Wait for first request to complete |
-
-## Tips and Best Practices
-
-### Performance
-- Lua bridge stays running between requests (faster)
-- First stat calculation is slower (initializes)
-- Subsequent calculations use cached data
-- Stop bridge when done for long period
-
-### Accuracy
-- Lua bridge stats > XML parsed stats (always)
-- Lua uses actual PoB calculation engine
-- XML parsing is approximate/incomplete
-- Use Lua for optimization decisions
-
-### Workflow
-- Use XML tools for quick checks
-- Use Lua bridge for detailed work
-- Preview before committing tree changes
-- Stop bridge to free resources
-
-### Debugging
-- Check Claude Desktop logs for errors
-- Test luajit manually: `luajit -v`
-- Verify fork path: `ls $POB_FORK_PATH/HeadlessWrapper.lua`
-- Test PoB fork manually: `cd $POB_FORK_PATH && luajit HeadlessWrapper.lua`
-
-## Build Archetype Keywords
-
-Use these when asking for build planning help:
-
-### Damage Types
-- Physical, Fire, Cold, Lightning, Chaos
-- Elemental, Physical, Poison, Bleed, Ignite
-- DoT (Damage over Time)
-
-### Attack Types
-- Melee, Ranged, Bow, Wand, Spell
-- Totem, Trap, Mine, Brand
-- Minion, Summoner
-
-### Defense Styles
-- Life, ES (Energy Shield), Hybrid (Life+ES)
-- Armour, Evasion, Block, Dodge
-- Leech, Regen, Gain on Hit
-
-### Build Focuses
-- Crit (Critical Strike)
-- Non-crit, Resolute Technique
-- Elemental, Physical
-- Attack Speed, Slow hard-hitting
-- Tankiness, Glass Cannon
-- League Start, Budget, Endgame
-
-### Example Queries
-- "Cold DoT Occultist with ES and high cold res"
-- "Physical bow crit Deadeye with evasion"
-- "RF Chieftain with life and armour"
-- "Max block spell suppression Gladiator"
-- "CI ES recharge Trickster"
-- "Minion necromancer with aura stacking"
-
-## Quick Start Checklist
-
-### First Time Setup
-- [ ] Install Node.js
-- [ ] Clone/download pob-mcp-server
-- [ ] Run `npm install`
-- [ ] Run `npm run build`
-- [ ] Configure Claude Desktop with POB_DIRECTORY
-- [ ] Restart Claude Desktop
-- [ ] Test: "Show me my builds"
-
-### Enable Lua Bridge (Optional)
-- [ ] Install LuaJIT
-- [ ] Clone PathOfBuilding (api-stdio branch)
-- [ ] Add POB_LUA_ENABLED=true to config
-- [ ] Add POB_FORK_PATH to config
-- [ ] Restart Claude Desktop
-- [ ] Test: "Start the Lua bridge"
-
-## Support and Resources
-
-- **GitHub**: https://github.com/yourusername/pob-mcp-server
-- **Testing Guide**: See TESTING_GUIDE.md
-- **Full Documentation**: See README.md
-- **PoB API Fork**: https://github.com/Dulluhan/pob-api
-- **MCP Protocol**: https://modelcontextprotocol.io
-
-## Version Information
-
-- **Current Version**: Phase 4 Complete
-- **Total Tools**: 91
-- **MCP SDK**: @modelcontextprotocol/sdk
-- **Node.js**: 14+ required
-- **LuaJIT**: 2.0+ required (for bridge)
-- **PoB Fork**: Compatible with LocalIdentity's fork
-
-### What's New in Phase 4
-- Item management (add items from PoE text)
-- Equipment viewing
-- Flask activation control
-- Skill configuration
-- Main skill selection
-- Complete build modification workflows
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `luajit command not found` | LuaJIT not installed / wrong path | Set `POB_CMD` to the full path |
+| `Failed to find valid ready banner` | Wrong `POB_FORK_PATH` | Must contain `HeadlessWrapper.lua` |
+| `Timed out waiting for PoB response` | Request took too long | Bridge auto-restarts; retry the call |
+| `build not initialized` | No build loaded | Use `lua_load_build` first |
+| `unknown action: save_build` | Old PoB fork | Update to latest `api-stdio` branch |
+| HTTP 403 on character import | Private profile | Set `POE_SESSION_ID` |
+| HTTP 404 on character import | Wrong account/character name | Include discriminator (account#1234) |
+| HTTP 429 on trade API | Rate limited | Wait a moment and retry |

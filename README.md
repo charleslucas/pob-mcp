@@ -132,9 +132,10 @@ npm run build
 | `POB_LUA_ENABLED` | `false` | Set `"true"` to enable Lua bridge |
 | `POB_FORK_PATH` | `~/Projects/PathOfBuilding/src` | Path to PathOfBuilding/src |
 | `POB_CMD` | `luajit` | LuaJIT binary path |
-| `POB_TIMEOUT_MS` | `10000` | Lua request timeout (ms) |
+| `POB_TIMEOUT_MS` | `30000` | Lua request timeout (ms). On timeout the bridge auto-restarts. |
 | `POE_TRADE_ENABLED` | `false` | Enable Trade API tools |
-| `POE_SESSION_ID` | (none) | POESESSID cookie value, used for fetching private PoE profiles via `lua_import_character` / `lua_list_characters`. **Sensitive** — treat like a password; do not commit or share. |
+| `POE_SESSION_ID` | (none) | POESESSID cookie value. Required for private PoE profiles (`lua_import_character`, `lua_list_characters`) and for weighted trade queries (`find_weighted_trade_items`). **Sensitive** — treat like a password; do not commit or share. |
+| `POE_ACCOUNT_NAME` | (none) | Default PoE account name (with discriminator, e.g. `account#1234`). Used as fallback when `account_name` is not passed to `lua_list_characters` / `lua_import_character`. |
 
 ### Setting Up the Lua Bridge
 
@@ -151,15 +152,15 @@ sudo apt-get install luajit
 # Windows: download from https://luajit.org/ and add to PATH
 ```
 
-#### 2. Clone PathOfBuilding
+#### 2. Clone PathOfBuilding (API fork)
 ```bash
-git clone https://github.com/ianderse/PathOfBuilding.git
+git clone https://github.com/charleslucas/PathOfBuilding.git
 cd PathOfBuilding
-git checkout dev
+git checkout api-stdio
 ```
 Note the full path to the `src/` directory — that's your `POB_FORK_PATH`.
 
-> **Note**: the JSON-RPC API now lives on the `dev` branch (the head of upstream PR [PathOfBuildingCommunity/PathOfBuilding#9505](https://github.com/PathOfBuildingCommunity/PathOfBuilding/pull/9505)), kept in sync with `PathOfBuildingCommunity/dev`. The older `api-stdio` branch is stale and missing recent tree-version data — using it will crash on `lua_load_build` for current-league builds.
+This fork includes the headless JSON-RPC API, 3.28 (Mirage) tree data, all missing handler fixes, and compatibility patches for the headless Lua environment.
 
 #### 3. Verify
 ```bash
@@ -191,7 +192,7 @@ For **private profiles** (the PoE default), set `POE_SESSION_ID` to your `POESES
 
 ## Available Tools
 
-The server registers **93 tools** across 10 categories.
+The server registers **99 tools** across 10 categories.
 
 ### XML-Based Tools (Always Available)
 
@@ -270,6 +271,8 @@ The server registers **93 tools** across 10 categories.
 | `remove_gem` | Remove a gem by group + gem index |
 | `remove_skill` | Remove an entire socket group |
 | `setup_skill_with_gems` | Create a socket group with active gem + supports in one call |
+| `toggle_socket_group` | Enable or disable an entire socket group |
+| `toggle_gem` | Enable or disable a single gem within a socket group |
 
 **Slot names**: `Weapon 1`, `Weapon 2`, `Helmet`, `Body Armour`, `Gloves`, `Boots`, `Amulet`, `Ring 1`, `Ring 2`, `Belt`, `Flask 1`–`Flask 5`
 
@@ -286,6 +289,8 @@ The server registers **93 tools** across 10 categories.
 | `get_build_issues` | Get prioritized list of build problems and suggestions |
 | `check_boss_readiness` | Evaluate readiness for specific boss encounters |
 | `suggest_watchers_eye` | Suggest Watcher's Eye mods for the build's auras |
+| `find_best_anointment` | Rank all ~400 anointable notables by DPS/EHP impact using PoB's MiscCalculator (non-destructive; same engine as the GUI anoint picker) |
+| `get_mastery_options` | List all mastery cluster options in the current passive tree |
 
 **`suggest_optimal_nodes` goals**: `damage`, `defense`, `life`, `es`, `resist`, `speed`
 
@@ -357,7 +362,7 @@ Rates are updated every 5 minutes from poe.ninja. Pass the **exact** league name
 
 | Tool | Description |
 |---|---|
-| `search_trade_items` | Search trade with stat filters, price range, link count |
+| `search_trade_items` | Search trade with stat/rarity filters, price range, link count, `online_status` |
 | `get_item_price` | Price statistics (min/max/median/average) for an item |
 | `get_leagues` | List available leagues |
 | `search_stats` | Look up Trade API stat IDs |
@@ -367,6 +372,7 @@ Rates are updated every 5 minutes from poe.ninja. Pass the **exact** league name
 | `search_cluster_jewels` | Search for cluster jewels by notable |
 | `analyze_build_cluster_jewels` | Evaluate cluster jewel setups for a build |
 | `generate_shopping_list` | Generate a prioritized shopping list from build analysis |
+| `find_weighted_trade_items` | BIS search using PoB's TradeQueryGenerator — items ranked by real DPS/EHP impact for the loaded build. Requires `POB_LUA_ENABLED=true` and `POE_SESSION_ID`. |
 
 ---
 
@@ -446,20 +452,24 @@ ls "$POB_FORK_PATH/Modules/"              # must exist
 
 **Stats don't match PoB GUI**
 - Check bandit/pantheon/enemy settings with `get_config`
-- Ensure the correct tree spec is active in the XML
-- Make sure your PathOfBuilding fork is on the `api-stdio` branch and up to date
+- Ensure the correct tree spec is active — use `list_specs` and `select_spec` to switch
+- Verify your PathOfBuilding fork (`charleslucas/PathOfBuilding`, `api-stdio` branch) is up to date
 
-**Bridge becomes unresponsive**
+**Build is on 3.28 (Mirage) and tree looks wrong**
+- Ensure you have the latest `api-stdio` branch — it includes 3.28 tree data and Timeless Jewel graceful-degradation patches
+- `get_mastery_options` and `search_tree_nodes` use the full 3.28 tree node database
+
+**Bridge becomes unresponsive / times out**
+The bridge now auto-restarts after a timeout — just retry the failed request. If you need to force a clean reset:
 ```
-lua_stop → wait a moment → lua_start
+lua_stop → lua_start
 ```
-If still unresponsive, restart Claude Desktop.
 
 **Nodes dropped after `lua_set_tree`**
 Nodes must form a valid connected path from the class starting node. Disconnected nodes are silently dropped by PoB. Ensure all intermediate nodes are included.
 
 **`lua_save_build` doesn't persist gem changes**
-Gem modifications made via `add_gem`, `set_gem_level`, `set_gem_quality` are currently held in Lua memory and are not serialized back to the XML on save. This is a known limitation.
+Gem modifications made via `add_gem`, `set_gem_level`, `set_gem_quality` are held in Lua memory and are included in `lua_save_build` output. However, if you reload the build file in the PoB GUI, it may not show those changes because the GUI re-parses from its own in-memory state. Use `lua_reload_build` to sync the headless engine from disk after saving.
 
 ---
 

@@ -34,7 +34,9 @@ Fine-tune the Trade API behavior with these optional environment variables:
   "env": {
     "POE_TRADE_ENABLED": "true",
     "POE_RATE_LIMIT_PER_SECOND": "4",
-    "POE_CACHE_TTL": "300"
+    "POE_CACHE_TTL": "300",
+    "POE_SESSION_ID": "<your-POESESSID>",
+    "POE_ACCOUNT_NAME": "account#1234"
   }
 }
 ```
@@ -43,12 +45,49 @@ Fine-tune the Trade API behavior with these optional environment variables:
 - `POE_TRADE_ENABLED`: Set to "true" to enable Trade API (required)
 - `POE_RATE_LIMIT_PER_SECOND`: Requests per second limit (default: 4)
 - `POE_CACHE_TTL`: Cache time-to-live in seconds (default: 300)
+- `POE_SESSION_ID`: Your `POESESSID` cookie from pathofexile.com. Required for `find_weighted_trade_items` (the PoE trade API rejects anonymous weighted-stat queries) and for importing private character profiles. Treat like a password.
+- `POE_ACCOUNT_NAME`: Default account name (with discriminator) for character import tools.
 
 ### 3. Restart Claude Desktop
 
 After updating the configuration, restart Claude Desktop for changes to take effect.
 
 ## Available Tools
+
+### `find_weighted_trade_items` (Lua Bridge + Trade API)
+
+Find best-in-slot items ranked by **real DPS/EHP impact** for the currently loaded build, using PoB's own `TradeQueryGenerator` engine — the same system the GUI uses when you click "Find Upgrade". Requires `POB_LUA_ENABLED=true` and `POE_SESSION_ID` (the trade API rejects anonymous weighted-stat queries).
+
+**Parameters:**
+- `league` (required): Exact league name (e.g., "Mirage", "Standard")
+- `slot` (required): Equipment slot (e.g., "Belt", "Helmet", "Body Armour", "Ring 1")
+- `options`: Override stat weights, influence filters, max price, etc.
+- `limit`: Number of listings to fetch details for (default: 5, max: 10)
+
+**Example:**
+```
+Find the best belt upgrade for my loaded Cyclone build in Mirage league
+```
+
+**What makes this different from `search_trade_items`:** the search weights are generated directly from the build's stats — a str-stacking build will weight `+str` mods heavily, a life build will weight life heavily, etc. You don't need to specify stat filters manually.
+
+---
+
+### `find_best_anointment`
+
+Ranks all anointable notables (~400 total) by their DPS/EHP impact on the loaded build using PoB's `MiscCalculator`. Non-destructive — doesn't modify the build state. Requires `POB_LUA_ENABLED=true` and an anointable item in the target slot (any Amulet, or a Cord Belt for the Belt slot).
+
+**Parameters:**
+- `slot` (required): `"Amulet"` or `"Belt"`
+- `focus`: `"dps"`, `"defence"`, or `"both"` (default)
+- `max_results`: Number of top candidates to return (default: 10)
+
+**Example:**
+```
+Find the best anointment for my amulet on the loaded build
+```
+
+---
 
 ### 1. `get_leagues`
 
@@ -75,7 +114,7 @@ Search for items matching specific criteria.
 - `item_type`: Base type (e.g., "Corsair Sword")
 - `min_price`, `max_price`: Price range in specified currency
 - `price_currency`: Currency type (default: "chaos")
-- `online_only`: Only show online sellers (default: true)
+- `online_status`: Seller availability filter — `"available"` (default), `"online"`, `"onlineleague"`, `"securable"` (instant buyout only), or `"any"`
 - `rarity`: Item rarity filter ("normal", "magic", "rare", "unique", "any")
 - `min_links`: Minimum linked sockets (e.g., 6 for 6-link)
 - `stats`: Array of stat requirements
@@ -247,32 +286,22 @@ The Trade API returns prices in the currency sellers specify. Common currencies:
 
 ## Limitations
 
-1. **No Authentication**: Currently only supports public searches (no account-specific features)
-2. **Rate Limits**: Limited to ~4 requests/second (conservative)
-3. **Search Results**: Maximum 10 items per request
-4. **Cache Staleness**: Prices may be up to 5 minutes old
-5. **Stat Mapping**: Some complex mods may not have direct stat IDs
-
-## Future Enhancements
-
-Planned features:
-- **Item upgrade recommendations**: Automated suggestions based on build analysis
-- **Resistance gap solver**: Find cheapest gear combination to cap resists
-- **Budget build planner**: Create shopping lists within budget constraints
-- **Price history tracking**: Trend analysis for items
-- **Bulk search**: Search multiple item types at once
+1. **Rate Limits**: Limited to ~4 requests/second (configurable)
+2. **Search Results**: Maximum 10 items per request
+3. **Cache Staleness**: Prices may be up to 5 minutes old
+4. **Stat Mapping**: Some complex mods may not have direct stat IDs
+5. **`find_weighted_trade_items` requires auth**: The PoE trade API rejects anonymous weighted-stat queries — set `POE_SESSION_ID`.
 
 ## Support
 
 If you encounter issues:
-1. Check Trade API is enabled in config
+1. Check `POE_TRADE_ENABLED=true` is in your config
 2. Verify Claude Desktop was restarted after config changes
-3. Check console logs for error details
-4. Ensure network connectivity to pathofexile.com
-5. Report issues at https://github.com/ianderse/pob-mcp-server/issues
+3. Ensure network connectivity to pathofexile.com
+4. For `find_weighted_trade_items` failures, verify `POE_SESSION_ID` is set and not expired
+5. Report issues at https://github.com/charleslucas/pob-mcp/issues
 
 ## References
 
 - [Path of Exile Trade API Documentation](https://www.pathofexile.com/developer/docs)
-- [pob-mcp-server README](../README.md)
-- [Trade API Implementation Plan](../TRADE_API_IMPLEMENTATION_PLAN.md)
+- [pob-mcp README](../README.md)

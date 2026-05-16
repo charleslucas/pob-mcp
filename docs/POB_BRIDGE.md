@@ -1,10 +1,11 @@
 # PoB Headless Bridge Plan
 
-This document outlines how we will integrate the forked Path of Building (PoB) headless API into this MCP server to power high‑fidelity calculations and live tree edits.
+This document describes the Path of Building headless API integration powering high‑fidelity calculations and live tree edits.
 
 ## Overview
-- Goal: Use the forked PoB headless API to load builds, compute stats, and edit passive trees from MCP tools.
-- Fork location: `~/Projects/PathOfBuilding` (API server runs from `~/Projects/PathOfBuilding/src`).
+- **Status**: Implemented and working. The headless stdio bridge spawns LuaJIT with PoB's calculation engine.
+- Fork: `charleslucas/PathOfBuilding`, branch `api-stdio` (API server lives in `src/API/`)
+- Fork location: set `POB_FORK_PATH` to the path of the `src/` directory.
 - Transport: stdio JSON lines (one line per request/response), long‑lived process. Optional TCP (embedded in GUI) on 127.0.0.1:POB_API_TCP_PORT.
 - Bridge: `src/pobLuaBridge.ts` spawns and talks to the PoB API.
 - Rollout: Feature‑flagged; graceful fallback to current XML‑only analysis if headless is unavailable.
@@ -14,7 +15,7 @@ This document outlines how we will integrate the forked Path of Building (PoB) h
   - Start: On first “lua_*” tool call (or explicit `lua_start`).
   - Stop: On MCP shutdown (or explicit `lua_stop`).
 - Node bridge (already added): `src/pobLuaBridge.ts`
-  - Spawns `luajit HeadlessWrapper.lua` in `~/Projects/PathOfBuilding/src` with `POB_API_STDIO=1`.
+  - Spawns `luajit HeadlessWrapper.lua` in `$POB_FORK_PATH` with `POB_API_STDIO=1`.
   - Methods: `start()`, `stop()`, `ping()`, `loadBuildXml()`, `getStats()`, `getTree()`, `setTree()`.
 - Fork API (implemented): `load_build_xml`, `get_stats`, `get_tree`, `set_tree`, `quit`.
 
@@ -116,7 +117,7 @@ Notes
 Because the server binds to `127.0.0.1` on the Windows PC, it is not reachable across the network. Use SSH port forwarding:
 1) From macOS, create a tunnel to Windows (replace IP and user):
 ```bash
-ssh -L 31337:127.0.0.1:31337 iande@192.168.x.x
+ssh -L 31337:127.0.0.1:31337 youruser@192.168.x.x
 ```
 2) On macOS, point your client to `127.0.0.1:31337` (traffic tunnels to Windows PoB).
 
@@ -132,7 +133,7 @@ await api.stop();
 ```
 
 ### Common issues
-- Hostname resolution (SSH): On macOS, `ssh iande@IanPC` may fail if `IanPC` isn’t in DNS. Use the Windows IP or add an `/etc/hosts` entry.
+- Hostname resolution (SSH): Hostname-only SSH may fail if not in DNS. Use the machine’s IP address or add an `/etc/hosts` entry.
 - `TcpTestSucceeded: false`: Indicates nothing is listening on the tested port. Ensure PoB GUI was launched with `POB_API_TCP=1` and that you’re testing `localhost:31337` on the Windows machine (or via an SSH tunnel).
 - Remote access: Changing `TcpServer.lua` to bind `0.0.0.0` would expose the port, but is not recommended. Prefer tunneling for safety.
 
@@ -194,7 +195,7 @@ Notes
 4. Add configuration
    - Env vars (with defaults):
      - `POB_LUA_ENABLED` (default: false)
-     - `POB_FORK_PATH` (default: `~/Projects/PathOfBuilding/src`)
+     - `POB_FORK_PATH` (default: `~/Projects/PathOfBuilding/src`) — use `charleslucas/PathOfBuilding`, branch `api-stdio`
      - `POB_CMD` (default: `luajit`)
      - `POB_ARGS` (default: `HeadlessWrapper.lua`)
      - `POB_TIMEOUT_MS` (default: `10000`)
@@ -244,7 +245,7 @@ Notes
 
 ## Prerequisites
 - `luajit` in PATH (`brew install luajit` on macOS).
-- PathOfBuilding present at `~/Projects/PathOfBuilding` (with the headless API scaffold in `src/API/`).
+- PathOfBuilding fork present: `charleslucas/PathOfBuilding`, branch `api-stdio` (headless API in `src/API/`).
 - Set `POB_LUA_ENABLED=true` to expose the new tools.
 
 

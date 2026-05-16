@@ -1,6 +1,6 @@
 # PoB MCP Server Testing Guide
 
-This guide provides comprehensive test cases for all features of the Path of Building MCP server, with special focus on Phase 3 features (Lua bridge integration).
+This guide provides comprehensive test cases for all features of the Path of Building MCP server.
 
 ## Prerequisites
 
@@ -9,9 +9,9 @@ This guide provides comprehensive test cases for all features of the Path of Bui
 - At least 2-3 test builds in your PoB directory
 - MCP server configured in Claude Desktop
 
-### For Lua Bridge Features (Phase 3)
+### For Lua Bridge Features
 - LuaJIT installed and in PATH (`luajit` command available)
-- PoB API Fork cloned locally: https://github.com/Dulluhan/pob-api
+- PoB API fork cloned locally: https://github.com/charleslucas/PathOfBuilding (branch: `api-stdio`)
 - Environment variables configured (see Configuration section below)
 
 ## Configuration for Testing
@@ -43,7 +43,7 @@ This guide provides comprehensive test cases for all features of the Path of Bui
         "POB_LUA_ENABLED": "true",
         "POB_FORK_PATH": "/path/to/PathOfBuilding/src",
         "POB_CMD": "luajit",
-        "POB_TIMEOUT_MS": "10000"
+        "POB_TIMEOUT_MS": "30000"
       }
     }
   }
