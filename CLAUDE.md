@@ -136,6 +136,10 @@ PoE1 has 24 passive points from quests across all Acts. A character in endgame c
 **3. Pantheon (optional reminder)**
 Pantheon major/minor god choices are not imported. Remind the user to set these in PoB's Config tab if they need accurate pantheon bonuses modelled.
 
+### Naming convention for imported builds
+
+When saving imported characters, use `{League}-{CharacterName}.xml` (e.g. `Mirage-MirageSixFingeredMan.xml`, `Standard-WednesdayWeatherwax.xml`). This keeps league context visible in the build list and avoids collisions between characters with the same name in different leagues.
+
 ### After `lua_set_tree` or major tree changes
 
 Remind the user that PoB requires all allocated nodes to form a connected path back to the class start node. Nodes disconnected from the tree are silently dropped. Use `find_path_to_node` first to find the travel nodes needed to reach a target.
