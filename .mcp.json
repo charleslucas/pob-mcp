@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "pob": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": ["C:\\Users\\charl\\tools\\pob-mcp\\build\\index.js"],
+      "env": {
+        "POB_DIRECTORY": "C:\\Users\\charl\\OneDrive\\Documents\\Path of Building\\Builds",
+        "POB_LUA_ENABLED": "true",
+        "POB_FORK_PATH": "C:\\Users\\charl\\tools\\PathOfBuilding\\src",
+        "POB_CMD": "C:\\Users\\charl\\scoop\\shims\\luajit.exe",
+        "POB_TIMEOUT_MS": "10000",
+        "POB_API_TCP": "true",
+        "POB_API_TCP_PORT": "31337",
+        "POB_RECONNECT_TIMEOUT_MS": "30000",
+        "POB_DEBUG": "true"
+      }
+    }
+  }
+}

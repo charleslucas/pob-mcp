@@ -15,6 +15,16 @@ PoB's TCP server runs inside PoB's GUI frame loop via `onFrameFuncs`. SimpleGrap
 
 The only time you might need PoB in the foreground is if the keepalive subscript fails to start (e.g. FFI not available). If you see repeated connection timeouts, ask the user to bring PoB to the foreground once to establish the initial connection.
 
+### Auto-reconnect
+
+When the TCP connection is lost (PoB closed, crashed, or updated), the next tool call automatically retries the connection every 2 s for up to `POB_RECONNECT_TIMEOUT_MS` (default 30 s). This means:
+
+- **User can close and relaunch PoB mid-session** via `LaunchPoBWithAPI.bat` — the MCP client will reconnect automatically without any manual intervention.
+- **PoB update/restart cycle** is handled transparently as long as it completes within the reconnect window.
+- If PoB doesn't come back within the window, the tool returns a clear error with instructions.
+
+`POB_RECONNECT_TIMEOUT_MS` can be raised (e.g. `60000`) if PoB takes longer to start.
+
 ### When is a fresh connection triggered?
 
 - First call to any `lua_*` tool after the MCP server starts.
