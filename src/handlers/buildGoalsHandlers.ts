@@ -1,9 +1,9 @@
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import type { BuildIssue } from "../types.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 
 export interface BuildGoalsHandlerContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

@@ -1,8 +1,8 @@
 import { wrapHandler } from '../utils/errorHandling.js';
-import type { PoBLuaApiClient } from '../pobLuaBridge.js';
+import type { AnyLuaClient } from '../pobLuaBridge.js';
 
 interface AnointHandlerContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

@@ -1,13 +1,13 @@
 import type { BuildService } from "../services/buildService.js";
 import type { BuildExportService } from "../services/buildExportService.js";
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import type { ExportContext } from "../utils/contextBuilder.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 
 export interface ExportHandlerContext {
   buildService: BuildService;
   exportService: BuildExportService;
-  luaClient?: PoBLuaApiClient;
+  luaClient?: AnyLuaClient;
 }
 
 export async function handleExportBuild(

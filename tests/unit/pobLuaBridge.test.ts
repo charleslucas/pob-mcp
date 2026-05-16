@@ -429,7 +429,7 @@ describe('PoBLuaApiClient', () => {
       // Simulate process crash
       mockProcess.crash();
 
-      await expect(client.ping()).rejects.toThrow(/PoB API exited/);
+      await expect(client.ping()).rejects.toThrow(/PoB bridge not connected|PoB API exited|disconnected/);
     });
 
     it('should skip non-JSON lines and wait for valid response', async () => {
@@ -465,7 +465,7 @@ describe('PoBLuaApiClient', () => {
     });
 
     it('should throw when calling methods before start', async () => {
-      await expect(client.ping()).rejects.toThrow(/Process not started/);
+      await expect(client.ping()).rejects.toThrow(/Process not started|PoB bridge not connected/);
     });
   });
 

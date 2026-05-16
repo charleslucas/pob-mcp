@@ -6,11 +6,11 @@
  * falls back to user-provided args.
  */
 
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 
 export interface LevelingContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

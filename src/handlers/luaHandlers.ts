@@ -1,4 +1,4 @@
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
 import fs from "fs/promises";
 import path from "path";
@@ -8,7 +8,7 @@ import { sanitizeBuildName } from "../utils/pathSanitizer.js";
 export interface LuaHandlerContext {
   pobDirectory: string;
   luaEnabled: boolean;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
   stopLuaClient: () => Promise<void>;
 }

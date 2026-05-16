@@ -222,7 +222,7 @@ const DIFF_STATS: ReadonlyArray<{ key: string; label: string; pct?: boolean }> =
 ];
 
 async function captureBuildSnapshot(
-  luaClient: import("../pobLuaBridge.js").PoBLuaApiClient
+  luaClient: import("../pobLuaBridge.js").AnyLuaClient
 ): Promise<BuildSnapshot> {
   // The bridge does not support concurrent requests (single-threaded stdio),
   // so we MUST call these sequentially, not via Promise.all.

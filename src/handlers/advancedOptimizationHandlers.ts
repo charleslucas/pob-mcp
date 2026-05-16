@@ -1,4 +1,4 @@
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import type { BuildService } from "../services/buildService.js";
 import {
   analyzeEquippedItems,
@@ -16,7 +16,7 @@ import { sanitizeBuildName } from "../utils/pathSanitizer.js";
 export interface AdvancedOptimizationContext {
   buildService: BuildService;
   pobDirectory: string;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

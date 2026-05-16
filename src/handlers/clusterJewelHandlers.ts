@@ -10,7 +10,7 @@ import { TradeQueryBuilder } from '../services/tradeQueryBuilder.js';
 import { StatMapper } from '../services/statMapper.js';
 import { PoeNinjaClient } from '../services/poeNinjaClient.js';
 import { ItemListing } from '../types/tradeTypes.js';
-import type { PoBLuaApiClient } from '../pobLuaBridge.js';
+import type { AnyLuaClient } from '../pobLuaBridge.js';
 
 interface ClusterJewelContext {
   tradeClient: TradeApiClient;
@@ -551,7 +551,7 @@ function formatClusterJewelAnalysis(jewel: any, index: number): string {
 // ---------------------------------------------------------------------------
 
 interface ClusterJewelBuildContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

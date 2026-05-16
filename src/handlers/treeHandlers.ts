@@ -1,17 +1,17 @@
 import type { BuildService } from "../services/buildService.js";
 import type { TreeService } from "../services/treeService.js";
 import type { TreeAnalysisResult, TreeComparison, PassiveTreeNode, AllocationChange, PassiveTreeData } from "../types.js";
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
 
 export interface TreeHandlerContext {
   buildService: BuildService;
   treeService: TreeService;
-  getLuaClient?: () => PoBLuaApiClient | null;
+  getLuaClient?: () => AnyLuaClient | null;
 }
 
 export interface PassiveUpgradesContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

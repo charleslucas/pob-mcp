@@ -1,10 +1,10 @@
-import type { PoBLuaApiClient } from '../pobLuaBridge.js';
+import type { AnyLuaClient } from '../pobLuaBridge.js';
 import type { PoeNinjaClient } from '../services/poeNinjaClient.js';
 import { fetchBaseModData } from '../services/craftingDataService.js';
 import { wrapHandler } from '../utils/errorHandling.js';
 
 export interface CraftingAdvisorContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ninjaClient: PoeNinjaClient;
 }
 

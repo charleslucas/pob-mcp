@@ -11,7 +11,7 @@ import type { WatchService } from '../services/watchService.js';
 import type { ValidationService } from '../services/validationService.js';
 import type { BuildExportService } from '../services/buildExportService.js';
 import type { SkillGemService } from '../services/skillGemService.js';
-import type { PoBLuaApiClient } from '../pobLuaBridge.js';
+import type { AnyLuaClient } from '../pobLuaBridge.js';
 
 /**
  * Context for basic build and tree handlers
@@ -21,7 +21,7 @@ export interface HandlerContext {
   treeService: TreeService;
   validationService: ValidationService;
   pobDirectory: string;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 
@@ -40,7 +40,7 @@ export interface WatchContext {
 export interface LuaContext {
   pobDirectory: string;
   luaEnabled: boolean;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
   stopLuaClient: () => Promise<void>;
 }
@@ -49,7 +49,7 @@ export interface LuaContext {
  * Context for item and skill operations (subset of Lua operations)
  */
 export interface ItemSkillContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 
@@ -60,7 +60,7 @@ export interface OptimizationContext {
   buildService: BuildService;
   treeService: TreeService;
   pobDirectory: string;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 
@@ -70,7 +70,7 @@ export interface OptimizationContext {
 export interface ExportContext {
   buildService: BuildService;
   exportService: BuildExportService;
-  luaClient?: PoBLuaApiClient;
+  luaClient?: AnyLuaClient;
 }
 
 /**
@@ -80,7 +80,7 @@ export interface SkillGemContext {
   buildService: BuildService;
   skillGemService: SkillGemService;
   pobDirectory: string;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 
@@ -90,7 +90,7 @@ export interface SkillGemContext {
 export interface AdvancedOptimizationContext {
   buildService: BuildService;
   pobDirectory: string;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 
@@ -101,7 +101,7 @@ export interface ValidationContext {
   buildService: BuildService;
   validationService: ValidationService;
   pobDirectory: string;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 
@@ -117,7 +117,7 @@ export interface ContextDependencies {
   skillGemService: SkillGemService;
   pobDirectory: string;
   luaEnabled: boolean;
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
   stopLuaClient: () => Promise<void>;
 }

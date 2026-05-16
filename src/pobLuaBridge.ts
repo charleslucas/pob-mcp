@@ -1,4 +1,5 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { createConnection, Socket } from "net";
 import { EventEmitter } from "events";
 import path from "path";
 import os from "os";
@@ -8,184 +9,42 @@ type LuaRequest = { action: string; params?: Record<string, unknown> };
 /** Lua bridge response envelope — always an object with at minimum `ok: boolean` */
 type LuaResponse = { ok: boolean; error?: string; [key: string]: unknown };
 
-export interface PoBLuaApiOptions {
-  cwd?: string;
-  cmd?: string; // default: 'luajit'
-  args?: string[]; // default: ['HeadlessWrapper.lua']
-  env?: Record<string, string>;
-  timeoutMs?: number; // per-request timeout
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared base class
+// Both stdio (PoBLuaApiClient) and TCP (PoBLuaTcpClient) transports share all
+// business methods; only the connection layer differs.
+// ─────────────────────────────────────────────────────────────────────────────
 
-export class PoBLuaApiClient {
-  private proc: ChildProcessWithoutNullStreams | null = null;
-  private options: PoBLuaApiOptions;
-  private buffer = "";
-  private ready = false;
-  private isSending = false;
-  private killed = false;
-  private dataEmitter = new EventEmitter();
+abstract class PoBApiBase {
+  protected buffer = "";
+  protected isSending = false;
+  protected killed = false;
+  protected ready = false;
+  protected dataEmitter = new EventEmitter();
 
-  /** Returns true if the process is running and ready to accept requests. */
-  isAlive(): boolean {
-    return !this.killed && this.ready && !!this.proc;
-  }
-
-  constructor(options: PoBLuaApiOptions = {}) {
-    // Prevent unhandled 'error' events (emitted on process exit) from crashing Node.js
+  constructor() {
     this.dataEmitter.on("error", () => {});
-    const forkSrc = options.cwd || path.join(os.homedir(), "Projects", "PathOfBuilding", "src");
-    this.options = {
-      cwd: forkSrc,
-      cmd: options.cmd || "luajit",
-      args: options.args || ["HeadlessWrapper.lua"],
-      env: options.env || {},
-      timeoutMs: options.timeoutMs ?? 30000, // Increased from 10s to 30s
-    };
   }
 
-  async start(): Promise<void> {
-    if (this.proc) return;
+  abstract isAlive(): boolean;
+  abstract start(): Promise<void>;
+  abstract stop(): Promise<void>;
 
-    // Set up Lua paths for runtime modules
-    const pobForkPath = this.options.cwd || process.env.POB_FORK_PATH || '';
+  protected abstract getTimeoutMs(): number;
+  /** Write one newline-terminated JSON string to the transport. */
+  protected abstract sendRaw(line: string): void;
+  /** Called on timeout to tear down the transport connection. */
+  protected abstract tearDownOnTimeout(): void;
 
-    // Cross-platform path handling: remove 'src' from the end if present
-    const baseDir = pobForkPath.endsWith(path.sep + 'src') || pobForkPath.endsWith('/src')
-      ? pobForkPath.slice(0, -4)
-      : pobForkPath;
-    const runtimeDir = path.join(baseDir, 'runtime');
-    const runtimeLuaPath = path.join(runtimeDir, 'lua');
-    const luaRocksPath = path.join(os.homedir(), '.luarocks', 'lib', 'lua', '5.1');
-
-    // Platform-specific Lua paths
-    const isWindows = process.platform === 'win32';
-    const luaExt = isWindows ? 'dll' : 'so';
-
-    // On Windows, use semicolons and backslashes; on Unix, use colons and forward slashes
-    const pathSep = isWindows ? ';' : ':';
-
-    const env = {
-      ...process.env,
-      ...this.options.env,
-      POB_API_STDIO: "1",
-      LUA_PATH: `${runtimeLuaPath}${path.sep}?.lua${pathSep}${runtimeLuaPath}${path.sep}?${path.sep}init.lua${pathSep}${pathSep}`,
-      LUA_CPATH: `${runtimeDir}${path.sep}?.${luaExt}${pathSep}${luaRocksPath}${path.sep}?.${luaExt}${pathSep}${pathSep}`,
-    } as NodeJS.ProcessEnv;
-
-    try {
-      this.proc = spawn(this.options.cmd!, this.options.args!, {
-        cwd: this.options.cwd,
-        env,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-    } catch (error: any) {
-      throw new Error(`Failed to spawn LuaJIT process: ${error.message}`);
-    }
-
-    this.proc.stdout.setEncoding("utf8");
-    this.proc.stderr.setEncoding("utf8");
-
-    // In Jest short-timeout scenarios, simulate missing ready banner to allow timeout test to pass
-    if (process.env.JEST_WORKER_ID && (this.options.timeoutMs ?? 0) <= 150) {
-      throw new Error("Failed to find valid ready banner");
-    }
-
-    // Track spawn errors
-    let spawnError: Error | null = null;
-    this.proc.on("error", (err: Error) => {
-      spawnError = err;
-      this.killed = true;
-      this.dataEmitter.emit("error", err);
-    });
-
-    this.proc.stdout.on("data", (chunk: string) => this.onStdout(chunk));
-    this.proc.stderr.on("data", (chunk: string) => {
-      // Keep stderr visible for debugging but don't reject requests by default
-      console.error("[PoB API stderr]", chunk.trim());
-    });
-
-    this.proc.on("exit", (code, signal) => {
-      this.killed = true;
-      this.dataEmitter.emit("error", new Error(`PoB API exited: code=${code} signal=${signal}`));
-    });
-
-    // Wait for ready banner (skip non-JSON lines like log messages)
-    let ready: string = "";
-    let attempts = 0;
-    const maxAttempts = 50; // 50 lines max to find JSON banner
-
-    while (attempts < maxAttempts) {
-      // Check if process errored during spawn
-      if (spawnError !== null) {
-        const cmd = this.options.cmd;
-        const err: Error = spawnError;
-        const errMsg = err.message || String(err);
-        if (errMsg.includes('ENOENT')) {
-          throw new Error(
-            `Failed to start PoB Lua Bridge: LuaJIT executable not found.\n\n` +
-            `The command "${cmd}" does not exist or is not in PATH.\n\n` +
-            `Please:\n` +
-            `1. Install LuaJIT (https://luajit.org/download.html)\n` +
-            `2. Update your Claude Desktop config with the correct POB_CMD path\n` +
-            `3. Or add LuaJIT to your system PATH and set POB_CMD=luajit\n\n` +
-            `Current POB_CMD: ${cmd}`
-          );
-        }
-        throw new Error(`Failed to spawn LuaJIT process: ${errMsg}`);
-      }
-
-      // Check if process exited
-      if (this.killed) {
-        throw new Error('PoB API process exited before becoming ready');
-      }
-
-      ready = await this.readLineWithTimeout(this.options.timeoutMs);
-      attempts++;
-
-      // Skip empty lines or lines that don't start with '{'
-      if (!ready.trim() || !ready.trim().startsWith('{')) {
-        continue;
-      }
-
-      // Try to parse as JSON
-      try {
-        const msg = JSON.parse(ready);
-        if (msg && msg.ready === true) {
-          this.ready = true;
-          return; // Successfully initialized
-        }
-      } catch (e) {
-        // Not valid JSON, keep looking
-        continue;
-      }
-    }
-
-    throw new Error(`Failed to find valid ready banner after ${maxAttempts} lines`);
-  }
-
-  private onStdout(chunk: string) {
-    if (process.env.POB_DEBUG === "true") {
-      console.error("[PoB API stdout]", chunk.trim());
-    }
-    this.buffer += chunk;
-    this.dataEmitter.emit("data");
-  }
-
-  private readLineWithTimeout(timeoutMs?: number): Promise<string> {
-    const ms = timeoutMs ?? this.options.timeoutMs!;
+  protected readLineWithTimeout(timeoutMs?: number): Promise<string> {
+    const ms = timeoutMs ?? this.getTimeoutMs();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        // Kill the process so isAlive() returns false and ensureClient() restarts it.
-        // Without this, stale buffered data from the timed-out request corrupts the
-        // next request's response ("ghost response" problem).
         this.killed = true;
         this.ready = false;
         this.buffer = "";
-        if (this.proc) {
-          try { this.proc.kill(); } catch {}
-          this.proc = null;
-        }
+        this.tearDownOnTimeout();
         reject(new Error("Timed out waiting for PoB response — bridge will auto-restart on next request"));
       }, ms);
 
@@ -201,18 +60,14 @@ export class PoBLuaApiClient {
         return false;
       };
 
-      const onError = (err: Error) => {
-        cleanup();
-        reject(err);
-      };
+      const onError = (err: Error) => { cleanup(); reject(err); };
+      const onData  = () => { tryRead(); };
 
       const cleanup = () => {
         clearTimeout(timer);
         this.dataEmitter.off("data", onData);
         this.dataEmitter.off("error", onError);
       };
-
-      const onData = () => { tryRead(); };
 
       if (!tryRead()) {
         this.dataEmitter.on("data", onData);
@@ -221,45 +76,31 @@ export class PoBLuaApiClient {
     });
   }
 
-  private async send(obj: LuaRequest): Promise<LuaResponse> {
-    if (!this.proc || !this.proc.stdin) throw new Error("Process not started");
-    if (this.killed) throw new Error("PoB API exited");
-    if (!this.ready) throw new Error("Process not ready");
-    if (this.isSending) throw new Error("Concurrent request not supported");
+  protected async send(obj: LuaRequest): Promise<LuaResponse> {
+    if (!this.isAlive()) throw new Error("PoB bridge not connected or not ready");
+    if (this.killed)     throw new Error("PoB bridge disconnected");
+    if (this.isSending)  throw new Error("Concurrent request not supported");
 
     this.isSending = true;
     try {
-      this.proc.stdin.write(JSON.stringify(obj) + "\n");
+      this.sendRaw(JSON.stringify(obj) + "\n");
 
-      // Read lines until we get valid JSON response
-      // Skip non-JSON lines (like "LOADING", warnings, etc.)
       let attempts = 0;
       const maxAttempts = 100;
-
       while (attempts < maxAttempts) {
-        const line = await this.readLineWithTimeout(this.options.timeoutMs);
+        const line = await this.readLineWithTimeout();
         attempts++;
-
-        // Skip empty lines or lines that don't look like JSON (debug messages, etc.)
-        if (!line.trim() || !line.trim().startsWith('{')) {
-          continue;
-        }
-
-        // Try to parse as JSON
-        try {
-          const res = JSON.parse(line);
-          return res;
-        } catch (e) {
-          // Not valid JSON, keep looking
-          continue;
-        }
+        if (!line.trim() || !line.trim().startsWith("{")) continue;
+        try { return JSON.parse(line); } catch {}
       }
-
       throw new Error(`Failed to receive valid JSON response after ${maxAttempts} lines`);
     } finally {
       this.isSending = false;
     }
   }
+
+  // ── Business methods ────────────────────────────────────────────────────────
+  // All shared between stdio and TCP transports — only this.send() differs.
 
   async ping(): Promise<boolean> {
     const res = await this.send({ action: "ping" });
@@ -296,8 +137,6 @@ export class PoBLuaApiClient {
     return res.tree;
   }
 
-
-
   async getItems(): Promise<any[]> {
     const res = await this.send({ action: "get_items" });
     if (!res.ok) throw new Error(res.error || "get_items failed");
@@ -305,19 +144,13 @@ export class PoBLuaApiClient {
   }
 
   async addItem(itemText: string, slotName?: string, noAutoEquip?: boolean): Promise<any> {
-    const res = await this.send({
-      action: "add_item_text",
-      params: { text: itemText, slotName, noAutoEquip },
-    });
+    const res = await this.send({ action: "add_item_text", params: { text: itemText, slotName, noAutoEquip } });
     if (!res.ok) throw new Error(res.error || "add_item_text failed");
     return res.item;
   }
 
   async setFlaskActive(flaskIndex: number, active: boolean): Promise<void> {
-    const res = await this.send({
-      action: "set_flask_active",
-      params: { index: flaskIndex, active },
-    });
+    const res = await this.send({ action: "set_flask_active", params: { index: flaskIndex, active } });
     if (!res.ok) throw new Error(res.error || "set_flask_active failed");
   }
 
@@ -327,16 +160,12 @@ export class PoBLuaApiClient {
     return res.skills;
   }
 
-  async setMainSelection(params: {
-    mainSocketGroup?: number;
-    mainActiveSkill?: number;
-    skillPart?: number;
-  }): Promise<void> {
+  async setMainSelection(params: { mainSocketGroup?: number; mainActiveSkill?: number; skillPart?: number }): Promise<void> {
     const res = await this.send({ action: "set_main_selection", params });
     if (!res.ok) throw new Error(res.error || "set_main_selection failed");
   }
 
-async setTree(params: {
+  async setTree(params: {
     classId: number;
     ascendClassId: number;
     secondaryAscendClassId?: number;
@@ -427,7 +256,7 @@ async setTree(params: {
     return res.results;
   }
 
-  async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string; }): Promise<{ tree: any; autoPathedNodes?: number[]; skippedAscendancyNodes?: number[] }> {
+  async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{ tree: any; autoPathedNodes?: number[]; skippedAscendancyNodes?: number[] }> {
     const res = await this.send({ action: "update_tree_delta", params });
     if (!res.ok) throw new Error(res.error || "update_tree_delta failed");
     return { tree: res.tree, autoPathedNodes: res.autoPathedNodes as number[] | undefined, skippedAscendancyNodes: res.skippedAscendancyNodes as number[] | undefined };
@@ -439,7 +268,7 @@ async setTree(params: {
     return res.output;
   }
 
-  async evaluateAnointCandidates(params: { slot: string; focus?: 'dps' | 'defence' | 'both'; limit?: number }): Promise<{
+  async evaluateAnointCandidates(params: { slot: string; focus?: "dps" | "defence" | "both"; limit?: number }): Promise<{
     candidates: Array<{ nodeId: number; name: string; dpsDelta: number; ehpDelta: number; score: number; recipe?: string[] }>;
     base: { CombinedDPS: number; TotalEHP: number };
     evaluated: number;
@@ -451,13 +280,13 @@ async setTree(params: {
     const res = await this.send({ action: "evaluate_anoint_candidates", params });
     if (!res.ok) throw new Error(res.error || "evaluate_anoint_candidates failed");
     return {
-      candidates: (res.candidates as Array<{ nodeId: number; name: string; dpsDelta: number; ehpDelta: number; score: number; recipe?: string[] }>) || [],
+      candidates: (res.candidates as any[]) || [],
       base: (res.base as { CombinedDPS: number; TotalEHP: number }) || { CombinedDPS: 0, TotalEHP: 0 },
       evaluated: Number(res.evaluated) || 0,
       skipped: Number(res.skipped) || 0,
-      slot: String(res.slot ?? ''),
-      baseType: String(res.baseType ?? ''),
-      focus: String(res.focus ?? 'both'),
+      slot: String(res.slot ?? ""),
+      baseType: String(res.baseType ?? ""),
+      focus: String(res.focus ?? "both"),
     };
   }
 
@@ -509,29 +338,13 @@ async setTree(params: {
     return res.result;
   }
 
-  /**
-   * Generate a weighted trade query JSON via PoB's TradeQueryGenerator.
-   * options is a pass-through to StartQuery (statWeights, influence1/2, jewelType,
-   * includeMirrored/Corrupted/Scourge/Eldritch/Synthesis, maxPrice, maxLevel,
-   * sockets, links, special{itemName}, ...). Caller may omit it to use build defaults.
-   */
-  async generateWeightedTradeQuery(
-    slot: string,
-    options?: Record<string, unknown>,
-  ): Promise<{ query: unknown; warning?: string }> {
-    const res = await this.send({
-      action: "generate_weighted_trade_query",
-      params: { slot, options: options || {} },
-    });
+  async generateWeightedTradeQuery(slot: string, options?: Record<string, unknown>): Promise<{ query: unknown; warning?: string }> {
+    const res = await this.send({ action: "generate_weighted_trade_query", params: { slot, options: options || {} } });
     if (!res.ok) throw new Error(res.error || "generate_weighted_trade_query failed");
     const queryRaw = res.query;
     let parsed: unknown = queryRaw;
     if (typeof queryRaw === "string") {
-      try {
-        parsed = JSON.parse(queryRaw);
-      } catch {
-        parsed = queryRaw;
-      }
+      try { parsed = JSON.parse(queryRaw); } catch { parsed = queryRaw; }
     }
     return { query: parsed, warning: typeof res.warning === "string" ? res.warning : undefined };
   }
@@ -539,31 +352,276 @@ async setTree(params: {
   async importPassiveTree(params: { json: string; char_data: any; clear_jewels?: boolean }): Promise<any> {
     const res = await this.send({ action: "import_passive_tree", params });
     if (!res.ok) throw new Error(res.error || "import_passive_tree failed");
-    return {
-      status: res.status,
-      level: res.level,
-      className: res.className,
-      ascendClassName: res.ascendClassName,
-    };
+    return { status: res.status, level: res.level, className: res.className, ascendClassName: res.ascendClassName };
   }
 
   async importItemsSkills(params: { json: string; clear_items?: boolean; clear_skills?: boolean; ignore_weapon_swap?: boolean }): Promise<any> {
     const res = await this.send({ action: "import_items_skills", params });
     if (!res.ok) throw new Error(res.error || "import_items_skills failed");
-    return {
-      status: res.status,
-      level: res.level,
-      character: res.character,
+    return { status: res.status, level: res.level, character: res.character };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stdio transport — spawns a headless LuaJIT process
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PoBLuaApiOptions {
+  cwd?: string;
+  cmd?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+export class PoBLuaApiClient extends PoBApiBase {
+  private proc: ChildProcessWithoutNullStreams | null = null;
+  private options: Required<PoBLuaApiOptions>;
+
+  isAlive(): boolean {
+    return !this.killed && this.ready && !!this.proc;
+  }
+
+  protected getTimeoutMs(): number { return this.options.timeoutMs; }
+
+  protected sendRaw(line: string): void {
+    this.proc!.stdin.write(line);
+  }
+
+  protected tearDownOnTimeout(): void {
+    if (this.proc) {
+      try { this.proc.kill(); } catch {}
+      this.proc = null;
+    }
+  }
+
+  constructor(options: PoBLuaApiOptions = {}) {
+    super();
+    const forkSrc = options.cwd || path.join(os.homedir(), "Projects", "PathOfBuilding", "src");
+    this.options = {
+      cwd: forkSrc,
+      cmd: options.cmd || "luajit",
+      args: options.args || ["HeadlessWrapper.lua"],
+      env: options.env || {},
+      timeoutMs: options.timeoutMs ?? 30000,
     };
+  }
+
+  async start(): Promise<void> {
+    if (this.proc) return;
+
+    const pobForkPath = this.options.cwd || process.env.POB_FORK_PATH || "";
+    const baseDir = pobForkPath.endsWith(path.sep + "src") || pobForkPath.endsWith("/src")
+      ? pobForkPath.slice(0, -4)
+      : pobForkPath;
+    const runtimeDir = path.join(baseDir, "runtime");
+    const runtimeLuaPath = path.join(runtimeDir, "lua");
+    const luaRocksPath = path.join(os.homedir(), ".luarocks", "lib", "lua", "5.1");
+    const isWindows = process.platform === "win32";
+    const luaExt = isWindows ? "dll" : "so";
+    const pathSep = isWindows ? ";" : ":";
+
+    const env = {
+      ...process.env,
+      ...this.options.env,
+      POB_API_STDIO: "1",
+      LUA_PATH: `${runtimeLuaPath}${path.sep}?.lua${pathSep}${runtimeLuaPath}${path.sep}?${path.sep}init.lua${pathSep}${pathSep}`,
+      LUA_CPATH: `${runtimeDir}${path.sep}?.${luaExt}${pathSep}${luaRocksPath}${path.sep}?.${luaExt}${pathSep}${pathSep}`,
+    } as NodeJS.ProcessEnv;
+
+    try {
+      this.proc = spawn(this.options.cmd, this.options.args, {
+        cwd: this.options.cwd,
+        env,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to spawn LuaJIT process: ${error.message}`);
+    }
+
+    this.proc.stdout.setEncoding("utf8");
+    this.proc.stderr.setEncoding("utf8");
+
+    if (process.env.JEST_WORKER_ID && (this.options.timeoutMs ?? 0) <= 150) {
+      throw new Error("Failed to find valid ready banner");
+    }
+
+    let spawnError: Error | null = null;
+    this.proc.on("error", (err: Error) => {
+      spawnError = err;
+      this.killed = true;
+      this.dataEmitter.emit("error", err);
+    });
+
+    this.proc.stdout.on("data", (chunk: string) => {
+      if (process.env.POB_DEBUG === "true") console.error("[PoB API stdout]", chunk.trim());
+      this.buffer += chunk;
+      this.dataEmitter.emit("data");
+    });
+
+    this.proc.stderr.on("data", (chunk: string) => {
+      console.error("[PoB API stderr]", chunk.trim());
+    });
+
+    this.proc.on("exit", (code, signal) => {
+      this.killed = true;
+      this.dataEmitter.emit("error", new Error(`PoB API exited: code=${code} signal=${signal}`));
+    });
+
+    let attempts = 0;
+    const maxAttempts = 50;
+    while (attempts < maxAttempts) {
+      if (spawnError !== null) {
+        const cmd = this.options.cmd;
+        const errMsg = (spawnError as Error).message || String(spawnError);
+        if (errMsg.includes("ENOENT")) {
+          throw new Error(
+            `Failed to start PoB Lua Bridge: LuaJIT executable not found.\n\n` +
+            `The command "${cmd}" does not exist or is not in PATH.\n\n` +
+            `Please:\n1. Install LuaJIT\n2. Update POB_CMD in your config\n\nCurrent POB_CMD: ${cmd}`
+          );
+        }
+        throw new Error(`Failed to spawn LuaJIT process: ${errMsg}`);
+      }
+      if (this.killed) throw new Error("PoB API process exited before becoming ready");
+
+      const line = await this.readLineWithTimeout(this.options.timeoutMs);
+      attempts++;
+      if (!line.trim() || !line.trim().startsWith("{")) continue;
+      try {
+        const msg = JSON.parse(line);
+        if (msg?.ready === true) { this.ready = true; return; }
+      } catch {}
+    }
+    throw new Error(`Failed to find valid ready banner after ${maxAttempts} lines`);
   }
 
   async stop(): Promise<void> {
     if (!this.proc) return;
-    try {
-      await this.send({ action: "quit" });
-    } catch {}
+    try { await this.send({ action: "quit" }); } catch {}
     this.proc.kill();
     this.proc = null;
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TCP transport — connects to a running PoB GUI with POB_API_TCP=1
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PoBTcpApiOptions {
+  host?: string;
+  port?: number;
+  timeoutMs?: number;
+}
+
+export class PoBLuaTcpClient extends PoBApiBase {
+  private socket: Socket | null = null;
+  private options: Required<PoBTcpApiOptions>;
+
+  isAlive(): boolean {
+    return !this.killed && this.ready && !!this.socket && !this.socket.destroyed;
+  }
+
+  protected getTimeoutMs(): number { return this.options.timeoutMs; }
+
+  protected sendRaw(line: string): void {
+    this.socket!.write(line);
+  }
+
+  protected tearDownOnTimeout(): void {
+    if (this.socket && !this.socket.destroyed) {
+      try { this.socket.destroy(); } catch {}
+      this.socket = null;
+    }
+  }
+
+  constructor(options: PoBTcpApiOptions = {}) {
+    super();
+    this.options = {
+      host: options.host || "127.0.0.1",
+      port: options.port || 31337,
+      timeoutMs: options.timeoutMs ?? 30000,
+    };
+  }
+
+  async start(): Promise<void> {
+    if (this.socket) return;
+    const { host, port, timeoutMs } = this.options;
+
+    const sock = createConnection({ host, port });
+    sock.setEncoding("utf8");
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        sock.destroy();
+        reject(new Error(
+          `Connection to PoB GUI at ${host}:${port} timed out.\n\n` +
+          `Make sure PoB is running with the POB_API_TCP=1 environment variable set.`
+        ));
+      }, timeoutMs);
+
+      sock.once("error", (err) => {
+        clearTimeout(timer);
+        reject(new Error(
+          `Cannot connect to PoB GUI at ${host}:${port}: ${err.message}\n\n` +
+          `Start PoB with: $env:POB_API_TCP = "1"; & "Path of Building.exe"`
+        ));
+      });
+
+      sock.once("connect", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+
+    sock.on("data", (chunk: string) => {
+      if (process.env.POB_DEBUG === "true") console.error("[PoB TCP data]", chunk.trim());
+      this.buffer += chunk;
+      this.dataEmitter.emit("data");
+    });
+
+    sock.on("close", () => {
+      this.killed = true;
+      this.ready = false;
+      this.dataEmitter.emit("error", new Error("PoB TCP connection closed"));
+    });
+
+    sock.on("error", (err) => {
+      this.killed = true;
+      this.ready = false;
+      this.dataEmitter.emit("error", err);
+    });
+
+    this.socket = sock;
+
+    // Wait for the ready banner sent by TcpServer.lua on connect
+    let attempts = 0;
+    while (attempts < 20) {
+      const line = await this.readLineWithTimeout(timeoutMs);
+      attempts++;
+      if (!line.trim() || !line.trim().startsWith("{")) continue;
+      try {
+        const msg = JSON.parse(line);
+        if (msg?.ready === true) {
+          this.ready = true;
+          console.error(`[PoB TCP] Connected to PoB GUI (${msg.version?.number ?? "?"}) on ${host}:${port}`);
+          return;
+        }
+      } catch {}
+    }
+    throw new Error(`PoB TCP: did not receive ready banner from ${host}:${port}`);
+  }
+
+  /** Disconnect without sending 'quit' — PoB GUI keeps running. */
+  async stop(): Promise<void> {
+    this.ready = false;
+    if (this.socket && !this.socket.destroyed) {
+      this.socket.destroy();
+    }
+    this.socket = null;
+    this.killed = true;
+  }
+}
+
+/** Union of both transport clients — use this in handler context interfaces. */
+export type AnyLuaClient = PoBLuaApiClient | PoBLuaTcpClient;

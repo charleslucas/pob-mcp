@@ -6,11 +6,11 @@
  * required — the output is a human-readable guide for manual searching.
  */
 
-import type { PoBLuaApiClient } from '../pobLuaBridge.js';
+import type { AnyLuaClient } from '../pobLuaBridge.js';
 import { wrapHandler } from '../utils/errorHandling.js';
 
 export interface ItemShoppingContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
 }
 
 // Slot-specific knowledge: which mods matter and what the base options are

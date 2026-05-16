@@ -6,7 +6,7 @@ import { ItemRecommendationEngine, UpgradeContext } from '../services/itemRecomm
 import { ItemListing, SearchOptions, ItemRecommendation, ResistanceRequirements, BudgetConstraints, TradeQuery } from '../types/tradeTypes.js';
 import { CostBenefitAnalyzer } from '../services/costBenefitAnalyzer.js';
 import { PoeNinjaClient } from '../services/poeNinjaClient.js';
-import type { PoBLuaApiClient } from '../pobLuaBridge.js';
+import type { AnyLuaClient } from '../pobLuaBridge.js';
 
 interface TradeContext {
   tradeClient: TradeApiClient;
@@ -16,7 +16,7 @@ interface TradeContext {
 }
 
 interface WeightedTradeContext extends TradeContext {
-  getLuaClient: () => PoBLuaApiClient | null;
+  getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
 }
 

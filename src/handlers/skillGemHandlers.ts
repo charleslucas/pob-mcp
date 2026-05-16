@@ -1,13 +1,13 @@
 import type { BuildService } from "../services/buildService.js";
 import type { SkillGemService } from "../services/skillGemService.js";
-import type { PoBLuaApiClient } from "../pobLuaBridge.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 
 export interface SkillGemHandlerContext {
   buildService: BuildService;
   skillGemService: SkillGemService;
   pobDirectory?: string;
-  getLuaClient?: () => PoBLuaApiClient | null;
+  getLuaClient?: () => AnyLuaClient | null;
   ensureLuaClient?: () => Promise<void>;
 }
 
