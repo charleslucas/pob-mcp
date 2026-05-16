@@ -11,7 +11,12 @@
       "WebSearch",
       "WebFetch(domain:www.pathofexile.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:poe.ninja)"
+      "WebFetch(domain:poe.ninja)",
+      "Bash(netstat -ano)",
+      "Bash(grep -n \"pob-mcp TCP API patch\\\\|onFrameFuncs\\\\['TcpServer'\\\\]\\\\|function main:DetectUnicodeSupport\" \"C:/Users/charl/AppData/Roaming/Path of Building Community/Modules/Main.lua\")",
+      "Read(//c/Users/charl/AppData/Roaming/Path of Building Community/Modules/**)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File UninstallTcpApi.ps1)",
+      "PowerShell(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\charl\\\\tools\\\\pob-mcp\\\\InstallTcpApi.ps1\" 2>&1)"
     ]
   }
 }
