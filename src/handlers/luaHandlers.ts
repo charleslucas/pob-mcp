@@ -110,9 +110,10 @@ export async function handleLuaLoadBuild(
 
     // If build_name is provided, read the file
     let xml = buildXml;
+    let resolvedPath = '';
     if (buildName) {
-      const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
-      xml = await fs.readFile(buildPath, 'utf-8');
+      resolvedPath = sanitizeBuildName(buildName, context.pobDirectory);
+      xml = await fs.readFile(resolvedPath, 'utf-8');
       // Use the build filename as the name if not specified
       if (!name) {
         name = buildName.replace(/\.xml$/i, '');
@@ -121,7 +122,8 @@ export async function handleLuaLoadBuild(
       throw new Error('Either build_name or build_xml must be provided');
     }
 
-    await luaClient.loadBuildXml(xml, name);
+    // Pass resolvedPath so TCP mode can update PoB's recent-files list.
+    await luaClient.loadBuildXml(xml, name, resolvedPath);
 
     // Check for multiple specs / item sets and inform the user (sequential — bridge is single-request)
     const extraLines: string[] = [];

@@ -119,7 +119,7 @@ abstract class PoBApiBase {
     return res.result;
   }
 
-  async loadBuildXml(xml: string, name = "API Build"): Promise<any> {
+  async loadBuildXml(xml: string, name = "API Build", path = ""): Promise<any> {
     const res = await this.send({ action: "load_build_xml", params: { xml, name } });
     if (!res.ok) throw new Error(res.error || "load_build_xml failed");
     return res;
@@ -632,6 +632,17 @@ export class PoBLuaTcpClient extends PoBApiBase {
       `Make sure PoB is running via LaunchPoBWithAPI.bat with a build open.\n` +
       `If the keepalive subscript failed, try bringing PoB to the foreground once, then retry.`
     );
+  }
+
+  /**
+   * In TCP mode, load/create a build by calling open_build_xml which routes
+   * through PoB's main:SetMode('BUILD',...) so the GUI switches to the build.
+   * The base-class loadBuildXml sends 'load_build_xml' which TcpServer rejects.
+   */
+  override async loadBuildXml(xml: string, name = "API Build", path = ""): Promise<any> {
+    const res = await this.send({ action: "open_build_xml", params: { xml, name, path } });
+    if (!res.ok) throw new Error(res.error || "open_build_xml failed");
+    return res;
   }
 
   /** Disconnect without sending 'quit' — PoB GUI keeps running. */

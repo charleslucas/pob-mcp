@@ -257,7 +257,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_new_build",
-      description: "Create a new blank build with specified class and ascendancy. Auto-starts the Lua bridge if needed (no need to call lua_start first). Classes and ascendancies (PoE1): Scion: Ascendant | Marauder: Juggernaut, Berserker, Chieftain | Ranger: Raider, Deadeye, Pathfinder | Witch: Occultist, Elementalist, Necromancer | Duelist: Slayer, Gladiator, Champion | Templar: Inquisitor, Hierophant, Guardian | Shadow: Assassin, Trickster, Saboteur",
+      description: "Create a new blank build with specified class and ascendancy. In TCP mode this opens the new build in the running PoB GUI. Auto-starts the Lua bridge if needed. Classes and ascendancies (PoE1): Scion: Ascendant | Marauder: Juggernaut, Berserker, Chieftain | Ranger: Raider, Deadeye, Pathfinder | Witch: Occultist, Elementalist, Necromancer | Duelist: Slayer, Gladiator, Champion | Templar: Inquisitor, Hierophant, Guardian | Shadow: Assassin, Trickster, Saboteur",
       inputSchema: {
         type: "object",
         properties: {
@@ -283,7 +283,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_load_build",
-      description: "Load a build file into the PoB calculation engine. Required before using other lua_* tools. AUTO-RETURNS a brief summary (life, DPS, EHP, resistances, top issues) — do NOT immediately follow with lua_get_stats or get_build_issues just to get basic numbers. Call additional tools only when you need details beyond the summary.",
+      description: "Load a build file into the PoB calculation engine. In TCP mode this opens the build in the running PoB GUI. AUTO-RETURNS a brief summary (life, DPS, EHP, resistances, top issues) — do NOT immediately follow with lua_get_stats or get_build_issues just to get basic numbers. Call additional tools only when you need details beyond the summary.",
       inputSchema: {
         type: "object",
         properties: {
