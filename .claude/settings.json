@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test_debug2.mjs)",
+      "Bash(POB_DEBUG=true timeout 45 node -e ' *)",
+      "Bash(node test_spec_debug.mjs)",
+      "Bash(git merge *)"
+    ]
+  }
+}
