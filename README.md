@@ -160,10 +160,11 @@ No `POB_FORK_PATH` or `POB_CMD` needed — PoB is already running. Open a build 
 | `POB_LUA_ENABLED` | `false` | Set `"true"` to enable Lua bridge (stdio or TCP) |
 | `POB_FORK_PATH` | `~/Projects/PathOfBuilding/src` | Path to PathOfBuilding/src — headless mode only |
 | `POB_CMD` | `luajit` | LuaJIT binary path — headless mode only |
-| `POB_TIMEOUT_MS` | `30000` | Lua request timeout (ms). On timeout the bridge auto-restarts. |
+| `POB_TIMEOUT_MS` | `10000` | Per-request timeout (ms). On timeout the bridge auto-restarts. |
 | `POB_API_TCP` | `false` | Set `"true"` to connect to a running PoB GUI instead of spawning headless LuaJIT |
 | `POB_API_TCP_HOST` | `127.0.0.1` | TCP mode: hostname/IP of the PoB GUI (loopback only by default) |
 | `POB_API_TCP_PORT` | `31337` | TCP mode: port PoB listens on (set `POB_API_TCP_PORT` in PoB's env too) |
+| `POB_RECONNECT_TIMEOUT_MS` | `300000` | TCP mode: how long to keep retrying a lost connection (default 5 min). |
 | `POE_TRADE_ENABLED` | `false` | Enable Trade API tools |
 | `POE_SESSION_ID` | (none) | POESESSID cookie value. Required for private PoE profiles (`lua_import_character`, `lua_list_characters`) and for weighted trade queries (`find_weighted_trade_items`). **Sensitive** — treat like a password; do not commit or share. |
 | `POE_ACCOUNT_NAME` | (none) | Default PoE account name (with discriminator, e.g. `account#1234`). Used as fallback when `account_name` is not passed to `lua_list_characters` / `lua_import_character`. |
@@ -207,22 +208,25 @@ TCP mode lets Claude and you work on the same build simultaneously in the PoB GU
 
 **Requirements:** Standard PoB Community installation (no special fork needed).
 
-**Step 1 — Launch PoB with the API server enabled:**
-```powershell
-# Windows PowerShell
-$env:POB_API_TCP = "1"
-$env:POB_API_TCP_PORT = "31337"   # optional, this is the default
-& "C:\Users\YourName\AppData\Roaming\Path of Building Community\Path of Building.exe"
+**Step 1 — Launch PoB via `LaunchPoBWithAPI.bat`** (Windows, included in this repo):
+
+This is the recommended way. It sets the required env vars, auto-patches `Modules/Main.lua` if PoB updated and overwrote it, and launches PoB. On startup you'll see in PoB's console (`~` key):
 ```
-PoB will print `[PoB API] TCP server started on port 31337` in its console output.
+[PoB API] TCP server started on port 31337
+[PoB API] Background keepalive active (~60 fps)
+```
 
 **Step 2 — Open a build in PoB**, then use any `lua_*` tool in Claude to connect.
 
-**Step 3 — Update Claude Desktop config** (see TCP Mode config example above).
+**Step 3 — Update Claude Desktop / Claude Code config** (see TCP Mode config example above).
+
+**Background operation:** PoB can be minimised or behind other windows — a background keepalive keeps its frame loop running at ~60 fps so the TCP server stays responsive. **PoB's console** (`~` key) shows every API event in real time: `>> get_stats`, `<< get_stats ok`, connect/disconnect, errors.
+
+**Auto-reconnect:** If PoB is closed and relaunched, the MCP client automatically reconnects within 2 s of the TCP server coming back online. Retries continue for up to 5 minutes (`POB_RECONNECT_TIMEOUT_MS`).
 
 **Note:** In TCP mode `lua_load_build` and `lua_new_build` are not available — use the PoB GUI to open builds. All read and mutation tools work normally (`lua_get_stats`, `update_tree_delta`, `set_config`, etc.).
 
-> ⚠️ **After a PoB update:** If you use PoB's built-in updater, it will overwrite `Modules/Main.lua` and the TCP server will stop working. Just relaunch via `LaunchPoBWithAPI.bat` — it detects the missing patch and re-applies it automatically before opening PoB.
+> ⚠️ **After a PoB update:** If you use PoB's built-in updater, it will overwrite `Modules/Main.lua` and the TCP server will stop working. Just relaunch via `LaunchPoBWithAPI.bat` — it detects the missing patch and re-applies it automatically.
 
 ### Importing a Live Character from PoE
 

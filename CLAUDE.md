@@ -13,17 +13,32 @@ PoB's TCP server runs inside PoB's GUI frame loop via `onFrameFuncs`. SimpleGrap
 
 **PoB can be minimised or in the background** — the TCP server remains responsive.
 
-The only time you might need PoB in the foreground is if the keepalive subscript fails to start (e.g. FFI not available). If you see repeated connection timeouts, ask the user to bring PoB to the foreground once to establish the initial connection.
+**No foreground required** — PoB works fully in the background. If you see repeated connection timeouts, ask the user to verify PoB was launched via `LaunchPoBWithAPI.bat` (not directly).
+
+### PoB console logging
+
+Every API event is shown in PoB's in-game console (`~` key):
+```
+[PoB API] Claude connected (1 client(s) active)
+[PoB API] >> get_stats
+[PoB API] << get_stats ok
+[PoB API] Claude disconnected (0 client(s) active)
+```
+This lets the user see exactly what Claude is doing to their build in real time.
+
+### Shutdown
+
+PoB exits cleanly and immediately. `TcpServer.lua` hooks `main.Shutdown` and uses a sentinel file (`pob-api.run`) to signal the keepalive subscript to stop within ~16 ms. No hung processes.
 
 ### Auto-reconnect
 
-When the TCP connection is lost (PoB closed, crashed, or updated), the next tool call automatically retries the connection every 2 s for up to `POB_RECONNECT_TIMEOUT_MS` (default 30 s). This means:
+When the TCP connection is lost (PoB closed, crashed, or updated), the next tool call automatically retries every 2 s for up to `POB_RECONNECT_TIMEOUT_MS` (default **5 minutes / 300 s**). This means:
 
-- **User can close and relaunch PoB mid-session** via `LaunchPoBWithAPI.bat` — the MCP client will reconnect automatically without any manual intervention.
-- **PoB update/restart cycle** is handled transparently as long as it completes within the reconnect window.
-- If PoB doesn't come back within the window, the tool returns a clear error with instructions.
+- **User can close and relaunch PoB mid-session** via `LaunchPoBWithAPI.bat` — the MCP client reconnects automatically.
+- **PoB update/restart cycle** is handled transparently within the reconnect window.
+- If PoB doesn't come back within 5 minutes, the tool returns a clear error with instructions.
 
-`POB_RECONNECT_TIMEOUT_MS` can be raised (e.g. `60000`) if PoB takes longer to start.
+`POB_RECONNECT_TIMEOUT_MS` is configurable (e.g. `600000` for 10 minutes).
 
 ### When is a fresh connection triggered?
 
@@ -58,7 +73,7 @@ npm run build          # compile TypeScript
 npm test               # 300+ unit tests (no PoB needed)
 npm test -- --forceExit  # same, force-exit to avoid open handle warnings
 
-# Live TCP integration (requires PoB running in foreground):
+# Live TCP integration (PoB can be in background):
 POB_API_TCP=true node tests/smoke/tcp-integration.mjs
 ```
 

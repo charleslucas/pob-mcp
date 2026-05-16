@@ -12,7 +12,7 @@ POB_DIRECTORY="/path/to/Path of Building/Builds"
 POB_LUA_ENABLED="true"
 POB_FORK_PATH="/path/to/PathOfBuilding/src"   # charleslucas/PathOfBuilding, api-stdio branch
 POB_CMD="luajit"                               # or full path on Windows
-POB_TIMEOUT_MS="30000"                         # default 30 s; bridge auto-restarts on timeout
+POB_TIMEOUT_MS="10000"                         # per-request timeout (ms); bridge auto-restarts on timeout
 ```
 
 ### Lua Bridge — TCP Mode (connect to running PoB GUI)
@@ -21,8 +21,9 @@ POB_LUA_ENABLED="true"
 POB_API_TCP="true"                            # skip headless, connect via TCP instead
 POB_API_TCP_HOST="127.0.0.1"                 # optional, loopback default
 POB_API_TCP_PORT="31337"                      # optional, default port
+POB_RECONNECT_TIMEOUT_MS="300000"            # how long to retry after disconnect (default 5 min)
 ```
-Launch PoB with: `$env:POB_API_TCP = "1"; & "Path of Building.exe"`
+Launch PoB with `LaunchPoBWithAPI.bat` (in pob-mcp repo) — sets env vars, auto-patches Main.lua, handles self-healing after updates. PoB works in background; console (~) shows all API events.
 
 ### Trade API
 ```bash
