@@ -176,7 +176,17 @@ export class PoBLuaApiClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        reject(new Error("Timed out waiting for response"));
+        // Kill the process so isAlive() returns false and ensureClient() restarts it.
+        // Without this, stale buffered data from the timed-out request corrupts the
+        // next request's response ("ghost response" problem).
+        this.killed = true;
+        this.ready = false;
+        this.buffer = "";
+        if (this.proc) {
+          try { this.proc.kill(); } catch {}
+          this.proc = null;
+        }
+        reject(new Error("Timed out waiting for PoB response — bridge will auto-restart on next request"));
       }, ms);
 
       const tryRead = (): boolean => {
