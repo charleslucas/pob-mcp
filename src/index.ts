@@ -143,7 +143,8 @@ class PoBMCPServer {
     });
 
     if (luaEnabled) {
-      console.error('[MCP Server] PoB Lua Bridge enabled (stdio mode)');
+      const mode = this.luaClientManager.isTcpMode() ? 'TCP mode' : 'stdio mode';
+      console.error(`[MCP Server] PoB Lua Bridge enabled (${mode})`);
     }
 
     this.setupHandlers();
