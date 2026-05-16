@@ -574,19 +574,23 @@ export class PoBLuaTcpClient extends PoBApiBase {
       });
     });
 
+    const dbg = process.env.POB_DEBUG === "true";
+
     sock.on("data", (chunk: string) => {
-      if (process.env.POB_DEBUG === "true") console.error("[PoB TCP data]", chunk.trim());
+      if (dbg) console.error("[PoB TCP data]", JSON.stringify(chunk.slice(0, 120)));
       this.buffer += chunk;
       this.dataEmitter.emit("data");
     });
 
     sock.on("close", () => {
+      if (dbg) console.error("[PoB TCP] socket closed");
       this.killed = true;
       this.ready = false;
       this.dataEmitter.emit("error", new Error("PoB TCP connection closed"));
     });
 
     sock.on("error", (err) => {
+      if (dbg) console.error("[PoB TCP] socket error:", err.message);
       this.killed = true;
       this.ready = false;
       this.dataEmitter.emit("error", err);
@@ -594,10 +598,12 @@ export class PoBLuaTcpClient extends PoBApiBase {
 
     this.socket = sock;
 
+    if (dbg) console.error("[PoB TCP] waiting for ready banner, buffer=", JSON.stringify(this.buffer));
     // Wait for the ready banner sent by TcpServer.lua on connect
     let attempts = 0;
     while (attempts < 20) {
       const line = await this.readLineWithTimeout(timeoutMs);
+      if (dbg) console.error("[PoB TCP] banner attempt", attempts, "line=", JSON.stringify(line));
       attempts++;
       if (!line.trim() || !line.trim().startsWith("{")) continue;
       try {
