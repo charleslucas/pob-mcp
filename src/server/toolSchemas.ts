@@ -335,6 +335,11 @@ export function getLuaToolSchemas(): any[] {
             description: "Skip importing the weapon swap slots AND keep the build's existing 'use second weapon set' flag untouched. Use this when you have a custom swap configuration (e.g. leveling weapons in the swap) you want preserved. Default false: import the swap items and force the calc engine to use the primary slots so stats match the character's in-game active set.",
             default: false,
           },
+          bandit: {
+            type: "string",
+            description: "Bandit choice to set after import. The PoE API does not expose this — ask the user which bandit they chose. Values: 'None' (Kill All, +1 passive point in current PoE1 — note the second point that was historically from Kill All is now from the 'Through Sacred Ground' quest), 'Alira' (+5 mana regen, +15% all res, +20% crit multi), 'Kraityn' (+6% atk/cast speed, +6% ailment avoidance, +6% move speed), 'Oak' (+2% life regen, +20 max life, +6% phys reduction).",
+            enum: ["None", "Alira", "Kraityn", "Oak"],
+          },
         },
         required: ["character_name"],
       },

@@ -25,6 +25,8 @@ export interface ImportCharacterOptions {
   clearItems?: boolean;
   clearSkills?: boolean;
   ignoreWeaponSwap?: boolean;
+  /** Bandit choice: "None" (Kill All), "Alira", "Kraityn", or "Oak". */
+  bandit?: string;
 }
 
 /** Subset of the LuaHandlerContext that import handlers actually need. */
@@ -444,6 +446,7 @@ export async function handleImportCharacter(
     const clearItems = options?.clearItems ?? true;
     const clearSkills = options?.clearSkills ?? true;
     const ignoreWeaponSwap = options?.ignoreWeaponSwap ?? false;
+    const bandit = options?.bandit ?? null;
 
     // 2. Fetch passive skills + items + character list in parallel.
     //    The list is needed only for `name`, `level`, `league`, and the
@@ -509,6 +512,15 @@ export async function handleImportCharacter(
       );
     }
 
+    // 5b. Apply bandit choice if provided — not available from the PoE API.
+    if (bandit !== null) {
+      try {
+        await luaClient.setConfig({ bandit });
+      } catch {
+        // Non-fatal — report in output but don't fail the import.
+      }
+    }
+
     // 6. Snapshot AFTER and compute the diff.
     const after = await captureBuildSnapshot(luaClient);
 
@@ -572,12 +584,33 @@ export async function handleImportCharacter(
     lines.push(`## Skills`);
     lines.push(...buildSkillsDiff(before, after));
 
+    // Bandit note — always show since it's never available from the API.
+    lines.push("");
+    lines.push(`## ⚠️ Bandit choice (manual step required)`);
+    lines.push(
+      bandit
+        ? `Bandit set to **${bandit}** (passed as parameter).`
+        : `Bandit choice is **not available** from the PoE API and has been left unchanged.`
+    );
+    lines.push("");
+    lines.push(`Current passive point values (PoE1):`);
+    lines.push(`- **Kill All** (None): +1 passive point from bandit quest`);
+    lines.push(`  *(+1 additional point comes from the "Through Sacred Ground" quest — verify in-game quest log)*`);
+    lines.push(`- **Alira**: +5 Mana Regen/sec, +15% all Elemental Resistances, +20% Critical Strike Multiplier`);
+    lines.push(`- **Kraityn**: +6% Attack/Cast Speed, +6% chance to Avoid Elemental Ailments, +6% Movement Speed`);
+    lines.push(`- **Oak**: +2% Life Regenerated per second, +20 to Maximum Life, +6% Physical Damage Reduction`);
+    lines.push("");
+    lines.push(
+      bandit
+        ? `To change it: ask the user which bandit they chose, then call \`set_config\` with \`bandit\` = "None"/"Alira"/"Kraityn"/"Oak".`
+        : `Ask the user which bandit they chose (or check their in-game quest log under "Deal with the Bandits"), ` +
+          `then call \`set_config\` with \`bandit\` = "None"/"Alira"/"Kraityn"/"Oak". Alternatively, pass \`bandit\` directly to \`lua_import_character\`.`
+    );
+
     // What's preserved (informational footer).
     lines.push("");
     lines.push(`## Preserved (NOT touched by import)`);
-    lines.push(
-      `- Configuration (bandit, pantheon, enemy stats, charge toggles)`
-    );
+    lines.push(`- Pantheon, enemy stats, charge toggles (set these in PoB Config tab)`);
     lines.push(`- Build notes`);
     lines.push(`- Other tree specs (only the active spec was replaced)`);
     lines.push(`- Other item sets (only the active set was replaced)`);

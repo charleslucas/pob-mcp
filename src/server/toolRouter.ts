@@ -180,6 +180,7 @@ export async function routeToolCall(
           clearItems: args.clear_items as boolean | undefined,
           clearSkills: args.clear_skills as boolean | undefined,
           ignoreWeaponSwap: args.ignore_weapon_swap as boolean | undefined,
+          bandit: args.bandit as string | undefined,
         }
       );
 
