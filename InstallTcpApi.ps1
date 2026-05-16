@@ -66,16 +66,14 @@ if (-not (Test-Path $mainLua)) {
 }
 
 $content = Get-Content -Path $mainLua -Raw -Encoding UTF8
-$marker  = "function main:DetectUnicodeSupport()"
+$patchTag    = "-- [pob-mcp TCP API patch]"
+$insertBefore = "function main:DetectUnicodeSupport()"
 
-if ($content -notmatch [regex]::Escape($marker)) {
-    Write-Error "Could not find insertion point '$marker' in Main.lua — PoB version may be incompatible."
-    exit 1
-}
-
-$patchTag = "-- [pob-mcp TCP API patch]"
 if ($content -match [regex]::Escape($patchTag)) {
     Write-Host "[3/3] Main.lua already patched — skipping" -ForegroundColor Yellow
+} elseif ($content -notmatch [regex]::Escape($insertBefore)) {
+    Write-Error "Could not find '$insertBefore' in Main.lua — PoB version may be incompatible."
+    exit 1
 } else {
     # Back up the original
     $backup = $mainLua + ".bak"
@@ -84,17 +82,27 @@ if ($content -match [regex]::Escape($patchTag)) {
         Write-Host "[3/3] Backed up Main.lua -> Main.lua.bak" -ForegroundColor Cyan
     }
 
-    # Use single-quoted here-string so PowerShell doesn't interpolate Lua code
+    # The TCP block is inserted just before the closing `end` of main:Init() so that
+    # `self` (the main object) is in scope for self.onFrameFuncs.
+    # We locate that end by finding the blank line + DetectUnicodeSupport boundary,
+    # then replace the `end\n\n` just before it with `end + our block + \n\n`.
+    #
+    # Single-quoted here-string: PowerShell will NOT interpolate $-variables inside,
+    # so Lua code is preserved verbatim.
     $tcpBlock = @'
-
 	-- [pob-mcp TCP API patch]
-	-- Start the TCP API server if POB_API_TCP=1 is set (e.g. via LaunchPoBWithAPI.bat).
-	-- Pumped each frame via onFrameFuncs so it never blocks the GUI.
+	-- Start the TCP API server when POB_API_TCP=1 (set by LaunchPoBWithAPI.bat).
+	-- Pumped via onFrameFuncs each GUI frame so it never blocks the UI.
 	if os.getenv('POB_API_TCP') == '1' then
 		local tcpPort = tonumber(os.getenv('POB_API_TCP_PORT')) or 31337
-		local ok_h, API = pcall(require, 'API.Handlers')
+		local apiBase = (GetScriptPath and GetScriptPath()) or ''
+		local ok_h, API
+		ok_h, API = pcall(dofile, apiBase .. '/API/Handlers.lua')
+		if not (ok_h and API) then ok_h, API = pcall(require, 'API.Handlers') end
 		if ok_h and API then
-			local ok_t, TcpServer = pcall(require, 'API.TcpServer')
+			local ok_t, TcpServer
+			ok_t, TcpServer = pcall(dofile, apiBase .. '/API/TcpServer.lua')
+			if not (ok_t and TcpServer) then ok_t, TcpServer = pcall(require, 'API.TcpServer') end
 			if ok_t and TcpServer and TcpServer.available then
 				if TcpServer.init(API.handlers, tcpPort) then
 					self.onFrameFuncs['TcpServer'] = function() TcpServer.pump() end
@@ -110,9 +118,22 @@ if ($content -match [regex]::Escape($patchTag)) {
 
 '@
 
-    $patched = $content -replace [regex]::Escape($marker), ($tcpBlock + $marker)
+    # Insert our block before the `end` that closes Init().
+    # Pattern: `end` on its own line followed by blank line(s) then DetectUnicodeSupport.
+    # We keep the `end` in place and inject inside it.
+    # Insert BEFORE the bare `end` that closes Init(), so our code is inside Init()
+    # and `self` is in scope. The block must come before `end`, not after.
+    $patched = $content -replace `
+        '(?m)^end(\r?\n[\r\n]*)(function main:DetectUnicodeSupport\(\))', `
+        ($tcpBlock + 'end$1$2')
+
+    if ($patched -eq $content) {
+        # Simpler fallback: just insert before DetectUnicodeSupport
+        $patched = $content.Replace($insertBefore, ($tcpBlock + $insertBefore))
+    }
+
     Set-Content -Path $mainLua -Value $patched -Encoding UTF8 -NoNewline
-    Write-Host "[3/3] Patched Main.lua" -ForegroundColor Green
+    Write-Host "[3/3] Patched Main.lua (TCP block inserted inside Init())" -ForegroundColor Green
 }
 
 # ── Done ──────────────────────────────────────────────────────────────────────
