@@ -105,6 +105,37 @@ Install scripts (in this repo):
   UninstallTcpApi.ps1       — restore Main.lua and remove API files
 ```
 
+## User notifications — what to ask after key operations
+
+Some build data cannot be retrieved from the PoE API and requires a brief conversation with the user. Proactively raise these after the relevant operations rather than waiting for the user to notice something is wrong.
+
+### After `lua_import_character`
+
+**1. Bandit choice (always ask)**
+The PoE API does not expose bandit quest choices. After import, ask:
+> "Which bandit did you choose? Kill All, Alira, Kraityn, or Oak?"
+
+Then call `set_config` with `bandit: "None"` (Kill All) / `"Alira"` / `"Kraityn"` / `"Oak"`.
+
+Current PoE1 values:
+- **Kill All (None):** +1 passive point from the bandit quest. The second point that was historically granted here has moved to the "Through Sacred Ground" quest — confirm with the user that they've completed it.
+- **Alira:** +5 Mana Regenerated per second, +15% all Elemental Resistances, +20% Critical Strike Multiplier
+- **Kraityn:** +6% Attack/Cast Speed, +6% chance to Avoid Elemental Ailments, +6% Movement Speed
+- **Oak:** +2% Life Regenerated per second, +20 to Maximum Life, +6% Physical Damage Reduction
+
+**2. Quest passive points (ask if character is not at endgame)**
+PoB assumes the character has all quest passive rewards. If the character is still levelling, some quest rewards may be incomplete. Ask:
+> "Have you completed all the passive point quest rewards? If not, PoB's point count will be slightly higher than your actual available points."
+
+PoE1 has 24 passive points from quests across all Acts. A character in endgame content has almost certainly completed them all.
+
+**3. Pantheon (optional reminder)**
+Pantheon major/minor god choices are not imported. Remind the user to set these in PoB's Config tab if they need accurate pantheon bonuses modelled.
+
+### After `lua_set_tree` or major tree changes
+
+Remind the user that PoB requires all allocated nodes to form a connected path back to the class start node. Nodes disconnected from the tree are silently dropped. Use `find_path_to_node` first to find the travel nodes needed to reach a target.
+
 ## Key constraints
 
 - **Do not modify the user's existing builds** without explicit permission. Creating test builds is fine.
