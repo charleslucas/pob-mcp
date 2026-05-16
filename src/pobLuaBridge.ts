@@ -668,12 +668,23 @@ export class PoBLuaTcpClient extends PoBApiBase {
   }
 
   /**
-   * In TCP mode, new_build generates a minimal XML and opens it in the GUI
-   * via open_build_xml rather than sending the rejected 'new_build' action.
+   * In TCP mode, new_build lets PoB create a fresh default build via
+   * open_build_xml with no XML, then polls until calcsTab/importTab are ready.
    */
   override async newBuild(params?: { className?: string; ascendancy?: string }): Promise<any> {
-    const xml = PoBLuaTcpClient.makeBlankBuildXml(params?.className, params?.ascendancy);
-    return this.loadBuildXml(xml, `New ${params?.className ?? "Scion"} Build`);
+    // Pass no XML — PoB creates its own default new build.
+    const res = await this.send({ action: "open_build_xml", params: { path: "" } });
+    if (!res.ok) throw new Error(res.error || "open_build_xml failed");
+
+    // Poll get_build_info until the build is initialized (ready flag or non-empty info).
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 150));
+      try {
+        const info = await this.getBuildInfo();
+        if (info) break;
+      } catch { /* not ready yet */ }
+    }
+    return res;
   }
 
   /**
@@ -684,6 +695,8 @@ export class PoBLuaTcpClient extends PoBApiBase {
   override async loadBuildXml(xml: string, name = "API Build", path = ""): Promise<any> {
     const res = await this.send({ action: "open_build_xml", params: { xml, name, path } });
     if (!res.ok) throw new Error(res.error || "open_build_xml failed");
+    // Brief wait for Build:Init to complete across frames before the next request.
+    await new Promise(r => setTimeout(r, 300));
     return res;
   }
 
