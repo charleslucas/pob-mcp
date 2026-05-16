@@ -3,6 +3,7 @@ build/
 *.log
 .DS_Store
 .env
+.mcp.json
 settings.local.json
 jest-output.json
 coverage/
