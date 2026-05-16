@@ -95,7 +95,7 @@ if ($content -match [regex]::Escape($patchTag)) {
 	-- Pumped via onFrameFuncs each GUI frame so it never blocks the UI.
 	if os.getenv('POB_API_TCP') == '1' then
 		local tcpPort = tonumber(os.getenv('POB_API_TCP_PORT')) or 31337
-		local apiBase = (GetScriptPath and GetScriptPath()) or ''
+		local apiBase = (GetScriptPath and GetScriptPath()) or '.'
 		local ok_h, API
 		ok_h, API = pcall(dofile, apiBase .. '/API/Handlers.lua')
 		if not (ok_h and API) then ok_h, API = pcall(require, 'API.Handlers') end
