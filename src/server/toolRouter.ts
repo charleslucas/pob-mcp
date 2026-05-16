@@ -134,7 +134,8 @@ export async function routeToolCall(
         treeContext,
         args.build_name as string,
         args.target_node_id as string,
-        args.show_alternatives as boolean | undefined
+        args.show_alternatives as boolean | undefined,
+        args.from_node_id as string | undefined
       );
 
     // Lua bridge tools

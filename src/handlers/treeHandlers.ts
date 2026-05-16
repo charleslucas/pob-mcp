@@ -198,7 +198,8 @@ export async function handleFindPath(
   context: TreeHandlerContext,
   buildName: string | undefined,
   targetNodeId: string,
-  showAlternatives?: boolean
+  showAlternatives?: boolean,
+  fromNodeId?: string
 ) {
   try {
     let allocatedNodeIds: string[] = [];
@@ -239,7 +240,7 @@ export async function handleFindPath(
       };
     }
 
-    const allocatedNodes = new Set<string>(allocatedNodeIds);
+    let allocatedNodes = new Set<string>(allocatedNodeIds);
     const treeData = await context.treeService.getTreeData(treeVersion);
 
     // Check if target node exists
@@ -258,6 +259,16 @@ export async function handleFindPath(
           },
         ],
       };
+    }
+
+    // If from_node_id is provided, route from that specific node instead of
+    // the build frontier — enables any-node-to-any-node routing.
+    if (fromNodeId) {
+      if (!treeData.nodes.has(fromNodeId)) {
+        throw new Error(`from_node_id ${fromNodeId} not found in tree data`);
+      }
+      allocatedNodes = new Set([fromNodeId]);
+      treeVersion = treeVersion; // keep for header
     }
 
     // Find shortest path(s) using TreeService
@@ -280,12 +291,20 @@ export async function handleFindPath(
     }
 
     // Format output
+    const routeDesc = fromNodeId
+      ? `from node ${fromNodeId} to ${targetNode.name || targetNodeId}`
+      : `to ${targetNode.name || "Node " + targetNodeId}`;
     const textLines: string[] = [
-      `=== Path to ${targetNode.name || "Node " + targetNodeId} ===`,
+      `=== Path ${routeDesc} ===`,
       '',
-      `Build: ${buildName}`,
-      `Target: ${targetNode.name || "Unknown"} [${targetNodeId}]`,
     ];
+    if (fromNodeId) {
+      const fromNode = treeData.nodes.get(fromNodeId);
+      textLines.push(`From: ${fromNode?.name || "Unknown"} [${fromNodeId}]`);
+    } else {
+      textLines.push(`Build: ${buildName}`);
+    }
+    textLines.push(`Target: ${targetNode.name || "Unknown"} [${targetNodeId}]`);
     if (targetNode.isKeystone) textLines.push('Type: KEYSTONE');
     else if (targetNode.isNotable) textLines.push('Type: Notable');
     textLines.push('');
@@ -294,9 +313,13 @@ export async function handleFindPath(
       const path = paths[i];
       const pathLabel = paths.length > 1 ? `Path ${i + 1} (Alternative ${i === 0 ? "- Shortest" : i})` : "Shortest Path";
 
+      const keystones = path.nodes.filter(id => treeData.nodes.get(id)?.isKeystone).length;
+      const notables  = path.nodes.filter(id => { const n = treeData.nodes.get(id); return n?.isNotable && !n?.isKeystone; }).length;
+      const travel    = path.nodes.length - keystones - notables;
+
       textLines.push(`**${pathLabel}**`);
       textLines.push(`Total Cost: ${path.cost} passive points`);
-      textLines.push(`Nodes to Allocate: ${path.nodes.length}`, '');
+      textLines.push(`Nodes to Allocate: ${path.nodes.length}  (${keystones > 0 ? keystones + ' keystone, ' : ''}${notables} notable, ${travel} travel)`, '');
 
       textLines.push('Allocation Order:');
       for (let j = 0; j < path.nodes.length; j++) {

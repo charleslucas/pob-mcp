@@ -184,7 +184,7 @@ export function getToolSchemas(): ToolSchema[] {
     },
     {
       name: "find_path_to_node",
-      description: "Find the shortest path from your current tree to a specific passive node. Uses loaded Lua bridge build when no build_name is provided.",
+      description: "Find the shortest path of passive nodes between two points on the tree. By default routes from the build's current allocation frontier to the target. Supply from_node_id to route between any two arbitrary nodes regardless of the current build — useful for measuring distance between keystones, planning routes across the tree, etc. Each node in the result includes its name, type (Keystone/Notable/travel), and full stat descriptions.",
       inputSchema: {
         type: "object",
         properties: {
@@ -194,7 +194,11 @@ export function getToolSchemas(): ToolSchema[] {
           },
           target_node_id: {
             type: "string",
-            description: "ID of the target passive node",
+            description: "ID of the destination passive node",
+          },
+          from_node_id: {
+            type: "string",
+            description: "Route from this specific node instead of the build's allocated frontier. Enables any-node-to-any-node routing independent of the current build (e.g. 'how many nodes between Resolute Technique and Iron Reflexes?').",
           },
           show_alternatives: {
             type: "boolean",
