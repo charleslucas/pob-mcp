@@ -61,6 +61,25 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "lua_list_characters",
+      description: "List all characters on a PoE account via the official API. Does not require the Lua bridge to be enabled. Use this to find a character to import. Account name needs the discriminator (e.g., account#1234). If omitted, falls back to POE_ACCOUNT_NAME.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          account_name: {
+            type: "string",
+            description: "PoE account name including discriminator (e.g., 'account#1234'). Optional when POE_ACCOUNT_NAME is set.",
+          },
+          realm: {
+            type: "string",
+            description: "Realm: 'pc', 'xbox', or 'sony' (default: 'pc').",
+            enum: ["pc", "xbox", "sony"],
+            default: "pc",
+          },
+        },
+      },
+    },
+    {
       name: "get_build_stats",
       description: "Extract specific stats from a build (Life, DPS, resistances, etc.)",
       inputSchema: {
@@ -270,6 +289,50 @@ export function getLuaToolSchemas(): any[] {
           },
         },
         required: ["build_name"],
+      },
+    },
+    {
+      name: "lua_import_character",
+      description: "Import a character from the official PoE API into the currently loaded build (replaces tree, items, and gems). Requires a build loaded via lua_load_build or lua_new_build. If account_name is omitted, falls back to POE_ACCOUNT_NAME. Set POE_SESSION_ID env var for private profiles.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          account_name: {
+            type: "string",
+            description: "PoE account name including discriminator (e.g., 'account#1234'). Optional when POE_ACCOUNT_NAME is set.",
+          },
+          character_name: {
+            type: "string",
+            description: "Exact character name to import (case-sensitive).",
+          },
+          realm: {
+            type: "string",
+            description: "Realm: 'pc', 'xbox', or 'sony' (default: 'pc').",
+            enum: ["pc", "xbox", "sony"],
+            default: "pc",
+          },
+          clear_jewels: {
+            type: "boolean",
+            description: "Clear existing jewels before importing the new tree (default: true).",
+            default: true,
+          },
+          clear_items: {
+            type: "boolean",
+            description: "Clear existing equipped items before importing (default: true).",
+            default: true,
+          },
+          clear_skills: {
+            type: "boolean",
+            description: "Clear existing skill gems before importing (default: true).",
+            default: true,
+          },
+          ignore_weapon_swap: {
+            type: "boolean",
+            description: "Skip importing the weapon swap slots AND keep the build's existing 'use second weapon set' flag untouched. Use this when you have a custom swap configuration (e.g. leveling weapons in the swap) you want preserved. Default false: import the swap items and force the calc engine to use the primary slots so stats match the character's in-game active set.",
+            default: false,
+          },
+        },
+        required: ["character_name"],
       },
     },
     {

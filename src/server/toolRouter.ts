@@ -19,6 +19,7 @@ import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPass
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
+import { handleListCharacters, handleImportCharacter } from "../handlers/importHandlers.js";
 import { handleAddItem, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -157,6 +158,28 @@ export async function routeToolCall(
         args.build_name as string | undefined,
         args.build_xml as string | undefined,
         args.name as string | undefined
+      );
+
+    case "lua_list_characters":
+      return await handleListCharacters(
+        luaContext,
+        args?.account_name as string | undefined,
+        args?.realm as string | undefined
+      );
+
+    case "lua_import_character":
+      if (!args?.character_name) throw new Error("Missing character_name");
+      return await handleImportCharacter(
+        luaContext,
+        args.account_name as string | undefined,
+        args.character_name as string,
+        args.realm as string | undefined,
+        {
+          clearJewels: args.clear_jewels as boolean | undefined,
+          clearItems: args.clear_items as boolean | undefined,
+          clearSkills: args.clear_skills as boolean | undefined,
+          ignoreWeaponSwap: args.ignore_weapon_swap as boolean | undefined,
+        }
       );
 
     case "set_character_level": {

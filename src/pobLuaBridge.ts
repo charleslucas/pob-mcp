@@ -296,7 +296,7 @@ export class PoBLuaApiClient {
     return res.tree;
   }
 
-  
+
 
   async getItems(): Promise<any[]> {
     const res = await this.send({ action: "get_items" });
@@ -530,11 +530,31 @@ async setTree(params: {
       try {
         parsed = JSON.parse(queryRaw);
       } catch {
-        // Leave as raw string if Lua returned malformed JSON; caller can decide what to do.
         parsed = queryRaw;
       }
     }
     return { query: parsed, warning: typeof res.warning === "string" ? res.warning : undefined };
+  }
+
+  async importPassiveTree(params: { json: string; char_data: any; clear_jewels?: boolean }): Promise<any> {
+    const res = await this.send({ action: "import_passive_tree", params });
+    if (!res.ok) throw new Error(res.error || "import_passive_tree failed");
+    return {
+      status: res.status,
+      level: res.level,
+      className: res.className,
+      ascendClassName: res.ascendClassName,
+    };
+  }
+
+  async importItemsSkills(params: { json: string; clear_items?: boolean; clear_skills?: boolean; ignore_weapon_swap?: boolean }): Promise<any> {
+    const res = await this.send({ action: "import_items_skills", params });
+    if (!res.ok) throw new Error(res.error || "import_items_skills failed");
+    return {
+      status: res.status,
+      level: res.level,
+      character: res.character,
+    };
   }
 
   async stop(): Promise<void> {
