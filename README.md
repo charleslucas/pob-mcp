@@ -222,6 +222,8 @@ PoB will print `[PoB API] TCP server started on port 31337` in its console outpu
 
 **Note:** In TCP mode `lua_load_build` and `lua_new_build` are not available — use the PoB GUI to open builds. All read and mutation tools work normally (`lua_get_stats`, `update_tree_delta`, `set_config`, etc.).
 
+> ⚠️ **After a PoB update:** If you use PoB's built-in updater, it will overwrite `Modules/Main.lua` and the TCP server will stop working. Just relaunch via `LaunchPoBWithAPI.bat` — it detects the missing patch and re-applies it automatically before opening PoB.
+
 ### Importing a Live Character from PoE
 
 You can import any of your live characters directly from the official Path of Exile API into the loaded build — tree, jewels, items, and skill gems are pulled from the game and applied:

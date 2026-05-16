@@ -1,0 +1,134 @@
+# InstallTcpApi.ps1
+# Installs the PoB TCP API server into the standard PoB Community installation.
+# Run from the pob-mcp directory:  .\InstallTcpApi.ps1
+#
+# What it does:
+#   1. Creates an API\ folder in the PoB Community installation directory
+#   2. Copies API\TcpServer.lua, API\Handlers.lua, API\BuildOps.lua
+#   3. Patches Modules\Main.lua to start the TCP server when POB_API_TCP=1
+#
+# Safe to re-run after PoB updates — re-applies only what changed.
+# LaunchPoBWithAPI.bat calls this automatically on every launch so you
+# never have to think about it after an update.
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# ── Locate PoB Community installation ────────────────────────────────────────
+$pobDir = "$env:APPDATA\Path of Building Community"
+if (-not (Test-Path $pobDir)) {
+    Write-Error "Path of Building Community not found at: $pobDir"
+    exit 1
+}
+Write-Host "PoB installation: $pobDir" -ForegroundColor Cyan
+
+# ── Locate source files (relative to this script) ────────────────────────────
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$forkApiDir = Join-Path $scriptDir "..\PathOfBuilding\src\API"
+if (-not (Test-Path $forkApiDir)) {
+    # Fall back: look for PathOfBuilding next to pob-mcp
+    $forkApiDir = Join-Path $scriptDir "..\..\PathOfBuilding\src\API"
+}
+if (-not (Test-Path $forkApiDir)) {
+    Write-Error "Cannot find the PathOfBuilding fork API directory. Expected at: $forkApiDir`nClone https://github.com/charleslucas/PathOfBuilding (api-stdio branch) next to pob-mcp."
+    exit 1
+}
+$forkApiDir = Resolve-Path $forkApiDir
+Write-Host "Source API dir:   $forkApiDir" -ForegroundColor Cyan
+
+# ── Step 1: Create API directory ─────────────────────────────────────────────
+$destApiDir = Join-Path $pobDir "API"
+if (-not (Test-Path $destApiDir)) {
+    New-Item -ItemType Directory -Path $destApiDir | Out-Null
+    Write-Host "[1/3] Created $destApiDir" -ForegroundColor Green
+} else {
+    Write-Host "[1/3] API directory already exists" -ForegroundColor Yellow
+}
+
+# ── Step 2: Copy Lua API files ────────────────────────────────────────────────
+$filesToCopy = @("TcpServer.lua", "Handlers.lua", "BuildOps.lua")
+foreach ($file in $filesToCopy) {
+    $src = Join-Path $forkApiDir $file
+    $dst = Join-Path $destApiDir $file
+    if (-not (Test-Path $src)) {
+        Write-Error "Source file missing: $src"
+        exit 1
+    }
+    Copy-Item -Path $src -Destination $dst -Force
+    Write-Host "[2/3] Copied $file" -ForegroundColor Green
+}
+
+# ── Step 3: Patch Modules\Main.lua ───────────────────────────────────────────
+$mainLua = Join-Path $pobDir "Modules\Main.lua"
+if (-not (Test-Path $mainLua)) {
+    Write-Error "Main.lua not found at: $mainLua"
+    exit 1
+}
+
+$content = Get-Content -Path $mainLua -Raw -Encoding UTF8
+$marker  = "function main:DetectUnicodeSupport()"
+
+if ($content -notmatch [regex]::Escape($marker)) {
+    Write-Error "Could not find insertion point '$marker' in Main.lua — PoB version may be incompatible."
+    exit 1
+}
+
+$patchTag = "-- [pob-mcp TCP API patch]"
+if ($content -match [regex]::Escape($patchTag)) {
+    Write-Host "[3/3] Main.lua already patched — skipping" -ForegroundColor Yellow
+} else {
+    # Back up the original
+    $backup = $mainLua + ".bak"
+    if (-not (Test-Path $backup)) {
+        Copy-Item -Path $mainLua -Destination $backup
+        Write-Host "[3/3] Backed up Main.lua -> Main.lua.bak" -ForegroundColor Cyan
+    }
+
+    # Use single-quoted here-string so PowerShell doesn't interpolate Lua code
+    $tcpBlock = @'
+
+	-- [pob-mcp TCP API patch]
+	-- Start the TCP API server if POB_API_TCP=1 is set (e.g. via LaunchPoBWithAPI.bat).
+	-- Pumped each frame via onFrameFuncs so it never blocks the GUI.
+	if os.getenv('POB_API_TCP') == '1' then
+		local tcpPort = tonumber(os.getenv('POB_API_TCP_PORT')) or 31337
+		local ok_h, API = pcall(require, 'API.Handlers')
+		if ok_h and API then
+			local ok_t, TcpServer = pcall(require, 'API.TcpServer')
+			if ok_t and TcpServer and TcpServer.available then
+				if TcpServer.init(API.handlers, tcpPort) then
+					self.onFrameFuncs['TcpServer'] = function() TcpServer.pump() end
+					ConPrintf('[PoB API] TCP server started on port %d', tcpPort)
+				end
+			else
+				ConPrintf('[PoB API] TcpServer unavailable: %s', tostring(TcpServer))
+			end
+		else
+			ConPrintf('[PoB API] Could not load API.Handlers: %s', tostring(API))
+		end
+	end
+
+'@
+
+    $patched = $content -replace [regex]::Escape($marker), ($tcpBlock + $marker)
+    Set-Content -Path $mainLua -Value $patched -Encoding UTF8 -NoNewline
+    Write-Host "[3/3] Patched Main.lua" -ForegroundColor Green
+}
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "Installation complete!" -ForegroundColor Green
+Write-Host ""
+Write-Host "To use TCP mode:"
+Write-Host "  1. Launch PoB using LaunchPoBWithAPI.bat (or with POB_API_TCP=1 set)"
+Write-Host "  2. Open a build in PoB"
+Write-Host "  3. Set POB_API_TCP=true in your Claude Desktop config"
+Write-Host "  4. Use any lua_* tool in Claude to connect"
+Write-Host ""
+Write-Host "If PoB updates and removes the patch, just run this script again."
+Write-Host ""
+Write-Host "WARNING: If you use the 'Check for Updates' / 'Update' button inside PoB," -ForegroundColor Yellow
+Write-Host "         the update will overwrite Main.lua and the TCP server will stop" -ForegroundColor Yellow
+Write-Host "         working on the NEXT launch. LaunchPoBWithAPI.bat will detect this" -ForegroundColor Yellow
+Write-Host "         and automatically re-apply the patch, so just relaunch via the" -ForegroundColor Yellow
+Write-Host "         batch file and it will self-heal." -ForegroundColor Yellow
