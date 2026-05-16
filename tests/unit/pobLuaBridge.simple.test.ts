@@ -103,10 +103,5 @@ describe('PoBLuaApiClient - Simple Tests', () => {
   });
 });
 
-describe('PoBLuaTcpClient - API surface', () => {
-  // Just verify the class exists and can be imported
-  it('should be able to import PoBLuaTcpClient', async () => {
-    const { PoBLuaTcpClient } = await import('../../src/pobLuaBridge');
-    expect(PoBLuaTcpClient).toBeDefined();
-  });
-});
+// PoBLuaTcpClient (TCP connection to live PoB GUI) is not yet implemented.
+// Tests will be added here when it is built.
