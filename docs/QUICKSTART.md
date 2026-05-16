@@ -99,6 +99,30 @@ Try these prompts:
 
 ## Common Workflows
 
+### Use TCP mode (live PoB GUI)
+
+Work on the same build as Claude — changes appear instantly in the PoB window:
+
+**1. Start PoB with the TCP server:**
+```powershell
+$env:POB_API_TCP = "1"
+& "C:\Users\YourName\AppData\Roaming\Path of Building Community\Path of Building.exe"
+```
+
+**2. Update Claude config** — replace `POB_FORK_PATH`/`POB_CMD` with:
+```json
+"POB_API_TCP": "true"
+```
+
+**3. Open a build in PoB, then:**
+```
+lua_get_stats (category: defense)    ← reads what's open in PoB
+update_tree_delta (add_nodes: [...]) ← you'll see nodes appear in PoB
+set_config (enemyIsBoss: true)       ← PoB recalculates immediately
+```
+
+No `lua_load_build` needed — PoB already has your build open. `lua_stop` disconnects Claude without closing PoB.
+
 ### Import a live character from PoE
 
 ```

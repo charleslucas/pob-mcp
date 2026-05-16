@@ -105,7 +105,7 @@ npm run build
 }
 ```
 
-#### Full Configuration (With Lua Bridge)
+#### Full Configuration (Headless Lua Bridge)
 ```json
 {
   "mcpServers": {
@@ -116,23 +116,54 @@ npm run build
         "POB_DIRECTORY": "/path/to/your/Path of Building/Builds",
         "POB_LUA_ENABLED": "true",
         "POB_FORK_PATH": "/path/to/PathOfBuilding/src",
-        "POB_CMD": "/usr/local/bin/luajit",
-        "POB_TIMEOUT_MS": "10000"
+        "POB_CMD": "/usr/local/bin/luajit"
       }
     }
   }
 }
 ```
 
+#### TCP Mode — Connect to a Running PoB GUI
+
+Instead of spawning a headless process, Claude can connect directly to a **running PoB GUI** and work on the same build you have open — changes appear live in the PoB window.
+
+**1. Start PoB with the TCP server enabled (Windows):**
+```powershell
+$env:POB_API_TCP = "1"
+& "C:\Users\YourName\AppData\Roaming\Path of Building Community\Path of Building.exe"
+```
+
+**2. Configure Claude Desktop:**
+```json
+{
+  "mcpServers": {
+    "pob": {
+      "command": "node",
+      "args": ["/absolute/path/to/pob-mcp-server/build/index.js"],
+      "env": {
+        "POB_DIRECTORY": "/path/to/your/Path of Building/Builds",
+        "POB_LUA_ENABLED": "true",
+        "POB_API_TCP": "true"
+      }
+    }
+  }
+}
+```
+
+No `POB_FORK_PATH` or `POB_CMD` needed — PoB is already running. Open a build in PoB first, then use `lua_start` (or any `lua_*` tool) to connect. `lua_stop` disconnects Claude without closing PoB.
+
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `POB_DIRECTORY` | OS-default Builds dir | Path to your PoB builds directory |
-| `POB_LUA_ENABLED` | `false` | Set `"true"` to enable Lua bridge |
-| `POB_FORK_PATH` | `~/Projects/PathOfBuilding/src` | Path to PathOfBuilding/src |
-| `POB_CMD` | `luajit` | LuaJIT binary path |
+| `POB_LUA_ENABLED` | `false` | Set `"true"` to enable Lua bridge (stdio or TCP) |
+| `POB_FORK_PATH` | `~/Projects/PathOfBuilding/src` | Path to PathOfBuilding/src — headless mode only |
+| `POB_CMD` | `luajit` | LuaJIT binary path — headless mode only |
 | `POB_TIMEOUT_MS` | `30000` | Lua request timeout (ms). On timeout the bridge auto-restarts. |
+| `POB_API_TCP` | `false` | Set `"true"` to connect to a running PoB GUI instead of spawning headless LuaJIT |
+| `POB_API_TCP_HOST` | `127.0.0.1` | TCP mode: hostname/IP of the PoB GUI (loopback only by default) |
+| `POB_API_TCP_PORT` | `31337` | TCP mode: port PoB listens on (set `POB_API_TCP_PORT` in PoB's env too) |
 | `POE_TRADE_ENABLED` | `false` | Enable Trade API tools |
 | `POE_SESSION_ID` | (none) | POESESSID cookie value. Required for private PoE profiles (`lua_import_character`, `lua_list_characters`) and for weighted trade queries (`find_weighted_trade_items`). **Sensitive** — treat like a password; do not commit or share. |
 | `POE_ACCOUNT_NAME` | (none) | Default PoE account name (with discriminator, e.g. `account#1234`). Used as fallback when `account_name` is not passed to `lua_list_characters` / `lua_import_character`. |
@@ -169,6 +200,27 @@ ls /path/to/PathOfBuilding/src/HeadlessWrapper.lua
 ```
 
 #### 4. Update Claude Desktop config and restart Claude Desktop
+
+### Setting Up TCP Mode (Live PoB GUI)
+
+TCP mode lets Claude and you work on the same build simultaneously in the PoB GUI — no separate process, no file round-trips, changes appear instantly.
+
+**Requirements:** Standard PoB Community installation (no special fork needed).
+
+**Step 1 — Launch PoB with the API server enabled:**
+```powershell
+# Windows PowerShell
+$env:POB_API_TCP = "1"
+$env:POB_API_TCP_PORT = "31337"   # optional, this is the default
+& "C:\Users\YourName\AppData\Roaming\Path of Building Community\Path of Building.exe"
+```
+PoB will print `[PoB API] TCP server started on port 31337` in its console output.
+
+**Step 2 — Open a build in PoB**, then use any `lua_*` tool in Claude to connect.
+
+**Step 3 — Update Claude Desktop config** (see TCP Mode config example above).
+
+**Note:** In TCP mode `lua_load_build` and `lua_new_build` are not available — use the PoB GUI to open builds. All read and mutation tools work normally (`lua_get_stats`, `update_tree_delta`, `set_config`, etc.).
 
 ### Importing a Live Character from PoE
 
@@ -454,6 +506,16 @@ ls "$POB_FORK_PATH/Modules/"              # must exist
 - Check bandit/pantheon/enemy settings with `get_config`
 - Ensure the correct tree spec is active — use `list_specs` and `select_spec` to switch
 - Verify your PathOfBuilding fork (`charleslucas/PathOfBuilding`, `api-stdio` branch) is up to date
+
+**TCP mode: `Cannot connect to PoB GUI at 127.0.0.1:31337`**
+- Make sure PoB was started with `$env:POB_API_TCP = "1"` set in the *same shell* before launching
+- Verify PoB printed `[PoB API] TCP server started` in its console
+- If no console is visible, try launching PoB from PowerShell directly
+
+**TCP mode: `TcpServer unavailable: LuaSocket not available`**
+- This happens if PoB can't load `socket.dll` from its runtime directory
+- Confirm you're launching the standard PoB Community install, not a custom build
+- The standard install ships `socket.dll` in its runtime folder
 
 **Build is on 3.28 (Mirage) and tree looks wrong**
 - Ensure you have the latest `api-stdio` branch — it includes 3.28 tree data and Timeless Jewel graceful-degradation patches

@@ -7,13 +7,22 @@
 POB_DIRECTORY="/path/to/Path of Building/Builds"
 ```
 
-### Lua Bridge
+### Lua Bridge — Headless Mode (spawns LuaJIT)
 ```bash
 POB_LUA_ENABLED="true"
 POB_FORK_PATH="/path/to/PathOfBuilding/src"   # charleslucas/PathOfBuilding, api-stdio branch
 POB_CMD="luajit"                               # or full path on Windows
 POB_TIMEOUT_MS="30000"                         # default 30 s; bridge auto-restarts on timeout
 ```
+
+### Lua Bridge — TCP Mode (connect to running PoB GUI)
+```bash
+POB_LUA_ENABLED="true"
+POB_API_TCP="true"                            # skip headless, connect via TCP instead
+POB_API_TCP_HOST="127.0.0.1"                 # optional, loopback default
+POB_API_TCP_PORT="31337"                      # optional, default port
+```
+Launch PoB with: `$env:POB_API_TCP = "1"; & "Path of Building.exe"`
 
 ### Trade API
 ```bash
@@ -196,9 +205,17 @@ Returns critical issues, warnings, and info with 0–10 health score. Uses Lua e
 list_builds → analyze_build → validate_build
 ```
 
-### High-fidelity stats
+### High-fidelity stats (headless mode)
 ```
 lua_start → lua_load_build → lua_get_stats (category: defense) → validate_build
+```
+
+### Live PoB GUI (TCP mode)
+```
+# Start PoB with: $env:POB_API_TCP = "1"; & "Path of Building.exe"
+# Open build in PoB, then:
+lua_get_stats → update_tree_delta → set_config
+# Changes appear instantly in the PoB window
 ```
 
 ### Import live character

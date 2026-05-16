@@ -43,21 +43,17 @@ Spawns PoB's Lua engine in headless mode (stdio JSON-RPC), giving Claude access 
 
 ## What's Next
 
-### TCP Mode — Connect to Running PoB GUI
+### ✅ TCP Mode — Connect to Running PoB GUI
 
-The current Lua bridge spawns a separate *headless* PoB process. A TCP mode would instead connect to a **running PoB GUI** launched with `POB_API_TCP=1`, enabling:
+Claude can now connect directly to a **running PoB GUI** instead of spawning a separate headless process:
 
-- Changes made via Claude appear live in the PoB window
-- No need to manage a separate LuaJIT process
-- Bi-directional: Claude can read from and write to the build currently open in PoB
+- Changes appear live in the PoB window — you and Claude edit the same build
+- No `POB_FORK_PATH` or `POB_CMD` required — standard PoB Community install
+- `PoBLuaTcpClient` in `pobLuaBridge.ts` — same JSON-RPC protocol, TCP transport
+- `API/TcpServer.lua` in the PoB fork — non-blocking LuaSocket server, pumped each frame
+- `POB_API_TCP=true` env var selects TCP vs stdio mode in `LuaClientManager`
 
-**Implementation plan:**
-1. Merge `TcpServer.lua` from `ianderse/dev` into the `api-stdio` branch of the PoB fork
-2. Implement `PoBLuaTcpClient` in `pobLuaBridge.ts` (same JSON-RPC protocol, TCP transport)
-3. Add `POB_API_TCP=true` env var to `LuaClientManager` to select TCP vs stdio mode
-4. Launch PoB with: `$env:POB_API_TCP = "1"; & "Path of Building.exe"`
-
-**Effort estimate:** 2–3 days
+**To use:** `$env:POB_API_TCP = "1"; & "Path of Building.exe"` then add `"POB_API_TCP": "true"` to your Claude config.
 
 ### poe.ninja League Data
 
