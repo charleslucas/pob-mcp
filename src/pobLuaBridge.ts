@@ -639,6 +639,43 @@ export class PoBLuaTcpClient extends PoBApiBase {
     );
   }
 
+  /** Class metadata for minimal build XML generation. */
+  private static readonly CLASS_META: Record<string, { id: number; startNode: number; ascendancies: Record<string, number> }> = {
+    Scion:    { id: 0, startNode: 58833, ascendancies: { None: 0, Ascendant: 1 } },
+    Marauder: { id: 1, startNode: 58308, ascendancies: { None: 0, Juggernaut: 1, Berserker: 2, Chieftain: 3 } },
+    Ranger:   { id: 2, startNode: 16828, ascendancies: { None: 0, Raider: 1, Deadeye: 2, Pathfinder: 3 } },
+    Witch:    { id: 3, startNode: 2714,  ascendancies: { None: 0, Occultist: 1, Elementalist: 2, Necromancer: 3 } },
+    Duelist:  { id: 4, startNode: 56547, ascendancies: { None: 0, Slayer: 1, Gladiator: 2, Champion: 3 } },
+    Templar:  { id: 5, startNode: 4201,  ascendancies: { None: 0, Inquisitor: 1, Hierophant: 2, Guardian: 3 } },
+    Shadow:   { id: 6, startNode: 35631, ascendancies: { None: 0, Assassin: 1, Trickster: 2, Saboteur: 3 } },
+  };
+
+  private static makeBlankBuildXml(className = "Scion", ascendancy = "None"): string {
+    const meta = PoBLuaTcpClient.CLASS_META[className] ?? PoBLuaTcpClient.CLASS_META["Scion"]!;
+    const ascId = meta.ascendancies[ascendancy] ?? 0;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<PathOfBuilding>\n` +
+      `  <Build level="1" targetVersion="3_21" bandits="None" ` +
+        `className="${className}" ascendClassName="${ascendancy}" mainSocketGroup="1"/>\n` +
+      `  <Skills/>\n` +
+      `  <Tree activeSpec="1">\n` +
+      `    <Spec treeVersion="3_21" ascendClassId="${ascId}" classId="${meta.id}" ` +
+        `nodes="${meta.startNode}"/>\n` +
+      `  </Tree>\n` +
+      `  <Items/>\n` +
+      `  <Notes/>\n` +
+      `</PathOfBuilding>`;
+  }
+
+  /**
+   * In TCP mode, new_build generates a minimal XML and opens it in the GUI
+   * via open_build_xml rather than sending the rejected 'new_build' action.
+   */
+  override async newBuild(params?: { className?: string; ascendancy?: string }): Promise<any> {
+    const xml = PoBLuaTcpClient.makeBlankBuildXml(params?.className, params?.ascendancy);
+    return this.loadBuildXml(xml, `New ${params?.className ?? "Scion"} Build`);
+  }
+
   /**
    * In TCP mode, load/create a build by calling open_build_xml which routes
    * through PoB's main:SetMode('BUILD',...) so the GUI switches to the build.
