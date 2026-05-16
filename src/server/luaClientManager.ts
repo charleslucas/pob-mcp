@@ -63,7 +63,7 @@ export class LuaClientManager {
     // Total reconnect window: how long to keep retrying before giving up.
     const reconnectMs = process.env.POB_RECONNECT_TIMEOUT_MS
       ? parseInt(process.env.POB_RECONNECT_TIMEOUT_MS)
-      : 30000;
+      : 300000;  // 5 minutes default
     const retryIntervalMs = 2000;
 
     const deadline = Date.now() + reconnectMs;
