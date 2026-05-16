@@ -1,10 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node test_debug2.mjs)",
-      "Bash(POB_DEBUG=true timeout 45 node -e ' *)",
-      "Bash(node test_spec_debug.mjs)",
-      "Bash(git merge *)"
+      "Bash(npm run build*)",
+      "Bash(npm test*)",
+      "Bash(node test_*.mjs)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git merge*)",
+      "Bash(git push*)",
+      "WebSearch",
+      "WebFetch(domain:www.pathofexile.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:poe.ninja)"
     ]
   }
 }

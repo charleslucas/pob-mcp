@@ -9,7 +9,7 @@
     <PlayerStat stat="ChanceToEvade" value="75"/>
   </Build>
   <Tree activeSpec="1">
-    <Spec title="Main Build" treeVersion="3_21">
+    <Spec title="Main Build" treeVersion="3_28">
       <URL>https://www.pathofexile.com/passive-skill-tree/AAAABQIBAQABAgMEBQYHCAk=</URL>
       <Sockets>
         <Socket nodeId="1234" itemId="1"/>

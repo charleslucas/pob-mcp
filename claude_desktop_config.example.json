@@ -3,10 +3,20 @@
     "pob": {
       "command": "node",
       "args": [
-        "/CHANGE/THIS/PATH/pob-mcp-server/build/index.js"
+        "C:/CHANGE/THIS/PATH/pob-mcp/build/index.js"
       ],
       "env": {
-        "POB_DIRECTORY": "/Users/YOUR_USERNAME/Documents/Path of Building/Builds"
+        "POB_DIRECTORY": "C:/Users/YOUR_USERNAME/OneDrive/Documents/Path of Building/Builds",
+
+        "POB_LUA_ENABLED": "true",
+        "POB_FORK_PATH": "C:/path/to/PathOfBuilding/src",
+        "POB_CMD": "C:/path/to/luajit.exe",
+        "POB_TIMEOUT_MS": "30000",
+
+        "POE_TRADE_ENABLED": "false",
+
+        "POE_SESSION_ID": "",
+        "POE_ACCOUNT_NAME": ""
       }
     }
   }
