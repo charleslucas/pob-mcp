@@ -3,6 +3,7 @@ import type { TreeService } from "../services/treeService.js";
 import type { ValidationService } from "../services/validationService.js";
 import type { TreeAnalysisResult } from "../types.js";
 import type { HandlerContext } from "../utils/contextBuilder.js";
+import { PoBLuaTcpClient } from "../pobLuaBridge.js";
 import path from "path";
 import fs from "fs/promises";
 import { wrapHandler } from "../utils/errorHandling.js";
@@ -407,8 +408,14 @@ export async function handleGetBuildStats(context: HandlerContext, buildName: st
 
 export async function handleGetBuildNotes(context: HandlerContext, buildName: string) {
   return wrapHandler('get build notes', async () => {
-    const build = await context.buildService.readBuild(buildName);
-    const notes = build.Notes ?? '';
+    const fileName = buildName.endsWith('.xml') ? buildName : `${buildName}.xml`;
+
+    // In TCP mode: read from the live build so we see unsaved in-memory notes.
+    try { await context.ensureLuaClient(); } catch { /* PoB not running — fall back to file */ }
+    const client = context.getLuaClient();
+    const tcpGetNotes = client instanceof PoBLuaTcpClient ? client.getNotes.bind(client) : null;
+    const notes = tcpGetNotes ? await tcpGetNotes() : (await context.buildService.readBuild(fileName)).Notes ?? '';
+
     return {
       content: [{
         type: 'text' as const,
@@ -422,15 +429,24 @@ export async function handleGetBuildNotes(context: HandlerContext, buildName: st
 
 export async function handleSetBuildNotes(context: HandlerContext, buildName: string, notes: string) {
   return wrapHandler('set build notes', async () => {
-    const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
-    let xml = await fs.readFile(buildPath, 'utf-8');
+    const fileName = buildName.endsWith('.xml') ? buildName : `${buildName}.xml`;
 
-    // XML-escape the notes content so special characters don't corrupt the build file
+    // In TCP mode: push notes into the live build directly — PoB will see them immediately.
+    // The user saves from PoB GUI which persists the notes to disk.
+    try { await context.ensureLuaClient(); } catch { /* PoB not running — fall back to file */ }
+    const client = context.getLuaClient();
+    const tcpSetNotes = client instanceof PoBLuaTcpClient ? client.setNotes.bind(client) : null;
+    if (tcpSetNotes) {
+      await tcpSetNotes(notes);
+    }
+
+    // Always write to file so notes persist even if PoB isn't running / user hasn't saved yet.
+    const buildPath = sanitizeBuildName(fileName, context.pobDirectory);
+    let xml = await fs.readFile(buildPath, 'utf-8');
     const escaped = notes
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-
     if (xml.includes('<Notes>')) {
       xml = xml.replace(/<Notes>[\s\S]*?<\/Notes>/, `<Notes>${escaped}</Notes>`);
     } else if (xml.includes('<Notes/>')) {
@@ -438,14 +454,13 @@ export async function handleSetBuildNotes(context: HandlerContext, buildName: st
     } else {
       xml = xml.replace('</PathOfBuilding>', `  <Notes>${escaped}</Notes>\n</PathOfBuilding>`);
     }
-
     await fs.writeFile(buildPath, xml, 'utf-8');
-    // Invalidate the build cache so a subsequent get_build_notes reads the updated file
-    context.buildService.invalidateBuild(buildName);
+    context.buildService.invalidateBuild(fileName);
+
     return {
       content: [{
         type: 'text' as const,
-        text: `✅ Notes updated in ${buildName} (${notes.length} characters).`,
+        text: `Notes updated in ${fileName} (${notes.length} characters).${tcpSetNotes ? ' Live build updated via TCP.' : ''}`,
       }],
     };
   });

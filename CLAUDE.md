@@ -144,6 +144,21 @@ When saving imported characters, use `{League}-{CharacterName}.xml` (e.g. `Mirag
 
 Remind the user that PoB requires all allocated nodes to form a connected path back to the class start node. Nodes disconnected from the tree are silently dropped. Use `find_path_to_node` first to find the travel nodes needed to reach a target.
 
+## TCP-first principle
+
+When a live TCP client is active (`PoBLuaTcpClient`), **always prefer TCP operations over file operations**. Reasons:
+
+- The user can see every change in the PoB GUI in real time (console log + live build state).
+- The in-memory build state may differ from the saved file (unsaved gems, config tweaks, etc.) — reading from file would give stale data.
+- Writing directly to file while the build is open risks being silently overwritten when the user saves from PoB.
+
+**In practice this means:**
+- `get_build_notes` / `set_build_notes` → use `get_notes` / `set_notes` TCP actions; fall back to file only if TCP is unavailable.
+- Any handler that reads build state (stats, items, tree, config) should prefer `lua_*` TCP calls over parsing the XML file from disk.
+- When implementing new handlers that touch build data, check `client instanceof PoBLuaTcpClient` and route accordingly.
+
+The file path is still always written as a persistence backup — the user may not have saved yet, or may be running headless.
+
 ## Key constraints
 
 - **Do not modify the user's existing builds** without explicit permission. Creating test builds is fine.

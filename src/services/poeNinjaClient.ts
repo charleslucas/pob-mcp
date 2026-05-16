@@ -85,7 +85,7 @@ export class PoeNinjaClient {
   /**
    * Get currency rates for a league
    */
-  async getCurrencyRates(league: string): Promise<CurrencyOverview> {
+  async getCurrencyRates(league: string): Promise<NewCurrencyOverview> {
     const cacheKey = `currency:${league}`;
     const cached = this.getFromCache(cacheKey);
     if (cached) {
@@ -111,7 +111,7 @@ export class PoeNinjaClient {
   /**
    * Get fragment rates for a league
    */
-  async getFragmentRates(league: string): Promise<CurrencyOverview> {
+  async getFragmentRates(league: string): Promise<NewCurrencyOverview> {
     const cacheKey = `fragment:${league}`;
     const cached = this.getFromCache(cacheKey);
     if (cached) {
@@ -141,10 +141,11 @@ export class PoeNinjaClient {
     const data = await this.getCurrencyRates(league);
     const rateMap = new Map<string, number>();
     rateMap.set('Chaos Orb', 1.0);
+    const idToName = new Map(data.items.map(item => [item.id, item.name]));
     for (const line of data.lines) {
-      if (line.currencyTypeName && line.chaosEquivalent > 0) {
-        rateMap.set(line.currencyTypeName, line.chaosEquivalent);
-      }
+      const name = idToName.get(line.id);
+      if (!name || !(line.primaryValue > 0)) continue;
+      rateMap.set(name, line.primaryValue);
     }
     return rateMap;
   }
@@ -175,22 +176,14 @@ export class PoeNinjaClient {
     sellRate.set('Chaos Orb', 1.0);
     buyRate.set('Chaos Orb', 1.0);
 
+    const idToName = new Map(overview.items.map(item => [item.id, item.name]));
     for (const line of overview.lines) {
-      const name = line.currencyTypeName;
-      if (!name || line.chaosEquivalent <= 0) continue;
-
-      // receive.value: chaos per unit of this currency (sell side)
-      const sell = line.receive?.value ?? line.chaosEquivalent;
-      // pay.value: chaos per unit of this currency when buying (buy side)
-      // poe.ninja pay.value is expressed as [units-of-currency per chaos], so invert it.
-      const buy = line.pay?.value
-        ? 1 / line.pay.value          // convert [currency/chaos] → [chaos/currency]
-        : line.chaosEquivalent;       // fallback: assume no spread
-
-      if (sell > 0 && buy > 0) {
-        sellRate.set(name, sell);
-        buyRate.set(name, buy);
-      }
+      const name = idToName.get(line.id);
+      if (!name || !(line.primaryValue > 0)) continue;
+      // New API has no bid/ask split — use primaryValue for both sides.
+      // Round-trips will always show ~0% profit; arbitrage detection effectively disabled.
+      sellRate.set(name, line.primaryValue);
+      buyRate.set(name, line.primaryValue);
     }
 
     const currencies = Array.from(sellRate.keys());
