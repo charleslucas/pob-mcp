@@ -237,7 +237,7 @@ export function getLuaToolSchemas(): any[] {
   return [
     {
       name: "lua_start",
-      description: "Start the PoB headless API process. This will spawn the LuaJIT process that can load builds and compute stats using the actual PoB calculation engine.",
+      description: "Start or connect to the PoB calculation engine. In TCP mode (POB_API_TCP=true) this connects to a running PoB GUI rather than spawning a headless process. PoB must be running via LaunchPoBWithAPI.bat and have a build open. A background keepalive subscript keeps PoB's frame loop ticking at ~60 fps even when PoB is minimised or in the background, so no foreground interaction is needed.",
       inputSchema: {
         type: "object",
         properties: {},

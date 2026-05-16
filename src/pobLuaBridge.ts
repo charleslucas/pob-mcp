@@ -556,7 +556,8 @@ export class PoBLuaTcpClient extends PoBApiBase {
         sock.destroy();
         reject(new Error(
           `Connection to PoB GUI at ${host}:${port} timed out.\n\n` +
-          `Make sure PoB is running with the POB_API_TCP=1 environment variable set.`
+          `Make sure PoB is running via LaunchPoBWithAPI.bat with a build open.\n` +
+          `If the keepalive subscript failed to start, try bringing PoB to the foreground once, then retry.`
         ));
       }, timeoutMs);
 
@@ -615,7 +616,11 @@ export class PoBLuaTcpClient extends PoBApiBase {
         }
       } catch {}
     }
-    throw new Error(`PoB TCP: did not receive ready banner from ${host}:${port}`);
+    throw new Error(
+      `PoB TCP: did not receive ready banner from ${host}:${port}.\n` +
+      `Make sure PoB is running via LaunchPoBWithAPI.bat with a build open.\n` +
+      `If the keepalive subscript failed, try bringing PoB to the foreground once, then retry.`
+    );
   }
 
   /** Disconnect without sending 'quit' — PoB GUI keeps running. */
