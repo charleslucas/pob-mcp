@@ -207,6 +207,11 @@ abstract class PoBApiBase {
     return res.config;
   }
 
+  async closeBuild(): Promise<void> {
+    const res = await this.send({ action: "close_build" });
+    if (!res.ok) throw new Error(res.error || "close_build failed");
+  }
+
   async getNotes(): Promise<string> {
     const res = await this.send({ action: "get_notes" });
     if (!res.ok) throw new Error(res.error || "get_notes failed");

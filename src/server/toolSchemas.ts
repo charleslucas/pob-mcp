@@ -268,6 +268,11 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "lua_close_build",
+      description: "Close the currently open build and return to the PoB build list screen. TCP mode only. Use this between batch operations (e.g. import all characters) to keep the GUI clean between builds. After closing, use lua_new_build or lua_load_build to open the next one.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
       name: "lua_save_build",
       description: "Save the currently loaded in-memory Lua bridge build to a file. Required before using file-based tools (validate_build, analyze_build, etc.) on an in-memory build.",
       inputSchema: {

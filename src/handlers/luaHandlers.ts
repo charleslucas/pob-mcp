@@ -28,6 +28,18 @@ export async function handleLuaStart(context: LuaHandlerContext) {
   });
 }
 
+export async function handleLuaCloseBuild(context: LuaHandlerContext) {
+  return wrapHandler('close build', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    await luaClient.closeBuild();
+    return {
+      content: [{ type: "text" as const, text: "Build closed. PoB returned to the build list." }],
+    };
+  });
+}
+
 export async function handleLuaStop(context: LuaHandlerContext) {
   return wrapHandler('stop Lua bridge', async () => {
     await context.stopLuaClient();
