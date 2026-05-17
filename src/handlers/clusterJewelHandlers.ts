@@ -82,7 +82,7 @@ export async function handleSearchClusterJewels(
     const passiveMin = passive_count ?? range.min;
     const passiveMax = passive_count ?? range.max;
     builder.withStats([{
-      id: 'implicit.stat_3948993189', // "Adds # Passive Skills"
+      id: 'explicit.stat_3086156145', // "Adds # Passive Skills" (enchant, shown as explicit in trade API)
       min: passiveMin,
       max: passiveMax,
     }]);
