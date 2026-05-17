@@ -60,23 +60,28 @@ export async function handleSearchClusterJewels(
     // Build the query
     const builder = new TradeQueryBuilder();
 
-    // Set cluster jewel base type
-    const baseTypeName = `${size} Cluster Jewel`;
-    builder.withType(baseTypeName);
+    // Cluster jewels use category "jewel" — the size is determined by passive count implicit
+    builder.withCategory('jewel');
+
+    // Default passive count ranges by size if not specified
+    const sizePassiveRange: Record<string, { min: number; max: number }> = {
+      Large: { min: 8, max: 12 },
+      Medium: { min: 4, max: 6 },
+      Small: { min: 2, max: 3 },
+    };
 
     // Set rarity to magic or rare (cluster jewels are typically these)
     // Most useful cluster jewels are magic (blue) or rare (yellow)
 
-    // Add passive count filter if specified
-    if (passive_count) {
-      // This is an implicit mod: "Adds X Passive Skills"
-      // We'll need to search by the implicit mod text
-      builder.withStats([{
-        id: 'implicit.stat_3948993189', // "Adds # Passive Skills"
-        min: passive_count,
-        max: passive_count,
-      }]);
-    }
+    // Add passive count filter — use explicit count or default to size range
+    const range = sizePassiveRange[size];
+    const passiveMin = passive_count ?? range.min;
+    const passiveMax = passive_count ?? range.max;
+    builder.withStats([{
+      id: 'implicit.stat_3948993189', // "Adds # Passive Skills"
+      min: passiveMin,
+      max: passiveMax,
+    }]);
 
     // Add enchantment filter if specified
     if (enchant) {
