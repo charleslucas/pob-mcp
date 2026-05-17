@@ -102,9 +102,10 @@ export async function handleSnapshotBuild(
 ) {
   return wrapHandler('snapshot build', async () => {
   const { exportService, buildService } = context;
+  const fileName = args.build_name.endsWith('.xml') ? args.build_name : `${args.build_name}.xml`;
 
   const result = await exportService.snapshotBuild(buildService, {
-    buildName: args.build_name,
+    buildName: fileName,
     description: args.description,
     tag: args.tag,
   });
@@ -136,8 +137,9 @@ export async function handleListSnapshots(
 ) {
   return wrapHandler('list snapshots', async () => {
   const { exportService } = context;
+  const fileName = args.build_name.endsWith('.xml') ? args.build_name : `${args.build_name}.xml`;
 
-  const result = await exportService.listSnapshots(args.build_name, {
+  const result = await exportService.listSnapshots(fileName, {
     limit: args.limit,
     tagFilter: args.tag_filter,
   });

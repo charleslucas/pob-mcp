@@ -157,7 +157,8 @@ function formatShoppingItem(item: any, budget: BudgetTier, detailed: boolean): s
   }
 
   // Show selected budget tier recommendation
-  const rec = item.recommendations[budget];
+  const rec = item.recommendations?.[budget] ?? item.recommendations?.medium ?? item.recommendations?.budget;
+  if (!rec) return output;
   output += `  Target: ${rec.searchCriteria}\n`;
   output += `  Est. Cost: ${rec.estimatedPrice.min}-${rec.estimatedPrice.max} ${rec.estimatedPrice.currency}\n`;
 

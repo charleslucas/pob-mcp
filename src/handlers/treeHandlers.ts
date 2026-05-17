@@ -523,11 +523,17 @@ export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
   if (!luaClient) throw new Error('Lua bridge not active. Use lua_load_build first.');
 
   const data = await luaClient.getMasteryOptions();
-  const masteries: any[] = data?.masteries ?? [];
+  // Lua returns: { masteries: [{ nodeId, name, options: [{ effectId, stats: string[], selected: bool }] }] }
+  const allMasteries: any[] = data?.masteries ?? [];
+
+  // Only show masteries that have a selected effect (i.e. the node is allocated and an effect chosen)
+  const masteries = allMasteries.filter((m: any) =>
+    (m.options ?? []).some((o: any) => o.selected)
+  );
 
   if (masteries.length === 0) {
     return {
-      content: [{ type: 'text' as const, text: '=== Mastery Suggestions ===\n\nNo allocated mastery nodes found in the current build.\n' }],
+      content: [{ type: 'text' as const, text: '=== Mastery Suggestions ===\n\nNo allocated mastery effects found in the current build.\n' }],
     };
   }
 
@@ -536,41 +542,38 @@ export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
   const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || (baseStats.MinionTotalDPS as number) || 1;
   const baseEHP = (baseStats.TotalEHP as number) || (baseStats.Life as number) || 1;
 
-  // Current mastery effect map: { nodeId: effectId }
+  // Current mastery effect map: { nodeId: effectId } from selected options
   const currentMasteryEffects: Record<number, number> = {};
-  for (const m of masteries) {
-    if (m.allocatedEffect != null) {
-      currentMasteryEffects[m.nodeId] = m.allocatedEffect;
-    }
+  for (const m of allMasteries) {
+    const selected = (m.options ?? []).find((o: any) => o.selected);
+    if (selected) currentMasteryEffects[m.nodeId] = selected.effectId;
   }
 
   const outputLines: string[] = ['=== Mastery Node Suggestions ===', ''];
 
   for (const mastery of masteries) {
-    outputLines.push(`**${mastery.nodeName}** (node ${mastery.nodeId})`);
-    if (mastery.allocatedEffect != null) {
-      const current = mastery.availableEffects.find((e: any) => e.effectId === mastery.allocatedEffect);
-      outputLines.push(`  Current: ${current?.stat ?? mastery.allocatedEffect}`);
-    } else {
-      outputLines.push('  Current: (none selected)');
-    }
+    const options: any[] = mastery.options ?? [];
+    const currentOption = options.find((o: any) => o.selected);
+    const currentStat = currentOption?.stats?.join(' / ') ?? String(currentOption?.effectId ?? '?');
 
-    // Simulate each effect choice
+    outputLines.push(`**${mastery.name ?? 'Mastery'}** (node ${mastery.nodeId})`);
+    outputLines.push(`  Current: ${currentStat}`);
+
+    // Simulate each alternative effect choice
     const scored: ScoredEffect[] = [];
-    for (const effect of mastery.availableEffects) {
+    for (const effect of options) {
       try {
         const newMasteryEffects = { ...currentMasteryEffects, [mastery.nodeId]: effect.effectId };
         const out = await luaClient.calcWith({ masteryEffects: newMasteryEffects });
         if (!out) continue;
-        // calcWith returns raw Lua output; minion stats nested under out.Minion
         const outDPS = (out.CombinedDPS as number) || (out.TotalDPS as number) ||
                        (out.Minion?.CombinedDPS as number) || (out.Minion?.TotalDPS as number) || baseDPS;
         const outEHP = (out.TotalEHP as number) || (out.Life as number) || baseEHP;
-        scored.push({ stat: effect.stat, dpsDelta: outDPS - baseDPS, ehpDelta: outEHP - baseEHP });
+        const statStr = effect.stats?.join(' / ') ?? String(effect.effectId);
+        scored.push({ stat: statStr, dpsDelta: outDPS - baseDPS, ehpDelta: outEHP - baseEHP });
       } catch { /* skip effects that fail simulation */ }
     }
 
-    // Sort by relative gain (same formula as handleGetPassiveUpgrades to avoid raw-value scale mismatch)
     scored.sort((a, b) =>
       ((b.dpsDelta / baseDPS) + (b.ehpDelta / baseEHP)) -
       ((a.dpsDelta / baseDPS) + (a.ehpDelta / baseEHP))
@@ -579,9 +582,10 @@ export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
       outputLines.push('  (simulation unavailable for this mastery)');
     }
     for (const s of scored.slice(0, 3)) {
-      const dpsStr = s.dpsDelta !== 0 ? ` | DPS Delta${s.dpsDelta > 0 ? '+' : ''}${Math.round(s.dpsDelta)}` : '';
-      const ehpStr = s.ehpDelta !== 0 ? ` | EHP Delta${s.ehpDelta > 0 ? '+' : ''}${Math.round(s.ehpDelta)}` : '';
-      outputLines.push(`  - ${s.stat}${dpsStr}${ehpStr}`);
+      const dpsStr = s.dpsDelta !== 0 ? ` | DPS ${s.dpsDelta > 0 ? '+' : ''}${Math.round(s.dpsDelta)}` : '';
+      const ehpStr = s.ehpDelta !== 0 ? ` | EHP ${s.ehpDelta > 0 ? '+' : ''}${Math.round(s.ehpDelta)}` : '';
+      const marker = s.stat === currentStat ? ' ← current' : '';
+      outputLines.push(`  - ${s.stat}${dpsStr}${ehpStr}${marker}`);
     }
     outputLines.push('');
   }
