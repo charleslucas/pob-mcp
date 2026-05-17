@@ -1071,9 +1071,13 @@ export async function handleFindWeightedTradeItems(
       throw new Error(`PoB returned no query JSON${warning ? ` (${warning})` : ''}`);
     }
 
-    // PoB's query carries fields beyond the typed TradeQuery shape (engine, statgroup sort).
-    // The trade API accepts them, so we forward as-is via an unknown cast.
-    const searchResult = await context.tradeClient.searchItems(league, pobQuery as unknown as TradeQuery);
+    // PoB's TradeQueryGenerator may produce a status value the trade API rejects.
+    // Override to a known-good value before submitting.
+    const normalizedQuery = pobQuery as Record<string, any>;
+    if (normalizedQuery.query) {
+      normalizedQuery.query.status = { option: 'online' };
+    }
+    const searchResult = await context.tradeClient.searchItems(league, normalizedQuery as unknown as TradeQuery);
 
     if (!searchResult.result || searchResult.result.length === 0) {
       const empty =
