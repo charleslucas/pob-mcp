@@ -64,6 +64,7 @@ export async function handleSearchClusterJewels(
     builder.withCategory('jewel');
 
     // Default passive count ranges by size if not specified
+    const sizeKey = size.charAt(0).toUpperCase() + size.slice(1).toLowerCase();
     const sizePassiveRange: Record<string, { min: number; max: number }> = {
       Large: { min: 8, max: 12 },
       Medium: { min: 4, max: 6 },
@@ -74,7 +75,7 @@ export async function handleSearchClusterJewels(
     // Most useful cluster jewels are magic (blue) or rare (yellow)
 
     // Add passive count filter — use explicit count or default to size range
-    const range = sizePassiveRange[size];
+    const range = sizePassiveRange[sizeKey];
     const passiveMin = passive_count ?? range.min;
     const passiveMax = passive_count ?? range.max;
     builder.withStats([{
