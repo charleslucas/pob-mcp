@@ -387,15 +387,16 @@ export async function handleGetPassiveUpgrades(
   const baseEHP = (baseStats.TotalEHP as number) || (baseStats.Life as number) || 1;
 
   // Step 2: map focus + issues to search keywords
+  // Use broad keywords that cover attack, spell, and generic damage scaling.
+  // Avoid "critical" alone — at 100% crit it adds nothing.
   const keywords: string[] = [];
 
   if (focus === 'dps' || focus === 'both') {
-    keywords.push('damage', 'critical');
+    keywords.push('damage', 'attack speed', 'accuracy', 'physical');
   }
 
   if (focus === 'defence' || focus === 'both') {
     keywords.push('life', 'energy shield');
-    // If there are resistance issues, add resistance keywords
     const hasResistIssue = issues.some(i => i.category === 'resistance' && (i.severity === 'error' || i.severity === 'warning'));
     if (hasResistIssue) {
       keywords.push('resistance');
@@ -406,12 +407,12 @@ export async function handleGetPassiveUpgrades(
   const seen = new Set<string>();
   const candidates: any[] = [];
 
-  for (const keyword of keywords.slice(0, 4)) {
+  for (const keyword of keywords.slice(0, 5)) {
     try {
       const results = await luaClient.searchNodes({
         keyword,
         nodeType: 'notable',
-        maxResults: 15,
+        maxResults: 12,
         includeAllocated: false,
       });
       if (results && results.nodes) {
