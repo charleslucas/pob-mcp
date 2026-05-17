@@ -4,6 +4,12 @@ An MCP (Model Context Protocol) server that enables Claude to analyze, modify, a
 
 ---
 
+## Part of poe_mcp_suite
+
+This server is part of [poe_mcp_suite](https://github.com/charleslucas/poe_mcp_suite) — a collection of MCP servers for Path of Exile designed to work together with Claude. See the suite repo for an overview of all available servers and tools.
+
+---
+
 **☕ If you find this project helpful, consider [buying me a coffee](https://buymeacoffee.com/ianderse)!**
 
 ---
