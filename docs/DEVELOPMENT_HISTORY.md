@@ -94,7 +94,78 @@ The existing `find_path_to_node` seeds its BFS from all currently allocated node
 
 ---
 
-## Key Technical Notes
+## Phase 5 — Passive Tree Simulation (`get_passive_upgrades`, `suggest_masteries`)
+
+Both tools evaluated candidates but always returned 0 results. Three independent root causes, each one hiding the next.
+
+### Root cause 1: `calcFullDPS` runs unconditionally when passive tree tab is open
+
+`calcs.getMiscCalculator` returns a cached `calcFunc` closure. When called, the closure checks:
+
+```lua
+if (useFullDPS ~= false or build.viewMode == "TREE") and usedFullDPS then
+    calcs.calcFullDPS(...)  -- expensive: 30+ seconds for a complex build
+end
+```
+
+The second branch fires whenever the user has the passive tree tab visible, regardless of `useFullDPS`. This made every `calcWith` call time out (10 s limit) when PoB was sitting on its default tab.
+
+**Fix:** Temporarily set `build.viewMode = "CALCULATOR"` before calling `calcFunc(override, false)` and restore it after. The closure reads `build.viewMode` dynamically at call time (Lua upvalue captures the table reference, not a snapshot), so the bypass works. Passing `false` as `useFullDPS` also satisfies the `useFullDPS ~= false` half.
+
+**Key insight:** `calcs.getMiscCalculator` runs `calcs.initEnv + calcs.perform + calcFullDPS` once to build the base, then caches a closure. `GetMiscCalculator()` (the CalcsTab method) just `unpack(self.miscCalculator)` — no rebuild. Each `calcFunc(override, false)` call with our bypass is ~0.1–1 s.
+
+### Root cause 2: `pcall(write_line, ...)` in TcpServer.lua silently swallows JSON failures
+
+TcpServer.lua sends responses with:
+
+```lua
+local ok3, res = pcall(handler, params)
+if not ok3 then
+    pcall(write_line, c.sock, { ok = false, error = ... })
+else
+    ConPrintf('[PoB API] << %s ok', action)
+    pcall(write_line, c.sock, res)  -- ← error here is silently swallowed
+end
+```
+
+`handlers.calc_with` was returning `{ ok = true, output = env.player.output }` — the raw output table from `calcs.perform`. That table contains Lua function values and userdata that dkjson cannot serialize. `json.encode` threw, `pcall` caught it, nothing was sent. TypeScript waited 10 s, timed out, killed the socket. All subsequent `calcWith` calls in the same tool invocation immediately failed on `isAlive()` check. Result: "showing top 0."
+
+The silent `[PoB API] << calc_with ok` console message with no corresponding TypeScript response was the tell.
+
+**Fix:** Extract only the JSON-safe scalar fields in the handler before returning:
+
+```lua
+local slim = { CombinedDPS = out.CombinedDPS, TotalDPS = out.TotalDPS, Life = out.Life, TotalEHP = out.TotalEHP, EnergyShield = out.EnergyShield }
+if type(out.Minion) == 'table' then slim.Minion = { CombinedDPS = out.Minion.CombinedDPS, TotalDPS = out.Minion.TotalDPS } end
+return { ok = true, output = slim }
+```
+
+**Lesson:** Any handler that returns a large PoB internal table is silently broken. Always extract scalars.
+
+### Root cause 3: `get_mastery_options` used wrong field names
+
+In PassiveTree.lua, mastery effect objects look like this after processing:
+
+```lua
+-- in tree.masteryEffects[effectId]:  { id = effectId, sd = processedStats }
+-- on node.masteryEffects[i]:  { effect = effectId, stats = processedStats }
+```
+
+The `M.get_mastery_options` implementation used `effect.id` (nil) and `effect.sd` (nil), so every `effectId` came back as nil and every stat array was empty. The mastery node flag check was also wrong: `node.isMastery` vs the correct `node.m or node.isMastery`.
+
+**Fix:** Use `effect.effect` for the ID, `effect.stats` for the stat text, and `(node.m or node.isMastery)` for the type check.
+
+### Root cause 4: `calcs.initEnv` ignores `override.masteryEffects`
+
+For mastery simulation, we tried passing `override = { masteryEffects = {[nodeId] = effectId} }` to `calcFunc`. Looking at `CalcSetup.lua`, `calcs.initEnv` handles `override.addNodes`, `override.removeNodes`, `override.spec`, `override.conditions`, and item replacement overrides — but has no code path for `masteryEffects`. The override was silently ignored; every mastery option simulated to the same DPS as the base.
+
+**How mastery mods actually flow:** During `PassiveSpec:ImportFromNodeList`, each allocated mastery node has `node.sd = effect.sd` set from `masterySelections[nodeId]`, and `ProcessStats(node)` rebuilds `node.modList`. `calcs.initEnv` then reads `allocNodes[id].modList` when building the player's mod database.
+
+**Fix:** For each mastery node in the override, save `node.sd` and `node.modList`, set `node.sd = effect.sd`, call `tree:ProcessStats(node)` to rebuild `modList`, call `calcFunc({}, false)`, then restore both fields. The `calcFunc({}, false)` with no override reads `allocNodes` directly, picking up the patched `modList`.
+
+**Note:** JSON round-trips object keys as strings; mastery node IDs must be coerced back to numbers with `tonumber(k)` before looking up `allocNodes[nodeId]` or `tree.masteryEffects[effectId]`.
+
+---
 
 - **PoB's Lua environment**: LuaJIT 2.x, standard libs available. `os.clock()` works. `io.open` works with paths relative to the PoB install directory.
 - **socket.dll**: Ships with PoB, entry point `luaopen_socket_core`. Not a standard LuaSocket install.
