@@ -77,29 +77,31 @@ export async function handleSearchClusterJewels(
     // Set rarity to magic or rare (cluster jewels are typically these)
     // Most useful cluster jewels are magic (blue) or rare (yellow)
 
-    // Add passive count filter — use explicit count or default to size range
-    const range = sizePassiveRange[sizeKey];
-    const passiveMin = passive_count ?? range.min;
-    const passiveMax = passive_count ?? range.max;
-    builder.withStats([{
-      id: 'explicit.stat_3086156145', // "Adds # Passive Skills" (enchant, shown as explicit in trade API)
-      min: passiveMin,
-      max: passiveMax,
-    }]);
-
-    // Add enchantment filter if specified
-    if (enchant) {
-      // Note: Trade API doesn't provide simple text search for cluster jewel enchantments
-      // Enchantments are in the "Added Small Passive Skills grant:" format
-      // We fetch extra items and filter client-side for best results
-    }
-
-    // Add notable filters if specified
+    // Notable passives are the primary query filter.
+    // Stat IDs follow the pattern "1 Added Passive Skill is {Name}" → explicit.stat_XXXXXX
+    // We fetch the full stats list once and search for matching entries.
     if (notables.length > 0) {
-      // Note: Notables use "Allocates X" format
-      // Trade API stat IDs for these are complex and item-specific
-      // We filter these client-side after fetching results for reliability
+      const allStats: Array<{ id: string; text: string }> = await (async () => {
+        try {
+          const resp = await fetch('https://www.pathofexile.com/api/trade/data/stats', {
+            headers: { 'User-Agent': 'pob-mcp/1.0', 'Accept': 'application/json' },
+          });
+          const data = await resp.json() as { result: Array<{ entries: Array<{ id: string; text: string }> }> };
+          return data.result.flatMap(g => g.entries);
+        } catch { return []; }
+      })();
+      const notableStats = notables.flatMap(notable => {
+        const target = `1 Added Passive Skill is ${notable}`.toLowerCase();
+        const match = allStats.find(s => s.text.toLowerCase() === target);
+        return match ? [{ id: match.id, disabled: false, value: { min: 1 } }] : [];
+      });
+      if (notableStats.length > 0) {
+        builder.withStats(notableStats);
+      }
     }
+
+    // Add enchantment filter note — enchants are fetched and filtered client-side
+    // Size is determined client-side from the base_type string (e.g. "Large Cluster Jewel...")
 
     // Add item level filter
     if (min_item_level) {
@@ -148,16 +150,22 @@ export async function handleSearchClusterJewels(
       });
     }
 
+    // Filter by size — base_type contains "Large"/"Medium"/"Small"
+    filteredItems = filteredItems.filter(item => {
+      const baseType: string = (item.item as any).baseType || (item.item as any).typeLine || '';
+      return baseType.toLowerCase().includes(sizeKey.toLowerCase());
+    });
+
     if (notables.length > 0) {
       filteredItems = filteredItems.filter(item => {
-        const explicitMods = item.item.explicitMods || [];
+        const explicitMods: string[] = (item.item as any).explicitMods || [];
+        // Notables appear as "1 Added Passive Skill is {Name}"
         const allocatedNotables = explicitMods
-          .filter(mod => mod.includes('Allocates'))
           .map(mod => {
-            // Extract notable name from "Allocates X" format
-            const match = mod.match(/Allocates (.+)/);
-            return match ? match[1] : '';
-          });
+            const match = mod.match(/Added Passive Skill is (.+)/);
+            return match ? match[1].trim() : '';
+          })
+          .filter(n => n);
 
         // Check if all requested notables are present
         return notables.every(notable =>
