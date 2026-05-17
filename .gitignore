@@ -4,6 +4,7 @@ build/
 .DS_Store
 .env
 .mcp.json
+.claude/
 settings.local.json
 jest-output.json
 coverage/
