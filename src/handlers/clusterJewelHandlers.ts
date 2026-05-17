@@ -27,7 +27,8 @@ export async function handleSearchClusterJewels(
   context: ClusterJewelContext,
   args: {
     league: string;
-    size: ClusterJewelSize;
+    size?: ClusterJewelSize;
+    jewel_size?: string;
     passive_count?: number;
     enchant?: string;
     notables?: string[];
@@ -46,7 +47,8 @@ export async function handleSearchClusterJewels(
   return wrapHandler('search cluster jewels', async () => {
     const {
       league,
-      size,
+      size: sizeRaw,
+      jewel_size,
       passive_count,
       enchant,
       notables = [],
@@ -63,7 +65,8 @@ export async function handleSearchClusterJewels(
     // Cluster jewels use category "jewel" — the size is determined by passive count implicit
     builder.withCategory('jewel');
 
-    // Default passive count ranges by size if not specified
+    // Accept either 'size' or 'jewel_size' parameter (schema uses jewel_size)
+    const size = (sizeRaw ?? (jewel_size as string) ?? 'Large') as string;
     const sizeKey = size.charAt(0).toUpperCase() + size.slice(1).toLowerCase();
     const sizePassiveRange: Record<string, { min: number; max: number }> = {
       Large: { min: 8, max: 12 },
@@ -190,7 +193,7 @@ export async function handleSearchClusterJewels(
     // Format results
     const output = formatClusterJewelResults(
       filteredItems,
-      size,
+      sizeKey as ClusterJewelSize,
       searchResult.total,
       league,
       searchResult.id
