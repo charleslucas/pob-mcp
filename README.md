@@ -89,6 +89,27 @@ npm install
 npm run build
 ```
 
+## Windows Scripts (TCP Mode)
+
+Three scripts ship with this repo for wiring up the live TCP connection to the PoB GUI. **You only need these on Windows.**
+
+| Script | When to run | What it does |
+|--------|-------------|--------------|
+| `InstallTcpApi.ps1` | Once (or after a clean PoB reinstall) | Copies `TcpServer.lua`, `Handlers.lua`, `BuildOps.lua` into `%APPDATA%\Path of Building Community\API\` and patches `Modules\Main.lua` to start the TCP server when `POB_API_TCP=1` is set. Creates a `Main.lua.bak` backup before patching. |
+| `LaunchPoBWithAPI.bat` | **Every time you start PoB** | Sets `POB_API_TCP=1` and `POB_API_TCP_PORT=31337`, checks whether the patch is still in `Main.lua` (re-runs `InstallTcpApi.ps1` automatically if PoB updated and overwrote it), then launches PoB. |
+| `UninstallTcpApi.ps1` | If you want to remove the API | Restores `Main.lua` from the `.bak` backup, removes the three API Lua files, and removes the `API\` directory if empty. |
+
+```powershell
+# First-time setup
+cd pob-mcp
+.\InstallTcpApi.ps1
+
+# Every subsequent launch — use this instead of the normal PoB shortcut
+.\LaunchPoBWithAPI.bat
+```
+
+> **After a PoB update:** PoB's updater overwrites `Modules\Main.lua` and shows an integrity check warning — this is expected and harmless (the TCP server is already running in memory for that session). Just relaunch via `LaunchPoBWithAPI.bat` and it self-heals automatically.
+
 ## Configuration
 
 ### Claude Desktop Configuration
