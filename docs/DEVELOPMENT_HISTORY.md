@@ -167,6 +167,51 @@ For mastery simulation, we tried passing `override = { masteryEffects = {[nodeId
 
 ---
 
+## Phase 6 — Reliability, Update Safety, and poe-mcp-server Gap Fill
+
+### TCP timeout diagnostics
+
+When the final TCP reconnect attempt fails, `luaClientManager.ts` now runs a Windows-specific diagnostic before throwing. It checks `tasklist` for `PathOfBuilding.exe` and tests for the keepalive sentinel file (`%APPDATA%\Path of Building Community\pob-api.run`). The error message is tailored to three cases:
+
+- **PoB not running** → launch via `LaunchPoBWithAPI.bat`
+- **PoB running, no sentinel** → launched without the batch file; TCP API not active
+- **PoB running, sentinel present** → keepalive stalled; bring window to foreground
+
+### Keepalive install reliability
+
+`LaunchPoBWithAPI.bat` previously only checked for the `[pob-mcp TCP API patch]` marker in `Modules\Main.lua`. Added a second check for `API\TcpServer.lua` — the API Lua files can be absent on a fresh machine even if Main.lua looks patched. Either missing condition triggers the installer. Install failures now `pause` the terminal so the user sees the error instead of silently launching without TCP.
+
+### PoB Update button suppression
+
+PoB's updater hash-checks every file and flags our `Modules\Main.lua` patch as modified, showing an "Update Ready" button. Clicking it mid-session replaces Main.lua and breaks the MCP connection.
+
+Three-layer defence:
+1. **`M.init()` banner** — `TcpServer.lua` prints a clearly delimited warning in PoB's console (`~` key) on every TCP server startup explaining not to click Update and how to update safely.
+2. **Frame-pump detection** — `M._pump_inner()` watches `launch.updateAvailable` and prints a louder per-occurrence warning the moment PoB detects a pending update.
+3. **Button hidden** — In the Main.lua patch block (both `InstallTcpApi.ps1` and `src/Modules/Main.lua`), after `TcpServer.init()` succeeds, `self.controls.applyUpdate.shown` is overridden to `function() return false end`. The button never renders while the TCP API is active. The update is still downloaded; the user can apply it by launching without the batch file.
+
+`lua_start`'s success message also includes the update warning so Claude surfaces it in chat on every connect.
+
+### Console open on startup
+
+Investigated whether the PoB console could be opened programmatically on TCP server start so users automatically see the warnings. The console toggle (`~` key) is handled entirely inside the SimpleGraphic C++ runtime — `ConPrintf`, `ConClear`, `ConExecute`, and `ConPrintTable` are the only Lua-exposed console functions, and none of them control visibility. No clean solution; the user must press `~` manually.
+
+### poe-mcp-server gap fill
+
+The server previously depended on `poe_lib.py`, `stash_cache.py`, and `rare_scorer.py` from a sibling `buildstuff/poe_monitor/` directory that was never part of the repo (user-specific hardcoded paths). All three are now implemented in the repo:
+
+**`poe_lib.py`** — `PoeApi` wraps the four PoE character-window endpoints (`get-items`, `get-passive-skills`, `get-stash-items` list, `get-stash-items` tab) with POESESSID cookie auth and a 1.5 s inter-request rate limit. `load_config()` reads from `POE_SESSION_ID` / `POE_ACCOUNT_NAME` env vars first, with `config.json` fallback. Account discriminator (`#1234`) is stripped before API calls. `build_pob_xml` and `PobAnalyzer` are stubs pointing to pob-mcp.
+
+**`stash_cache.py`** — `StashCache` writes JSON to `~/.cache/poe-mcp-server/{league}/` with 300-second TTL. Implements `get_tab`, `get_tab_by_name`, `get_tab_list`, `get_tabs`, `cache_age`, and the module-level `_cache_path`/`_tab_list_path` functions `poe_stash.py` imports directly.
+
+**`rare_scorer.py`** — Regex-based mod triage against PoE API mod text strings. ~25 weighted rules covering life, resistances, crit multiplier/chance, attack/cast speed, physical and elemental damage, movement speed, leech, and open affixes. Returns `ScoreResult` with `total_score`, `good_mod_count`, `junk_count`, per-mod `breakdown`, and `should_trade_check` flag. `price_estimate` is always 0 — the score is a relative triage signal, not a chaos value. Also handles in-game clipboard text via `score_item_text`.
+
+Import paths in `poe_stash.py`, `poe_char.py`, `poe_pricer.py`, and `poe_all.py` updated to add the server's own directory to `sys.path` instead of the hardcoded `buildstuff` path. Fixed an undefined `POE_DIR` variable in `poe_char.py` (now `~/.cache/poe-mcp-server/price_history.db`).
+
+**RePoE** was evaluated as a data source for mod tier classification (roll ranges, mod weights). It is not on PyPI and must be installed from GitHub along with brather1ng's PyPoE fork. The JSON data files are not bundled — they must be extracted from the user's local PoE GGPK by the user (GGG copyright). For the current triage scorer the extraction is not needed; added to `requirements.txt` for future use.
+
+---
+
 - **PoB's Lua environment**: LuaJIT 2.x, standard libs available. `os.clock()` works. `io.open` works with paths relative to the PoB install directory.
 - **socket.dll**: Ships with PoB, entry point `luaopen_socket_core`. Not a standard LuaSocket install.
 - **WM_TIMER vs WM_NULL**: Timer messages are synthesized and low-priority; real posted messages trigger the render loop.
