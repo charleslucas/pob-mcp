@@ -21,7 +21,20 @@ export async function handleLuaStart(context: LuaHandlerContext) {
       content: [
         {
           type: "text" as const,
-          text: `PoB Lua Bridge started successfully.\n\nThe PoB calculation engine is now ready to load builds and compute stats.`,
+          text: [
+        'PoB Lua Bridge started successfully.',
+        '',
+        'The PoB calculation engine is now ready to load builds and compute stats.',
+        '',
+        '⚠️  IMPORTANT — PoB Update button: Because the TCP API patches Main.lua, PoB\'s',
+        'integrity check will flag the file as modified and may show an update prompt.',
+        'Do NOT click "Update" while Claude is working — it will replace Main.lua and',
+        'break the MCP connection for the rest of this session.',
+        '',
+        'If you want to run a PoB update, close PoB and launch it normally (without',
+        'LaunchPoBWithAPI.bat). After updating, relaunch via LaunchPoBWithAPI.bat and',
+        'the patch will be re-applied automatically.',
+      ].join('\n'),
         },
       ],
     };
