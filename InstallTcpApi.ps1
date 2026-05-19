@@ -107,6 +107,12 @@ if ($content -match [regex]::Escape($patchTag)) {
 				if TcpServer.init(API.handlers, tcpPort) then
 					self.onFrameFuncs['TcpServer'] = function() TcpServer.pump() end
 					ConPrintf('[PoB API] TCP server started on port %d', tcpPort)
+					-- Hide the "Update Ready" button while the TCP API is active.
+					-- Clicking it mid-session would replace Main.lua and break the connection.
+					-- Users who want to update should close PoB and relaunch without the batch file.
+					if self.controls and self.controls.applyUpdate then
+						self.controls.applyUpdate.shown = function() return false end
+					end
 				end
 			else
 				ConPrintf('[PoB API] TcpServer unavailable: %s', tostring(TcpServer))
