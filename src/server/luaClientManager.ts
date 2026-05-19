@@ -11,7 +11,44 @@
  *     Optional: POB_API_TCP_HOST (default 127.0.0.1), POB_API_TCP_PORT (default 31337)
  */
 
+import { exec } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { PoBLuaApiClient, PoBLuaTcpClient, type AnyLuaClient } from '../pobLuaBridge.js';
+
+async function diagnoseTcpFailure(port: number): Promise<string> {
+  if (process.platform !== 'win32') return '';
+
+  const pobRunning = await new Promise<boolean>(resolve => {
+    exec('tasklist /FI "IMAGENAME eq PathOfBuilding.exe" /NH', (_err, stdout) => {
+      resolve(stdout.toLowerCase().includes('pathofbuilding.exe'));
+    });
+  });
+
+  const appdata = process.env.APPDATA ?? '';
+  const sentinelExists = appdata
+    ? existsSync(join(appdata, 'Path of Building Community', 'pob-api.run'))
+    : false;
+
+  if (!pobRunning) {
+    return (
+      'Diagnosis: Path of Building does not appear to be running.\n' +
+      '  → Launch it via LaunchPoBWithAPI.bat, not the normal PoB shortcut.\n\n'
+    );
+  }
+  if (!sentinelExists) {
+    return (
+      'Diagnosis: PoB is running but the TCP API keepalive is not active (sentinel file missing).\n' +
+      '  → PoB was likely started without LaunchPoBWithAPI.bat.\n' +
+      '  → Close PoB and relaunch it via LaunchPoBWithAPI.bat.\n\n'
+    );
+  }
+  return (
+    `Diagnosis: PoB is running with the keepalive active but is not responding on port ${port}.\n` +
+    '  → Try bringing the PoB window to the foreground briefly, then retry.\n' +
+    '  → If the problem persists, close PoB and relaunch via LaunchPoBWithAPI.bat.\n\n'
+  );
+}
 
 export class LuaClientManager {
   private client: AnyLuaClient | null = null;
@@ -107,10 +144,11 @@ export class LuaClientManager {
         const remaining = deadline - Date.now();
         if (remaining < retryIntervalMs) {
           const total = Math.round(reconnectMs / 1000);
+          const diag = await diagnoseTcpFailure(port);
           throw new Error(
-            `Cannot connect to PoB GUI at ${host}:${port} after ${total}s (${attempt} attempts).\n` +
-            `Make sure PoB is running via LaunchPoBWithAPI.bat with a build open.\n` +
-            `Last error: ${msg.split('\n')[0]}\n\n` +
+            `Cannot connect to PoB GUI at ${host}:${port} after ${total}s (${attempt} attempts).\n\n` +
+            diag +
+            `Last error: ${msg.split('\n')[0]}\n` +
             `To increase the retry window, set POB_RECONNECT_TIMEOUT_MS (current: ${reconnectMs}ms).`
           );
         }
