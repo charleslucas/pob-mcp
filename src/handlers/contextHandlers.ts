@@ -46,21 +46,43 @@ interface UsageEntry {
   cache_creation_input_tokens: number;
 }
 
-/** Parse the last usage entry from the tail string (scans lines in reverse). */
-function extractLastUsage(tail: string): UsageEntry | null {
+interface SessionInfo {
+  usage: UsageEntry;
+  model: string | null;
+}
+
+/** Known model context windows and characteristics. */
+const MODEL_INFO: Record<string, { window: string; notes: string }> = {
+  "claude-opus-4-7":            { window: "200K", notes: "Most capable; best for complex multi-step reasoning" },
+  "claude-sonnet-4-6":          { window: "200K", notes: "Balanced capability and speed; good default" },
+  "claude-haiku-4-5-20251001":  { window: "200K", notes: "Fastest; best for simple lookups and lightweight tasks" },
+};
+
+/** Parse the last usage entry and model from the tail string (scans lines in reverse). */
+function extractSessionInfo(tail: string): SessionInfo | null {
   const lines = tail.split("\n");
+  let usage: UsageEntry | null = null;
+  let model: string | null = null;
+
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
     if (!line) continue;
     try {
       const obj = JSON.parse(line);
-      const u = obj?.message?.usage;
-      if (u && typeof u.input_tokens === "number") return u as UsageEntry;
+      const msg = obj?.message ?? {};
+      if (!usage && msg.usage && typeof msg.usage.input_tokens === "number") {
+        usage = msg.usage as UsageEntry;
+      }
+      if (!model && msg.model && typeof msg.model === "string") {
+        model = msg.model;
+      }
+      if (usage && model) break;
     } catch {
       // incomplete line at start of tail window — skip
     }
   }
-  return null;
+
+  return usage ? { usage, model } : null;
 }
 
 /** Resolve the active session JSONL, using cache when available. */
@@ -123,9 +145,9 @@ export async function handleGetContextUsage() {
     }
 
     const tail = readFileTail(jsonlPath);        // ~8KB read, not the full file
-    const usage = extractLastUsage(tail);
+    const info = extractSessionInfo(tail);
 
-    if (!usage) {
+    if (!info) {
       return {
         content: [{
           type: "text" as const,
@@ -134,11 +156,15 @@ export async function handleGetContextUsage() {
       };
     }
 
+    const { usage, model } = info;
+    const modelId = model ?? "unknown";
+    const modelMeta = MODEL_INFO[modelId];
+
     // cache_read_input_tokens = all tokens served from the prompt cache this turn.
     // This represents the accumulated conversation state and CAN exceed the nominal
     // context window because auto-compaction + layered caching allow the session to
     // grow beyond a single window. Treat it as a session-length proxy, not a hard ceiling.
-    const contextTokens = usage.cache_read_input_tokens + usage.input_tokens;
+    const contextTokens = info.usage.cache_read_input_tokens + info.usage.input_tokens;
 
     // Thresholds based on observed behaviour, not a hard window size.
     // ~100K: light session.  ~200K: medium.  ~400K+: compaction likely already running.
@@ -155,14 +181,15 @@ export async function handleGetContextUsage() {
     const lines = [
       "=== Claude Code Context Usage ===",
       "",
+      `Model:          ${modelId}${modelMeta ? ` (${modelMeta.window} window — ${modelMeta.notes})` : ""}`,
       `Cached context: ${contextTokens.toLocaleString()} tokens  [${sessionLabel}]`,
       `Session bar:    ${bar}  (scaled to 400K; can exceed this via compaction)`,
       "",
       "Last turn breakdown:",
-      `  Cached (re-read):  ${usage.cache_read_input_tokens.toLocaleString()} tokens`,
-      `  New (uncached):    ${usage.input_tokens.toLocaleString()} tokens`,
-      `  Cache written:     ${usage.cache_creation_input_tokens.toLocaleString()} tokens`,
-      `  Output:            ${usage.output_tokens.toLocaleString()} tokens`,
+      `  Cached (re-read):  ${info.usage.cache_read_input_tokens.toLocaleString()} tokens`,
+      `  New (uncached):    ${info.usage.input_tokens.toLocaleString()} tokens`,
+      `  Cache written:     ${info.usage.cache_creation_input_tokens.toLocaleString()} tokens`,
+      `  Output:            ${info.usage.output_tokens.toLocaleString()} tokens`,
       "",
       "Note: cache_read_input_tokens reflects accumulated session state across",
       "compaction layers — it is not directly comparable to a fixed context window.",
