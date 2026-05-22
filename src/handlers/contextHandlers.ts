@@ -134,30 +134,44 @@ export async function handleGetContextUsage() {
       };
     }
 
+    // cache_read_input_tokens = all tokens served from the prompt cache this turn.
+    // This represents the accumulated conversation state and CAN exceed the nominal
+    // context window because auto-compaction + layered caching allow the session to
+    // grow beyond a single window. Treat it as a session-length proxy, not a hard ceiling.
     const contextTokens = usage.cache_read_input_tokens + usage.input_tokens;
-    const WINDOW = 200_000;
-    const pct = Math.round((contextTokens / WINDOW) * 100);
-    const filled = Math.min(20, Math.round(pct / 5));
-    const bar = "█".repeat(filled) + "░".repeat(20 - filled);
+
+    // Thresholds based on observed behaviour, not a hard window size.
+    // ~100K: light session.  ~200K: medium.  ~400K+: compaction likely already running.
+    const MEDIUM = 200_000;
+    const HEAVY  = 400_000;
+    const barFill = Math.min(20, Math.round((contextTokens / HEAVY) * 20));
+    const bar = "█".repeat(barFill) + "░".repeat(20 - barFill);
+
+    const sessionLabel =
+      contextTokens < MEDIUM ? "Light" :
+      contextTokens < HEAVY  ? "Medium (compaction may activate soon)" :
+                                "Heavy (auto-compaction likely already running)";
 
     const lines = [
       "=== Claude Code Context Usage ===",
       "",
-      `Context now:  ${contextTokens.toLocaleString()} tokens`,
-      `Window:       ${WINDOW.toLocaleString()} tokens  (compaction activates near limit)`,
-      `Usage:        ${bar} ${pct}%`,
+      `Cached context: ${contextTokens.toLocaleString()} tokens  [${sessionLabel}]`,
+      `Session bar:    ${bar}  (scaled to 400K; can exceed this via compaction)`,
       "",
       "Last turn breakdown:",
       `  Cached (re-read):  ${usage.cache_read_input_tokens.toLocaleString()} tokens`,
       `  New (uncached):    ${usage.input_tokens.toLocaleString()} tokens`,
       `  Cache written:     ${usage.cache_creation_input_tokens.toLocaleString()} tokens`,
       `  Output:            ${usage.output_tokens.toLocaleString()} tokens`,
+      "",
+      "Note: cache_read_input_tokens reflects accumulated session state across",
+      "compaction layers — it is not directly comparable to a fixed context window.",
     ];
 
-    if (pct >= 80) {
-      lines.push("", "⚠️  >80% full — save key findings to character_data/ before continuing.");
-    } else if (pct >= 60) {
-      lines.push("", "ℹ️  >60% full — prefer compact tool outputs for remaining work.");
+    if (contextTokens >= HEAVY) {
+      lines.push("", "⚠️  Heavy session — save key findings to character_data/ before large data loads.");
+    } else if (contextTokens >= MEDIUM) {
+      lines.push("", "ℹ️  Medium session — prefer compact tool outputs; compaction may activate soon.");
     }
 
     return {
