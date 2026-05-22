@@ -379,6 +379,11 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "get_context_usage",
+      description: "Returns real-time token usage for the current Claude Code session: how many tokens are in context, how close to the window limit, and a breakdown of cached vs new tokens. Reads from the Claude Code session JSONL log (~/.claude/projects/). Use this before loading heavy data to gauge available headroom.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
       name: "list_specs",
       description: "List all passive tree specs in the currently loaded build. Each spec can have a different tree allocation, class, and ascendancy.",
       inputSchema: { type: "object", properties: {} },
