@@ -351,7 +351,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_import_pobb",
-      description: "Load a Path of Building build from a pobb.in URL or ID into PoB. Accepts full URLs (https://pobb.in/abc123), short IDs (abc123), or user-namespaced URLs (https://pobb.in/u/username/abc123). Fetches the build XML from pobb.in, opens it in PoB, and returns a stat summary. In TCP mode this opens the build in the running PoB GUI. Auto-starts the Lua bridge if needed.",
+      description: "Load a Path of Building build from a pobb.in or poedb.tw URL (or bare pobb.in ID) into PoB. Accepts: pobb.in URLs (https://pobb.in/abc123), user-namespaced pobb.in URLs (https://pobb.in/u/user/abc123), bare pobb.in IDs (abc123), or poedb.tw URLs (https://poedb.tw/us/PathOfBuilding?id=abc123). Fetches the build XML, opens it in PoB, and returns a stat summary. In TCP mode this opens the build in the running PoB GUI.",
       inputSchema: {
         type: "object",
         properties: {

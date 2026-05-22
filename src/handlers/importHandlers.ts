@@ -657,65 +657,117 @@ export async function handleImportCharacter(
 // ---------------------------------------------------------------------------
 
 /**
- * User-Agent required by the pobb.in API.
- * Format: "app-name/version hosted.domain (contact: email)"
+ * User-Agent for PoB build sharing API requests.
+ * Format required by pobb.in: "app-name/version hosted.domain (contact: email)"
  */
 const POBB_USER_AGENT =
   "pob-mcp/1.0 pobb.in-import (contact: github.com/charleslucas/poe_mcp_suite)";
 
-/** Timeout for pobb.in HTTP requests (ms). */
+/** Timeout for build fetch HTTP requests (ms). */
 const POBB_TIMEOUT_MS = 20_000;
 
 /**
- * Extract the pobb.in build ID from a URL or raw ID string.
- *
- * Accepted forms:
- *   - Raw ID:                  kpRns1vROvV3
- *   - Simple URL:              https://pobb.in/kpRns1vROvV3
- *   - User-namespaced URL:     https://pobb.in/u/username/kpRns1vROvV3
- *
- * Returns `{ id, isUserNamespaced, username }`.
+ * Parsed result from a pobb.in or poedb.tw URL or raw ID.
  */
-function parsePobbInput(urlOrId: string): { id: string; isUserNamespaced: boolean; username: string | null } {
+interface PobImportTarget {
+  /** Short display identifier, e.g. "kpRns1vROvV3" */
+  displayId: string;
+  /** Human-readable source label, e.g. "pobb.in" or "poedb.tw" */
+  source: string;
+  /** URL to fetch full PoB XML from */
+  xmlUrl: string;
+  /** URL to fetch JSON metadata from, or null if not available */
+  metaUrl: string | null;
+}
+
+/**
+ * Parse a pobb.in or poedb.tw build URL (or raw ID) into concrete fetch URLs.
+ *
+ * Supported forms:
+ *   pobb.in
+ *     https://pobb.in/kpRns1vROvV3
+ *     https://pobb.in/u/username/kpRns1vROvV3
+ *     kpRns1vROvV3   (raw ID, no dots/slashes)
+ *
+ *   poedb.tw
+ *     https://poedb.tw/us/PathOfBuilding?id=E22R8MtObaQv
+ *     https://poedb.tw/pt/PathOfBuilding?id=E22R8MtObaQv
+ */
+function parsePobImportInput(urlOrId: string): PobImportTarget {
   const trimmed = urlOrId.trim();
 
-  // User-namespaced: https://pobb.in/u/{username}/{id} or /u/{username}/{id}
+  // ── poedb.tw ──────────────────────────────────────────────────────────────
+  if (trimmed.includes("poedb.tw")) {
+    // Extract id= query parameter from any locale path
+    const idMatch = trimmed.match(/[?&]id=([^&]+)/);
+    if (!idMatch) {
+      throw new Error(
+        `Cannot extract build ID from poedb.tw URL: "${trimmed}". ` +
+          `Expected format: https://poedb.tw/us/PathOfBuilding?id=ABC123`
+      );
+    }
+    const id = idMatch[1];
+    return {
+      displayId: id,
+      source: "poedb.tw",
+      xmlUrl: `https://poedb.tw/pob/${id}/xml`,
+      metaUrl: null, // poedb.tw has no JSON metadata endpoint
+    };
+  }
+
+  // ── pobb.in ───────────────────────────────────────────────────────────────
+  // User-namespaced: https://pobb.in/u/{username}/{id}
   const userMatch = trimmed.match(/pobb\.in\/u\/([^/]+)\/([^/?#]+)/);
   if (userMatch) {
-    return { id: userMatch[2], isUserNamespaced: true, username: userMatch[1] };
+    const id = userMatch[2];
+    return {
+      displayId: id,
+      source: "pobb.in",
+      xmlUrl: `https://pobb.in/${id}/xml`,
+      metaUrl: `https://pobb.in/${id}/json`,
+    };
   }
 
-  // Simple URL: https://pobb.in/{id} or pobb.in/{id}
+  // Simple URL: https://pobb.in/{id}
   const simpleMatch = trimmed.match(/pobb\.in\/([^/u][^/?#]*)/);
   if (simpleMatch) {
-    return { id: simpleMatch[1], isUserNamespaced: false, username: null };
+    const id = simpleMatch[1];
+    return {
+      displayId: id,
+      source: "pobb.in",
+      xmlUrl: `https://pobb.in/${id}/xml`,
+      metaUrl: `https://pobb.in/${id}/json`,
+    };
   }
 
-  // Raw ID — no slashes, no dots that look like a domain
+  // Raw ID — no slashes, no dots that look like a domain → assume pobb.in
   if (!trimmed.includes("/") && !trimmed.includes(".")) {
-    return { id: trimmed, isUserNamespaced: false, username: null };
+    return {
+      displayId: trimmed,
+      source: "pobb.in",
+      xmlUrl: `https://pobb.in/${trimmed}/xml`,
+      metaUrl: `https://pobb.in/${trimmed}/json`,
+    };
   }
 
   throw new Error(
-    `Cannot parse pobb.in URL or ID from: "${trimmed}". ` +
-      `Expected a full URL (https://pobb.in/abc123) or just the ID portion (abc123).`
+    `Cannot parse build URL or ID from: "${trimmed}". ` +
+      `Supported: pobb.in URLs (https://pobb.in/abc123), ` +
+      `poedb.tw URLs (https://poedb.tw/us/PathOfBuilding?id=abc123), ` +
+      `or a bare pobb.in ID (abc123).`
   );
 }
 
 /**
- * Fetch a URL from pobb.in with the required User-Agent and a timeout.
- * Returns the raw response text on success and throws a descriptive Error
- * on HTTP failure.
+ * Fetch a build resource URL with the required User-Agent and a timeout.
+ * Returns the raw response text on success; throws a descriptive Error on failure.
  */
-async function fetchPobbUrl(url: string, context: string): Promise<string> {
+async function fetchBuildUrl(url: string, context: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), POBB_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
-      headers: {
-        "User-Agent": POBB_USER_AGENT,
-        "Accept": "*/*",
-      },
+      headers: { "User-Agent": POBB_USER_AGENT, "Accept": "*/*" },
       signal: controller.signal,
     });
 
@@ -725,22 +777,22 @@ async function fetchPobbUrl(url: string, context: string): Promise<string> {
       const snippet = body.length > 300 ? body.slice(0, 300) + "..." : body;
       if (res.status === 403) {
         throw new Error(
-          `pobb.in returned 403 Forbidden for ${context}. ` +
-            `The build may be private, the ID may be wrong, or the API rejected the User-Agent.`
+          `Build host returned 403 Forbidden for ${context}. ` +
+            `The build may be private, the ID may be wrong, or the User-Agent was rejected.`
         );
       }
       if (res.status === 404) {
-        throw new Error(`pobb.in build not found (404) for ${context}. Check that the ID is correct.`);
+        throw new Error(`Build not found (404) for ${context}. Check that the ID is correct.`);
       }
       throw new Error(
-        `pobb.in request failed (${context}): HTTP ${res.status} ${res.statusText}${snippet ? " — " + snippet : ""}`
+        `Build fetch failed (${context}): HTTP ${res.status} ${res.statusText}${snippet ? " — " + snippet : ""}`
       );
     }
 
     return await res.text();
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") {
-      throw new Error(`pobb.in request timed out after ${POBB_TIMEOUT_MS}ms (${context}).`);
+      throw new Error(`Build fetch timed out after ${POBB_TIMEOUT_MS}ms (${context}).`);
     }
     throw err;
   } finally {
@@ -766,20 +818,18 @@ export async function handleImportPobb(
   context: LuaHandlerContext,
   urlOrId: string
 ) {
-  return wrapHandler("import pobb.in build", async () => {
+  return wrapHandler("import PoB build", async () => {
     if (!urlOrId || !urlOrId.trim()) {
       throw new Error("url_or_id is required");
     }
 
-    const parsed = parsePobbInput(urlOrId);
-    const { id } = parsed;
+    const target = parsePobImportInput(urlOrId);
+    const { displayId: id, source, xmlUrl, metaUrl } = target;
 
-    // Fetch metadata and XML in parallel — both are independent reads.
-    const xmlUrl = `https://pobb.in/${id}/xml`;
-    const jsonUrl = `https://pobb.in/${id}/json`;
-    const [metaText, xml] = await Promise.all([
-      fetchPobbUrl(jsonUrl, `metadata for ${id}`),
-      fetchPobbUrl(xmlUrl, `XML for ${id}`),
+    // Fetch XML (required) and metadata (optional) — in parallel when both present.
+    const [xml, metaText] = await Promise.all([
+      fetchBuildUrl(xmlUrl, `XML for ${id} (${source})`),
+      metaUrl ? fetchBuildUrl(metaUrl, `metadata for ${id}`).catch(() => null) : Promise.resolve(null),
     ]);
 
     // Parse the metadata JSON (best-effort — don't fail if malformed).
@@ -787,7 +837,7 @@ export async function handleImportPobb(
     let metaClass = "";
     let metaSkill = "";
     try {
-      const meta = JSON.parse(metaText) as {
+      const meta = JSON.parse(metaText ?? "") as {
         metadata?: {
           title?: string;
           ascendancy_or_class?: string;
@@ -810,7 +860,8 @@ export async function handleImportPobb(
 
     // Write the XML to a temp file so TCP mode can register it in PoB's
     // recent-files list (loadBuildXml passes the path to the TCP handler).
-    const tempFileName = `pobb-${id}.xml`;
+    const safeSource = source.replace(/[^a-z0-9]/gi, "-");
+    const tempFileName = `${safeSource}-${id}.xml`;
     const tempFilePath = path.join(context.pobDirectory, tempFileName);
     await fs.writeFile(tempFilePath, xml, "utf-8");
 
@@ -857,7 +908,7 @@ export async function handleImportPobb(
       // Auto-context summary: key stats + top issues.
       const summaryLines: string[] = [];
       const metaHeaderParts: string[] = [
-        `Imported from pobb.in: https://pobb.in/${id}`,
+        `Imported from ${source}: ${xmlUrl.replace(/\/xml$/, "")}`,
       ];
       if (metaClass) metaHeaderParts.push(`Class: ${metaClass}`);
       if (metaSkill) metaHeaderParts.push(`Main skill: ${metaSkill}`);
