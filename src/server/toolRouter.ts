@@ -19,7 +19,7 @@ import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPass
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
-import { handleListCharacters, handleImportCharacter, handleImportPobb } from "../handlers/importHandlers.js";
+import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSharePobb } from "../handlers/importHandlers.js";
 import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -190,6 +190,9 @@ export async function routeToolCall(
     case "lua_import_pobb":
       if (!args?.url_or_id) throw new Error("Missing url_or_id");
       return await handleImportPobb(luaContext, args.url_or_id as string);
+
+    case "lua_share_pobb":
+      return await handleSharePobb(luaContext, args?.platform as string | undefined ?? "pobb.in");
 
     case "set_character_level": {
       if (!args) throw new Error("Missing arguments");

@@ -21,6 +21,8 @@ import { wrapHandler } from "../utils/errorHandling.js";
 import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
+import zlib from "node:zlib";
 
 /** Options accepted by `handleImportCharacter`, mirroring the PoB GUI defaults. */
 export interface ImportCharacterOptions {
@@ -972,4 +974,144 @@ export async function handleImportPobb(
 
     return loadResult;
   });
+}
+
+// ---------------------------------------------------------------------------
+// pobb.in / poedb.tw build export (share)
+// ---------------------------------------------------------------------------
+
+const deflateAsync = promisify(zlib.deflate);
+
+/**
+ * Normalise the 'platform' argument.
+ * Accepts 'poedb', 'poedb.tw' as aliases for poedb.tw; everything else is pobb.in.
+ */
+function normalisePlatform(platform: string): 'pobb.in' | 'poedb.tw' {
+  const lc = platform.toLowerCase().trim();
+  if (lc === 'poedb' || lc === 'poedb.tw') return 'poedb.tw';
+  return 'pobb.in';
+}
+
+/**
+ * Export the currently loaded PoB build and upload it to pobb.in or poedb.tw.
+ * Returns a shareable URL. No account is required — creates an anonymous paste.
+ *
+ * Compression format (verified empirically):
+ *   body = URL-safe base64(zlib.deflate(xml_utf8)), padding stripped
+ * This matches the format used by both platforms.
+ */
+export async function handleSharePobb(
+  context: LuaHandlerContext,
+  platform: string = 'pobb.in'
+) {
+  return wrapHandler('share build', async () => {
+    const target = normalisePlatform(platform);
+
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized. Use lua_start to connect to PoB first.');
+    }
+
+    // 1. Export the build XML from the running PoB instance.
+    const xml = await luaClient.exportBuildXml();
+    if (!xml || !xml.trim()) {
+      throw new Error('exportBuildXml returned empty XML. Make sure a build is loaded.');
+    }
+
+    // 2. Compress with zlib deflate (what the PoB paste sites call "zlib.compress").
+    const compressed = await deflateAsync(Buffer.from(xml, 'utf-8'));
+
+    // 3. URL-safe base64, no padding.
+    const body = compressed
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+
+    // 4. POST to the appropriate endpoint.
+    let shareUrl: string;
+    if (target === 'poedb.tw') {
+      const responseText = await fetchBuildUrl_post(
+        'https://poedb.tw/pob/api/gen',
+        body,
+        'POST to poedb.tw'
+      );
+      // poedb.tw responds with the full URL directly (e.g. "https://poedb.tw/pob/0YtpjzLi6H").
+      shareUrl = responseText.trim();
+      if (!shareUrl.startsWith('http')) {
+        throw new Error(
+          'poedb.tw returned an unexpected response: ' + responseText.slice(0, 200)
+        );
+      }
+    } else {
+      // pobb.in responds with just the paste ID (e.g. "kpRns1vROvV3").
+      const responseText = await fetchBuildUrl_post(
+        'https://pobb.in/pob/',
+        body,
+        'POST to pobb.in'
+      );
+      const pasteId = responseText.trim();
+      if (!pasteId || pasteId.includes(' ') || pasteId.includes('<')) {
+        throw new Error(
+          'pobb.in returned an unexpected response: ' + responseText.slice(0, 200)
+        );
+      }
+      shareUrl = 'https://pobb.in/' + pasteId;
+    }
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: [
+            'Build shared successfully!',
+            '',
+            'URL: ' + shareUrl,
+            '',
+            'Platform: ' + target,
+            '(Anyone with the link can import this build into Path of Building.)',
+          ].join('\n'),
+        },
+      ],
+    };
+  });
+}
+
+/**
+ * POST plain-text body to a URL and return the response text.
+ * Uses the same User-Agent and timeout as fetchBuildUrl.
+ */
+async function fetchBuildUrl_post(url: string, body: string, context: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), POBB_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'User-Agent': POBB_USER_AGENT,
+        'Content-Type': 'text/plain',
+      },
+      body,
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      let snippet = '';
+      try { snippet = (await res.text()).slice(0, 300); } catch { /* ignore */ }
+      throw new Error(
+        'Share upload failed (' + context + '): HTTP ' + res.status + ' ' + res.statusText +
+        (snippet ? ' — ' + snippet : '')
+      );
+    }
+
+    return await res.text();
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'AbortError') {
+      throw new Error('Share upload timed out after ' + POBB_TIMEOUT_MS + 'ms (' + context + ').');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }

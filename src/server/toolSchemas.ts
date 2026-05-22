@@ -364,6 +364,21 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "lua_share_pobb",
+      description: "Export the currently loaded PoB build and upload it to pobb.in (default) or poedb.tw. Returns a shareable URL. No account needed — creates an anonymous paste.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          platform: {
+            type: "string",
+            description: "Paste platform: pobb.in (default) or poedb.tw.",
+            enum: ["pobb.in", "poedb.tw"],
+            default: "pobb.in",
+          },
+        },
+      },
+    },
+    {
       name: "list_specs",
       description: "List all passive tree specs in the currently loaded build. Each spec can have a different tree allocation, class, and ascendancy.",
       inputSchema: { type: "object", properties: {} },
