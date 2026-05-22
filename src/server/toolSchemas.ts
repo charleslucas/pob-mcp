@@ -350,6 +350,20 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "lua_import_pobb",
+      description: "Load a Path of Building build from a pobb.in URL or ID into PoB. Accepts full URLs (https://pobb.in/abc123), short IDs (abc123), or user-namespaced URLs (https://pobb.in/u/username/abc123). Fetches the build XML from pobb.in, opens it in PoB, and returns a stat summary. In TCP mode this opens the build in the running PoB GUI. Auto-starts the Lua bridge if needed.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url_or_id: {
+            type: "string",
+            description: "pobb.in URL (https://pobb.in/abc123), user-namespaced URL (https://pobb.in/u/username/abc123), or raw build ID (abc123).",
+          },
+        },
+        required: ["url_or_id"],
+      },
+    },
+    {
       name: "list_specs",
       description: "List all passive tree specs in the currently loaded build. Each spec can have a different tree allocation, class, and ascendancy.",
       inputSchema: { type: "object", properties: {} },

@@ -18,6 +18,9 @@ import {
   type PoeCharacterListEntry,
 } from "../services/poeCharacterApi.js";
 import { wrapHandler } from "../utils/errorHandling.js";
+import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 /** Options accepted by `handleImportCharacter`, mirroring the PoB GUI defaults. */
 export interface ImportCharacterOptions {
@@ -646,5 +649,276 @@ export async function handleImportCharacter(
     return {
       content: [{ type: "text" as const, text: lines.join("\n") }],
     };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// pobb.in import
+// ---------------------------------------------------------------------------
+
+/**
+ * User-Agent required by the pobb.in API.
+ * Format: "app-name/version hosted.domain (contact: email)"
+ */
+const POBB_USER_AGENT =
+  "pob-mcp/1.0 pobb.in-import (contact: github.com/charleslucas/poe_mcp_suite)";
+
+/** Timeout for pobb.in HTTP requests (ms). */
+const POBB_TIMEOUT_MS = 20_000;
+
+/**
+ * Extract the pobb.in build ID from a URL or raw ID string.
+ *
+ * Accepted forms:
+ *   - Raw ID:                  kpRns1vROvV3
+ *   - Simple URL:              https://pobb.in/kpRns1vROvV3
+ *   - User-namespaced URL:     https://pobb.in/u/username/kpRns1vROvV3
+ *
+ * Returns `{ id, isUserNamespaced, username }`.
+ */
+function parsePobbInput(urlOrId: string): { id: string; isUserNamespaced: boolean; username: string | null } {
+  const trimmed = urlOrId.trim();
+
+  // User-namespaced: https://pobb.in/u/{username}/{id} or /u/{username}/{id}
+  const userMatch = trimmed.match(/pobb\.in\/u\/([^/]+)\/([^/?#]+)/);
+  if (userMatch) {
+    return { id: userMatch[2], isUserNamespaced: true, username: userMatch[1] };
+  }
+
+  // Simple URL: https://pobb.in/{id} or pobb.in/{id}
+  const simpleMatch = trimmed.match(/pobb\.in\/([^/u][^/?#]*)/);
+  if (simpleMatch) {
+    return { id: simpleMatch[1], isUserNamespaced: false, username: null };
+  }
+
+  // Raw ID — no slashes, no dots that look like a domain
+  if (!trimmed.includes("/") && !trimmed.includes(".")) {
+    return { id: trimmed, isUserNamespaced: false, username: null };
+  }
+
+  throw new Error(
+    `Cannot parse pobb.in URL or ID from: "${trimmed}". ` +
+      `Expected a full URL (https://pobb.in/abc123) or just the ID portion (abc123).`
+  );
+}
+
+/**
+ * Fetch a URL from pobb.in with the required User-Agent and a timeout.
+ * Returns the raw response text on success and throws a descriptive Error
+ * on HTTP failure.
+ */
+async function fetchPobbUrl(url: string, context: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), POBB_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": POBB_USER_AGENT,
+        "Accept": "*/*",
+      },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      let body = "";
+      try { body = await res.text(); } catch { /* ignore */ }
+      const snippet = body.length > 300 ? body.slice(0, 300) + "..." : body;
+      if (res.status === 403) {
+        throw new Error(
+          `pobb.in returned 403 Forbidden for ${context}. ` +
+            `The build may be private, the ID may be wrong, or the API rejected the User-Agent.`
+        );
+      }
+      if (res.status === 404) {
+        throw new Error(`pobb.in build not found (404) for ${context}. Check that the ID is correct.`);
+      }
+      throw new Error(
+        `pobb.in request failed (${context}): HTTP ${res.status} ${res.statusText}${snippet ? " — " + snippet : ""}`
+      );
+    }
+
+    return await res.text();
+  } catch (err) {
+    if ((err as { name?: string })?.name === "AbortError") {
+      throw new Error(`pobb.in request timed out after ${POBB_TIMEOUT_MS}ms (${context}).`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Load a Path of Building build from a pobb.in URL or ID into PoB.
+ *
+ * Flow:
+ *   1. Parse the URL/ID to extract the build ID.
+ *   2. Fetch metadata JSON  (GET /{id}/json)  → title, class, main skill.
+ *   3. Fetch build XML      (GET /{id}/xml)   → full PoB XML (50-60 KB typical).
+ *   4. Write XML to a temp file in pobDirectory (`pobb-{id}.xml`).
+ *   5. Call luaClient.loadBuildXml() to open the build in PoB.
+ *   6. Delete the temp file (best-effort).
+ *   7. Return an auto-context summary (stats, specs, top issues).
+ *
+ * Works in both TCP mode (opens in running PoB GUI) and headless mode.
+ */
+export async function handleImportPobb(
+  context: LuaHandlerContext,
+  urlOrId: string
+) {
+  return wrapHandler("import pobb.in build", async () => {
+    if (!urlOrId || !urlOrId.trim()) {
+      throw new Error("url_or_id is required");
+    }
+
+    const parsed = parsePobbInput(urlOrId);
+    const { id } = parsed;
+
+    // Fetch metadata and XML in parallel — both are independent reads.
+    const xmlUrl = `https://pobb.in/${id}/xml`;
+    const jsonUrl = `https://pobb.in/${id}/json`;
+    const [metaText, xml] = await Promise.all([
+      fetchPobbUrl(jsonUrl, `metadata for ${id}`),
+      fetchPobbUrl(xmlUrl, `XML for ${id}`),
+    ]);
+
+    // Parse the metadata JSON (best-effort — don't fail if malformed).
+    let title: string = id;
+    let metaClass = "";
+    let metaSkill = "";
+    try {
+      const meta = JSON.parse(metaText) as {
+        metadata?: {
+          title?: string;
+          ascendancy_or_class?: string;
+          main_skill_name?: string;
+        };
+      };
+      if (meta?.metadata?.title) title = meta.metadata.title;
+      if (meta?.metadata?.ascendancy_or_class) metaClass = meta.metadata.ascendancy_or_class;
+      if (meta?.metadata?.main_skill_name) metaSkill = meta.metadata.main_skill_name;
+    } catch {
+      // Metadata parse failure is non-fatal — XML is the source of truth.
+    }
+
+    // Ensure the Lua bridge is ready before touching the filesystem.
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error("Lua client not initialized. Use lua_start to connect to PoB first.");
+    }
+
+    // Write the XML to a temp file so TCP mode can register it in PoB's
+    // recent-files list (loadBuildXml passes the path to the TCP handler).
+    const tempFileName = `pobb-${id}.xml`;
+    const tempFilePath = path.join(context.pobDirectory, tempFileName);
+    await fs.writeFile(tempFilePath, xml, "utf-8");
+
+    let loadResult: { content: Array<{ type: string; text: string }> };
+    try {
+      await luaClient.loadBuildXml(xml, title, tempFilePath);
+
+      // Check for multiple specs / item sets and inform the user.
+      const extraLines: string[] = [];
+      try {
+        const specsResult = await luaClient.listSpecs();
+        const itemSetsResult = await luaClient.listItemSets();
+        if (specsResult?.specs?.length > 1) {
+          extraLines.push("");
+          extraLines.push(`This build has ${specsResult.specs.length} passive tree specs:`);
+          const maxNodes = Math.max(...specsResult.specs.map((s: any) => s.nodeCount ?? 0));
+          for (const s of specsResult.specs) {
+            const hint = s.nodeCount === maxNodes && !s.active ? " (likely endgame)" : "";
+            extraLines.push(
+              `  ${s.active ? ">" : " "} [${s.index}] ${s.title} — ${s.className}/${s.ascendClassName}, ${s.nodeCount} nodes${hint}`
+            );
+          }
+          const activeSpec = specsResult.specs.find((s: any) => s.active);
+          if (activeSpec && activeSpec.nodeCount < maxNodes) {
+            const endgameSpec = specsResult.specs.find((s: any) => s.nodeCount === maxNodes);
+            extraLines.push(
+              `Warning: Active spec is a leveling tree (${activeSpec.nodeCount} nodes). For endgame analysis, run: select_spec(${endgameSpec?.index})`
+            );
+          }
+          extraLines.push("Use select_spec to switch specs.");
+        }
+        if (itemSetsResult?.itemSets?.length > 1) {
+          extraLines.push("");
+          extraLines.push(`This build has ${itemSetsResult.itemSets.length} item sets:`);
+          for (const s of itemSetsResult.itemSets) {
+            extraLines.push(`  ${s.active ? ">" : " "} [${s.id}] ${s.title}`);
+          }
+          extraLines.push("Use select_item_set to switch item sets.");
+        }
+      } catch {
+        // Non-fatal: spec/item set info is advisory only.
+      }
+
+      // Auto-context summary: key stats + top issues.
+      const summaryLines: string[] = [];
+      const metaHeaderParts: string[] = [
+        `Imported from pobb.in: https://pobb.in/${id}`,
+      ];
+      if (metaClass) metaHeaderParts.push(`Class: ${metaClass}`);
+      if (metaSkill) metaHeaderParts.push(`Main skill: ${metaSkill}`);
+
+      try {
+        const info = await luaClient.getBuildInfo().catch(() => null);
+        if (info) {
+          summaryLines.push(
+            `**${info.name || title}** | Level ${info.level} ${info.className ?? ""}${info.ascendClassName ? ` (${info.ascendClassName})` : ""}`
+          );
+        }
+
+        const s = await luaClient
+          .getStats([
+            "Life", "TotalDPS", "CombinedDPS", "MinionTotalDPS",
+            "FireResist", "ColdResist", "LightningResist", "ChaosResist", "TotalEHP",
+          ])
+          .catch(() => null);
+        if (s) {
+          const dps = Number(s.CombinedDPS || s.TotalDPS || s.MinionTotalDPS || 0);
+          const dpsLabel = s.MinionTotalDPS && !s.TotalDPS ? "Minion DPS" : "DPS";
+          summaryLines.push(
+            `Life: ${Number(s.Life ?? 0).toLocaleString()} | ${dpsLabel}: ${Math.round(dps).toLocaleString()} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString()}`
+          );
+          summaryLines.push(`Resists: F${s.FireResist}% C${s.ColdResist}% L${s.LightningResist}% Ch${s.ChaosResist}%`);
+        }
+
+        const issuesResult = await handleGetBuildIssues(context).catch(() => null);
+        if (issuesResult) {
+          const { issues } = issuesResult;
+          const topIssues = issues
+            .filter((i: any) => i.severity === "error" || i.severity === "warning")
+            .slice(0, 3);
+          if (topIssues.length > 0) {
+            summaryLines.push("");
+            summaryLines.push("**Top Issues:**");
+            for (const issue of topIssues) {
+              const icon = issue.severity === "error" ? "[ERROR]" : "[WARN]";
+              summaryLines.push(`  ${icon} ${issue.message}`);
+            }
+          } else {
+            summaryLines.push("");
+            summaryLines.push("No critical issues detected.");
+          }
+        }
+      } catch { /* auto-context is best-effort */ }
+
+      const extraText = extraLines.length > 0 ? "\n" + extraLines.join("\n") : "";
+      const summaryText = summaryLines.length > 0 ? "\n---\n" + summaryLines.join("\n") : "";
+      const loadText =
+        `Build loaded: "${title}"${extraText}\n\n${metaHeaderParts.join(" | ")}${summaryText}`;
+
+      loadResult = {
+        content: [{ type: "text" as const, text: loadText }],
+      };
+    } finally {
+      // Best-effort cleanup of the temp file — delete failure must not
+      // surface as an error or mask the load result.
+      fs.unlink(tempFilePath).catch(() => { /* ignore */ });
+    }
+
+    return loadResult;
   });
 }
