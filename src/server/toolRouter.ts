@@ -15,7 +15,7 @@ import type { PoeNinjaClient } from "../services/poeNinjaClient.js";
 // Import handlers
 import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBuildStats, handleGetBuildNotes, handleSetBuildNotes } from "../handlers/buildHandlers.js";
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
-import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
+import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet } from "../handlers/luaHandlers.js";
@@ -127,6 +127,14 @@ export async function routeToolCall(
         args?.build_name as string | undefined,
         args?.max_distance as number | undefined,
         args?.filter as string | undefined
+      );
+
+    case "plan_tree_paths":
+      if (!args) throw new Error("Missing arguments");
+      return await handlePlanTreePaths(
+        treeContext,
+        args.build_name as string | undefined,
+        args.target_node_ids as string[],
       );
 
     case "find_path_to_node":

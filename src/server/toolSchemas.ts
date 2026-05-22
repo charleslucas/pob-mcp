@@ -183,6 +183,25 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "plan_tree_paths",
+      description: "Plan the minimum combined passive node cost to reach multiple target notables at once. Finds the shortest path to each target from the current tree, merges shared path prefixes (de-duplicating nodes that lie on multiple paths), and returns the combined node list ready for lua_set_tree. Replaces N separate find_path_to_node calls when planning a milestone build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target_node_ids: {
+            type: "array",
+            items: { type: "string" },
+            description: "IDs of the destination passive nodes (2–20 targets)",
+          },
+          build_name: {
+            type: "string",
+            description: "Build file to route from (optional if a build is loaded via lua_load_build)",
+          },
+        },
+        required: ["target_node_ids"],
+      },
+    },
+    {
       name: "find_path_to_node",
       description: "Find the shortest path of passive nodes between two points on the tree. By default routes from the build's current allocation frontier to the target. Supply from_node_id to route between any two arbitrary nodes regardless of the current build — useful for measuring distance between keystones, planning routes across the tree, etc. Each node in the result includes its name, type (Keystone/Notable/travel), and full stat descriptions.",
       inputSchema: {

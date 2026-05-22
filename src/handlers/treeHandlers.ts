@@ -371,6 +371,173 @@ export async function handleFindPath(
 }
 
 
+export async function handlePlanTreePaths(
+  context: TreeHandlerContext,
+  buildName: string | undefined,
+  targetNodeIds: string[],
+) {
+  try {
+    if (!targetNodeIds || targetNodeIds.length === 0) {
+      return { content: [{ type: "text" as const, text: "No target node IDs provided." }] };
+    }
+
+    let allocatedNodeIds: string[] = [];
+    let treeVersion = 'Unknown';
+
+    if (buildName) {
+      try {
+        const build = await context.buildService.readBuild(buildName);
+        allocatedNodeIds = context.buildService.parseAllocatedNodes(build);
+        treeVersion = context.buildService.extractBuildVersion(build);
+      } catch (fileErr) {
+        if (buildName) throw fileErr;
+      }
+    }
+
+    if (allocatedNodeIds.length === 0 && context.getLuaClient) {
+      const luaClient = context.getLuaClient();
+      if (luaClient) {
+        const treeResult = await luaClient.getTree();
+        allocatedNodeIds = (treeResult.nodes || []).map(String);
+        treeVersion = treeResult.treeVersion || 'Unknown';
+      }
+    }
+
+    if (allocatedNodeIds.length === 0) {
+      return {
+        content: [{ type: "text" as const, text: "No allocated nodes found. Load a build first." }],
+      };
+    }
+
+    const allocatedNodes = new Set<string>(allocatedNodeIds);
+    const treeData = await context.treeService.getTreeData(treeVersion);
+
+    // Find path to each target; collect per-target results
+    const perTarget: Array<{
+      nodeId: string;
+      name: string;
+      pathNodes: string[];
+      cost: number;
+      alreadyAllocated: boolean;
+      notFound: boolean;
+    }> = [];
+
+    for (const nodeId of targetNodeIds) {
+      const node = treeData.nodes.get(nodeId);
+      if (!node) {
+        perTarget.push({ nodeId, name: "NOT FOUND", pathNodes: [], cost: 0, alreadyAllocated: false, notFound: true });
+        continue;
+      }
+      if (allocatedNodes.has(nodeId)) {
+        perTarget.push({ nodeId, name: node.name || nodeId, pathNodes: [], cost: 0, alreadyAllocated: true, notFound: false });
+        continue;
+      }
+      const paths = context.treeService.findShortestPaths(allocatedNodes, nodeId, treeData, 1);
+      if (paths.length === 0) {
+        perTarget.push({ nodeId, name: node.name || nodeId, pathNodes: [], cost: 0, alreadyAllocated: false, notFound: true });
+      } else {
+        perTarget.push({ nodeId, name: node.name || nodeId, pathNodes: paths[0].nodes, cost: paths[0].cost, alreadyAllocated: false, notFound: false });
+      }
+    }
+
+    // Union all path nodes — deduplication is automatic via Set
+    const unionNodes = new Set<string>();
+    for (const t of perTarget) {
+      for (const n of t.pathNodes) unionNodes.add(n);
+    }
+
+    // Track which nodes appear in multiple paths (shared)
+    const nodePathCount = new Map<string, number>();
+    for (const t of perTarget) {
+      for (const n of t.pathNodes) nodePathCount.set(n, (nodePathCount.get(n) ?? 0) + 1);
+    }
+    const sharedNodes = [...nodePathCount.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([id]) => id);
+
+    const totalIndividual = perTarget.reduce((s, t) => s + t.cost, 0);
+    const totalMerged = unionNodes.size;
+    const saved = totalIndividual - totalMerged;
+
+    const lines: string[] = [
+      `=== Plan: ${targetNodeIds.length} target node(s) ===`,
+      '',
+    ];
+
+    // Per-target breakdown
+    lines.push('**Per-target paths:**');
+    for (let i = 0; i < perTarget.length; i++) {
+      const t = perTarget[i];
+      if (t.notFound) {
+        lines.push(`  ${i + 1}. ⚠️  ${t.nodeId} — not found in tree data`);
+      } else if (t.alreadyAllocated) {
+        lines.push(`  ${i + 1}. ✓  ${t.name} [${t.nodeId}] — already allocated`);
+      } else {
+        const node = treeData.nodes.get(t.nodeId);
+        const typeTag = node?.isKeystone ? 'KEYSTONE' : node?.isNotable ? 'notable' : 'travel';
+        const sharedCount = t.pathNodes.filter(n => sharedNodes.includes(n) && n !== t.nodeId).length;
+        const sharedNote = sharedCount > 0 ? ` (${sharedCount} node(s) shared with other paths)` : '';
+        lines.push(`  ${i + 1}. ${t.name} [${t.nodeId}] (${typeTag}) — ${t.cost} node(s)${sharedNote}`);
+        // Show compact path
+        const pathStr = t.pathNodes
+          .map(n => {
+            const nd = treeData.nodes.get(n);
+            const label = nd?.isNotable || nd?.isKeystone ? `**${nd.name || n}**` : n;
+            return label;
+          })
+          .join(' → ');
+        lines.push(`     ${pathStr}`);
+      }
+    }
+    lines.push('');
+
+    // Shared nodes summary
+    if (sharedNodes.length > 0) {
+      lines.push(`**Shared path nodes (${sharedNodes.length}):** ${sharedNodes.join(', ')}`);
+      lines.push('');
+    }
+
+    // Cost summary
+    lines.push('**Cost summary:**');
+    lines.push(`  Sum of individual paths: ${totalIndividual} nodes`);
+    lines.push(`  After merging shared prefixes: ${totalMerged} nodes`);
+    if (saved > 0) {
+      lines.push(`  Points saved by merging: ${saved}`);
+    }
+    lines.push('');
+
+    // Notable stats summary
+    const notableIds = [...unionNodes].filter(n => {
+      const nd = treeData.nodes.get(n);
+      return nd?.isNotable || nd?.isKeystone;
+    });
+    if (notableIds.length > 0) {
+      lines.push('**Notables/keystones included:**');
+      for (const nid of notableIds) {
+        const nd = treeData.nodes.get(nid);
+        if (!nd) continue;
+        const tag = nd.isKeystone ? 'KEYSTONE' : 'Notable';
+        lines.push(`  - ${nd.name || nid} [${nid}] (${tag})`);
+        if (nd.stats) {
+          for (const s of nd.stats) lines.push(`      ${s}`);
+        }
+      }
+      lines.push('');
+    }
+
+    // Combined node list for lua_set_tree
+    const nodeList = [...unionNodes];
+    lines.push('**Combined node list (add these to your lua_set_tree call):**');
+    lines.push(JSON.stringify(nodeList));
+
+    return { content: [{ type: "text" as const, text: lines.join('\n') }] };
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return { content: [{ type: "text" as const, text: `Error: ${errorMsg}` }] };
+  }
+}
+
 export async function handleGetPassiveUpgrades(
   context: PassiveUpgradesContext,
   focus: 'dps' | 'defence' | 'both' = 'both',
