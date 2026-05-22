@@ -149,6 +149,12 @@ abstract class PoBApiBase {
     return res.item;
   }
 
+  async clearItemSlot(slotName: string): Promise<{ slot: string; cleared: boolean }> {
+    const res = await this.send({ action: 'clear_item_slot', params: { slotName } });
+    if (!res.ok) throw new Error(res.error || 'clear_item_slot failed');
+    return res.result as { slot: string; cleared: boolean };
+  }
+
   async setFlaskActive(flaskIndex: number, active: boolean): Promise<void> {
     const res = await this.send({ action: "set_flask_active", params: { index: flaskIndex, active } });
     if (!res.ok) throw new Error(res.error || "set_flask_active failed");

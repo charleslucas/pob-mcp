@@ -114,6 +114,37 @@ function parseItemRawMods(raw: string | undefined): ModLine[] {
   return mods;
 }
 
+export async function handleClearItemSlot(
+  context: ItemSkillHandlerContext,
+  slotName: string
+) {
+  return wrapHandler('clear item slot', async () => {
+    await context.ensureLuaClient();
+
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized. Use lua_start first.');
+    }
+
+    if (!slotName || slotName.trim().length === 0) {
+      throw new Error('slot_name cannot be empty');
+    }
+
+    const result = await luaClient.clearItemSlot(slotName);
+
+    const text = `Item slot ${result.slot} cleared.`;
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text,
+        },
+      ],
+    };
+  });
+}
+
 export async function handleGetEquippedItems(context: ItemSkillHandlerContext) {
   return wrapHandler('get equipped items', async () => {
     await context.ensureLuaClient();

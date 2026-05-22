@@ -561,6 +561,21 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: 'clear_item_slot',
+      description: 'Remove (unequip) the item from a specific gear slot. Use this to clear a slot before equipping a replacement item, or to test the build without a specific item.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          slot_name: {
+            type: 'string',
+            description: 'Slot to clear: Weapon 1, Weapon 2, Helmet, Body Armour, Gloves, Boots, Amulet, Ring 1, Ring 2, Belt, Flask 1-5',
+            enum: ['Weapon 1', 'Weapon 2', 'Helmet', 'Body Armour', 'Gloves', 'Boots', 'Amulet', 'Ring 1', 'Ring 2', 'Belt', 'Flask 1', 'Flask 2', 'Flask 3', 'Flask 4', 'Flask 5'],
+          },
+        },
+        required: ['slot_name'],
+      },
+    },
+    {
       name: "get_equipped_items",
       description: "Get all currently equipped items (empty slots are omitted). Returns name, base, rarity, and all mod lines (implicit, explicit, crafted, enchant) for each equipped item. Use when you need to evaluate gear choices or read specific affixes.",
       inputSchema: {

@@ -463,8 +463,8 @@ export async function handleLuaSetTree(context: LuaHandlerContext, args: any) {
     const dropped = requested - actualCount;
     let text = `✅ Passive tree updated. Allocated ${actualCount} nodes.`;
     if (dropped > 0) {
-      text += `\n⚠️  ${dropped} of ${requested} requested nodes were dropped (not connected to start or invalid IDs).`;
-      text += `\nTip: Ensure the class is set correctly and nodes form a valid connected path from the starting node.`;
+      text += `\n⚠️  ${dropped} of ${requested} requested nodes were dropped. Known cause: lua_set_tree uses PoB's ImportFromNodeList which has stricter connectivity validation than the game itself (e.g. removing isolated keystones may fail here but work in-game). Workaround: make this tree change in the PoB GUI, then re-import via lua_import_character to sync.`;
+      text += `\nTip: Ensure the class is set correctly and nodes form a valid connected path from the starting node. Use find_path_to_node to discover intermediate travel nodes.`;
     }
 
     const ascUsed = tree?.ascendancyPointsUsed ?? 0;

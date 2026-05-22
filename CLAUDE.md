@@ -144,6 +144,8 @@ When saving imported characters, use `{League}-{CharacterName}.xml` (e.g. `Mirag
 
 Remind the user that PoB requires all allocated nodes to form a connected path back to the class start node. Nodes disconnected from the tree are silently dropped. Use `find_path_to_node` first to find the travel nodes needed to reach a target.
 
+**Known connectivity limitation:** `lua_set_tree` uses PoB's `ImportFromNodeList` which applies stricter connectivity validation than the game itself. Some edge cases (e.g. removing an isolated keystone that is accessible in-game via the passive system but not through normal node adjacency) may result in nodes being silently dropped via the API even though they work in-game. If this happens, make the tree change directly in the PoB GUI, then use `lua_import_character` to re-sync, or use `update_tree_delta` which builds incrementally from the current connected tree.
+
 ## TCP-first principle
 
 When a live TCP client is active (`PoBLuaTcpClient`), **always prefer TCP operations over file operations**. Reasons:
