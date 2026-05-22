@@ -72,6 +72,7 @@ These require the Lua bridge (`lua_start`) and, in TCP mode, a running PoB GUI l
 | `update_tree_delta` | Add or remove specific nodes; auto-paths to connect them |
 | `search_tree_nodes` | Search tree nodes by name or stat keyword |
 | `get_nearby_nodes` | Find notable/keystone passives near the current tree |
+| `plan_tree_paths` | Plan minimum combined node cost to reach multiple target notables; merges shared path prefixes and returns a combined node list for `lua_set_tree` |
 | `find_path_to_node` | Find shortest passive path to a target node (or between any two nodes) |
 
 ---
