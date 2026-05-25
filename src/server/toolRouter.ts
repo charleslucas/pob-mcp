@@ -42,6 +42,7 @@ import { handleReportTreeNodeDiscrepancy, handleListTreePatches, handleGetTreeNo
 import { handleFindJewelAffectedNodes } from "../handlers/timelessJewelHandlers.js";
 import { handleListClusterJewelNodes } from "../handlers/clusterJewelListHandler.js";
 import { handleEvaluateThresholdJewels } from "../handlers/thresholdJewelHandler.js";
+import { handleGetTreeNodeWithTimelessJewels } from "../handlers/transformedNodeHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -186,6 +187,16 @@ export async function routeToolCall(
         getLuaClient: deps.getLuaClient,
         ensureLuaClient: deps.ensureLuaClient,
       });
+
+    case "get_tree_node_with_timeless_jewels":
+      if (!args) throw new Error("Missing arguments");
+      return await handleGetTreeNodeWithTimelessJewels(
+        {
+          getLuaClient: deps.getLuaClient,
+          ensureLuaClient: deps.ensureLuaClient,
+        },
+        args.node_id as string
+      );
 
     case "list_cluster_jewel_nodes":
       return await handleListClusterJewelNodes({

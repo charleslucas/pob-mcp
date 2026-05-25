@@ -322,6 +322,20 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "get_tree_node_with_timeless_jewels",
+      description: "Return a single passive node's CURRENT in-PoB stats, including any transformations applied by socketed Timeless Jewels (Lethal Pride, Glorious Vanity, etc.). Where `get_tree_node` returns the base data from PoB's tree.lua and `find_jewel_affected_nodes` tells you WHICH nodes are being transformed, this tool tells you WHAT they transform into — by reading PoB's already-computed post-transformation node state. No tooltip pastes, no game-data extraction, no template renderer needed; PoB has already done the work. Requires PoB Lua client (live TCP build or loaded XML). NOTE: requires the patched PathOfBuilding/src/API/BuildOps.lua + Handlers.lua with the `get_node_state` action — restart PoB via LaunchPoBWithAPI.bat after pulling the suite update for this tool to work.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          node_id: {
+            type: "string",
+            description: "Passive node ID (e.g. '11730' for Endurance)",
+          },
+        },
+        required: ["node_id"],
+      },
+    },
+    {
       name: "find_jewel_affected_nodes",
       description: "Identify which allocated passive nodes are being TRANSFORMED in-game by socketed Timeless Jewels (Lethal Pride, Glorious Vanity, Militant Faith, Brutal Restraint, Elegant Hubris). Phase-1 scope: identifies AFFECTED nodes by computing each Timeless Jewel's radius and listing the allocated nodes inside it — does NOT yet render the transformed stats. Primary use case: when an in-game tooltip doesn't match `get_tree_node` output, this tool answers \"is the discrepancy attributable to a jewel?\" and prevents false patches (the Endurance/Lethal-Pride case from 2026-05-25). Requires PoB Lua client (live TCP build or loaded XML).",
       inputSchema: {

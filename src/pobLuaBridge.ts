@@ -278,6 +278,21 @@ abstract class PoBApiBase {
     return res.results;
   }
 
+  /**
+   * Get the current in-PoB state of a single passive node, including any stat
+   * transformations applied by socketed Timeless Jewels. PoB computes these
+   * inside PassiveSpec — by the time we read here, `sd` reflects the
+   * transformed text (e.g. Lethal Pride Karui rewrites).
+   *
+   * Result shape:
+   *   { id, dn, type, allocated, sd: string[], conqueredBy?: {seed, conqueror_type}, ascendancyName? }
+   */
+  async getNodeState(params: { node_id: number | string }): Promise<any> {
+    const res = await this.send({ action: "get_node_state", params });
+    if (!res.ok) throw new Error(res.error || "get_node_state failed");
+    return res.node;
+  }
+
   async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{ tree: any; autoPathedNodes?: number[]; skippedAscendancyNodes?: number[] }> {
     const res = await this.send({ action: "update_tree_delta", params });
     if (!res.ok) throw new Error(res.error || "update_tree_delta failed");
