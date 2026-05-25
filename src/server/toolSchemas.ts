@@ -314,6 +314,14 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "list_radius_effect_jewels",
+      description: "Scan equipped jewels for 'in Radius' mods that aren't Timeless-Jewel transformations and aren't attribute thresholds — i.e. the long tail: Energy From Within, Healthy Mind, Fertile Mind, Might of the Meek, Brute Force Solution, etc. For each match, reports the radius mod lines, a best-effort category (transform / grant / multiplier / other), and the allocated nodes in the jewel's radius. Useful for build-comparison and for noticing when a radius jewel is socketed but not actually affecting much of the tree. PoB already applies the numeric effect in lua_get_stats totals; this tool surfaces WHICH jewels and WHICH nodes so the caller can reason about scope.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "list_cluster_jewel_nodes",
       description: "Summarize what each socketed Cluster Jewel (Large/Medium/Small) contributes to the passive tree — total passives, jewel sockets, the small-passive enchant bonus, additional small-passive mods, and the specific notables added. Reads from the live build via PoB. Cluster jewels often drive the biggest build-shape differences (their notables are frequently the highest-value stats in a build), so this is useful for build comparisons, DPS analyses, and cluster shopping. PoB also stores the actual generated node entries — those still show up in lua_get_tree — but this tool provides the high-level cluster-by-cluster view that's hard to extract otherwise.",
       inputSchema: {

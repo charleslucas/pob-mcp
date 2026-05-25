@@ -43,6 +43,7 @@ import { handleFindJewelAffectedNodes } from "../handlers/timelessJewelHandlers.
 import { handleListClusterJewelNodes } from "../handlers/clusterJewelListHandler.js";
 import { handleEvaluateThresholdJewels } from "../handlers/thresholdJewelHandler.js";
 import { handleGetTreeNodeWithTimelessJewels } from "../handlers/transformedNodeHandler.js";
+import { handleListRadiusEffectJewels } from "../handlers/radiusEffectJewelHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -200,6 +201,12 @@ export async function routeToolCall(
 
     case "list_cluster_jewel_nodes":
       return await handleListClusterJewelNodes({
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      });
+
+    case "list_radius_effect_jewels":
+      return await handleListRadiusEffectJewels({
         getLuaClient: deps.getLuaClient,
         ensureLuaClient: deps.ensureLuaClient,
       });
