@@ -234,13 +234,15 @@ These get extracted and used in-memory but are **never committed to any public r
 
 The data.json that *is* committed to the fork contains the same kinds of fields GGG already publishes in their export (structure + names + integer stat values + rendered stat strings via the templates).
 
-### Jewel-aware MCP tool (downstream of extraction) — NEXT MEATY FEATURE
+### Timeless-Jewel-aware MCP tool (downstream of extraction) — NEXT MEATY FEATURE
 
 The "no more user tooltip pastes for Timeless Jewel transformations" goal.
 
-**Why this is the next priority:** the current `get_tree_node` tool returns PoB's base data, which is what GGG publishes. Any in-game tooltip on a node within a Timeless Jewel's radius will differ from this (we caught the Endurance case earlier this week). Today the only way to verify is to ask the user for the in-game tooltip. The jewel-aware tool eliminates that round-trip.
+**Scope clarification:** this layer is specifically for **Timeless Jewels** (Lethal Pride, Glorious Vanity, Militant Faith, Brutal Restraint, Elegant Hubris) — the only jewel type whose effects appear *as transformed stats inside a passive node's tooltip*. Other jewel types (Cluster, Threshold, "effect in radius" uniques) need different tools — see the **Comprehensive jewel-awareness roadmap** section below.
 
-**Proposed tool:** `get_tree_node_with_jewels(node_id, build_name?)` — returns the node's stats *as transformed by the build's socketed Timeless Jewels*.
+**Why this is the next priority:** the current `get_tree_node` tool returns PoB's base data, which is what GGG publishes. Any in-game tooltip on a node within a Timeless Jewel's radius will differ from this (we caught the Endurance case earlier this week). Today the only way to verify is to ask the user for the in-game tooltip. The Timeless-Jewel-aware tool eliminates that round-trip.
+
+**Proposed tool:** `get_tree_node_with_timeless_jewels(node_id, build_name?)` — returns the node's stats *as transformed by the build's socketed Timeless Jewels*.
 
 **Building blocks needed (in dependency order):**
 
@@ -290,6 +292,76 @@ Recommend (c): keep the existing tools dependency-free, gate the new feature on 
 ### Why this matters (re-stated for clarity)
 
 - Patches workflow becomes mostly vestigial: extraction is always current with the user's install, so the canonical `data.json` is always right.
-- "Ask the user for a tooltip paste" becomes unnecessary: the jewel-aware tool computes transformations programmatically.
+- "Ask the user for a tooltip paste" becomes unnecessary: the Timeless-Jewel-aware tool computes transformations programmatically.
 - Forks stay valuable as **cross-platform caches** (anyone without PoE installed can still use the suite).
-- The work isolates cleanly: extraction pipeline first, jewel-aware tool second. Both are well-bounded.
+- The work isolates cleanly: extraction pipeline first, Timeless-Jewel-aware tool second. Both are well-bounded.
+
+---
+
+## Comprehensive jewel-awareness roadmap (long-term)
+
+The Timeless-Jewel-aware tool above is the *first* piece of a broader goal: making the suite fully aware of how every socketed jewel in a build affects the passive tree. Any comprehensive tree analysis (tree-analysis.md, build-comparison.md, dps-analysis.md) will eventually need this. The four pieces, in priority order:
+
+### 1. Timeless-Jewel-aware tool — `get_tree_node_with_timeless_jewels`
+Scoped in detail above. Transforms per-node tooltips for jewels in Lethal Pride / Glorious Vanity / Militant Faith / Brutal Restraint / Elegant Hubris radii. **First because it's the only category that misleads Claude about what a node actually provides.**
+
+### 2. Threshold-Jewel evaluator — `evaluate_threshold_jewels(build_name?)`
+Threshold jewels (Brawn, Lethal Assault, Inertia, Conqueror's Efficiency, etc.) apply a *global* effect conditional on having a specific amount of an attribute or particular notables within the jewel's radius. They don't change node tooltips, but they *do* turn on or off based on the surrounding tree state.
+
+Tool behavior:
+- Read the build's socketed jewels.
+- For each Threshold Jewel, find its socket position and radius.
+- Sum the relevant attribute (or count the relevant notables) in radius.
+- Report: "Brawn at socket 26196 requires +40 Strength in radius; currently +30 — NOT triggered, missing 10 Str."
+
+Useful for jewel shopping ("would this fit in my tree?") and for diagnosing missing build effects ("you think you have +6% inc Reservation Efficiency from Conqueror's Efficiency, but the threshold isn't met").
+
+Data needed: just `data.json` (to look up node positions and attribute values in radius) + the unique jewel's mod text (already in the build's item data). No `pathofexile-dat` extraction required — this is implementable today on top of `get_tree_node`.
+
+**Estimated effort:** half a day.
+
+### 3. Cluster-Jewel node surfacer — `list_cluster_jewel_nodes(build_name?)`
+Cluster Jewels (Large/Medium/Small) generate entirely new passive nodes inside their socket area when allocated. PoB already computes these — the tool's job is just to surface them in a clean format so other tools (and Claude) can reason about them.
+
+Tool behavior:
+- Read the build's allocated cluster jewels and their generated passives.
+- Report each cluster's notables, smalls, jewel sockets, and the small-passive-text enchant (e.g., "Added Small Passive Skills also grant 4% increased Cold Damage").
+- For each generated notable, show its full stats (already rendered by PoB).
+
+Useful for build-comparison.md (cluster differences are huge build-shape changes) and dps-analysis.md (cluster notables are often the highest-leverage stats).
+
+Data needed: the build's live state via `lua_get_tree` and `get_equipped_items`. No extraction required.
+
+**Estimated effort:** quarter to half a day.
+
+### 4. Radius-effect-unique resolver — `compute_radius_buffs(build_name?)`
+A grab-bag of unique jewels that modify the effective stats of allocated nodes in radius without changing the tooltip text. Examples: certain stats reading "Allocated Passives in radius also grant X% increased Y", Forbidden Power variants, Watchstones-as-jewels, etc.
+
+Tool behavior:
+- Read the build's socketed jewels.
+- Identify those with "in radius" mod patterns.
+- For each, compute which allocated nodes are in radius and what the effective bonus is.
+
+Data needed: just the build's live state + a small dictionary of known "in radius" jewels and their mod patterns. The dictionary itself is small and can live in code.
+
+**Estimated effort:** half a day, mostly cataloging which uniques have these mechanics.
+
+### Cross-cutting infrastructure
+
+Items 1-4 all share a need for a **`radiusUtils.ts`** helper:
+- `getRadiusForJewel(jewelType)` — Small=800, Medium=1200, Large=1500.
+- `getNodePosition(nodeId)` — group center + orbit offset (uses existing `pobTreeDataLoader`).
+- `nodesInRadius(jewelSocketId, radius)` — returns node IDs within distance.
+- `sumAttributeInRadius(jewelSocketId, radius, attribute)` — totals Strength/Dex/Int from allocated nodes in radius.
+
+Build this helper once, share across all four jewel-aware tools. Probably ~150 lines.
+
+### Suggested implementation order
+
+1. `radiusUtils.ts` — foundation. ~150 lines.
+2. Item 1 (Timeless-Jewel-aware) — highest payoff. ~1-2 days including the extraction wrapper.
+3. Item 2 (Threshold evaluator) — easy win, no extraction needed. ~half day.
+4. Item 3 (Cluster-Jewel surfacer) — also easy. ~quarter to half day.
+5. Item 4 (Radius-effect uniques) — harder to scope (lots of edge cases). ~half day plus ongoing additions as new uniques surface.
+
+Total for full jewel-awareness: roughly **3-4 focused days**. Each tool is independently shippable.
