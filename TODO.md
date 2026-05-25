@@ -51,11 +51,17 @@ if (fromNodeId) {
 
 ---
 
-## Skilltree Patches MCP Tool (`get_tree_node`, `report_tree_node_discrepancy`)
+## Skilltree Patches MCP Tools — ✅ SHIPPED
 
-GGG's published skilltree export (`reference_data/skilltree/data.json`) lags real game state. Stats change between patches without the export being re-tagged. Today, ad-hoc Python scripts that read `data.json` see stale stats — e.g. node 11730 "Endurance" is missing its `0.4% of Attack Damage Leeched as Life` line as of 3.28.0 export.
+**Status:** `get_tree_node`, `report_tree_node_discrepancy`, `list_tree_patches`, and `get_tree_node_patch` are all live (commits `fac7c93` and `b246376`). Pivoted away from the original "GGG data + overlay" plan to sourcing structural data from PoB community's `tree.lua` (via `luaparse`), with the patches overlay reserved for the rare edge cases where even PoB is wrong.
 
-The full overlay protocol is documented in `reference_data/skilltree/PATCHES.md`. This task implements the MCP surface for it.
+Service modules: `src/services/pobTreeDataLoader.ts`, `src/services/skilltreePatchesService.ts`.
+Handlers: `src/handlers/pobTreeDataHandlers.ts`, `src/handlers/skilltreePatchesHandlers.ts`.
+Schemas + routing in `src/server/`. 21 new unit tests, 416 tests total.
+
+The Endurance-leech example from earlier in this doc turned out to be a Lethal Pride Karui transformation, not a stale-export miss — see `legal_considerations.md` and the journal entry in MirageSixFingeredMan's `journal.md` for the full debugging trail. PATCHES.md inside the skilltree fork captures the verification protocol (the blank-line tooltip convention and the controlled-removal test) that catches this kind of error.
+
+### Original spec (preserved below for reference)
 
 ### Tool 1: `get_tree_node`
 
@@ -228,17 +234,58 @@ These get extracted and used in-memory but are **never committed to any public r
 
 The data.json that *is* committed to the fork contains the same kinds of fields GGG already publishes in their export (structure + names + integer stat values + rendered stat strings via the templates).
 
-### Jewel-aware MCP tool (downstream of extraction)
+### Jewel-aware MCP tool (downstream of extraction) — NEXT MEATY FEATURE
 
-After the extraction pipeline works, an MCP tool `get_tree_node_with_jewels(node_id, character_context)` can:
-1. Read the user's currently-loaded build (via `lua_get_tree`, `get_equipped_items`).
-2. Identify socketed Timeless Jewels.
-3. For each jewel, compute its seed → historic-character mapping (small algorithm, ~10 lines, well documented in the PoE community).
-4. Look up that character's transformations in `AlternatePassiveSkills` and `AlternatePassiveAdditions`.
-5. Apply transformations to the requested node if it's in radius.
-6. Return the per-node stats *as the user would see them in-game* — closing the loop on the "no more user tooltip pastes needed" workflow.
+The "no more user tooltip pastes for Timeless Jewel transformations" goal.
 
-This depends on the extraction pipeline + a small jewel-transformation engine. Order-of-magnitude another 1-2 days of work after extraction is done.
+**Why this is the next priority:** the current `get_tree_node` tool returns PoB's base data, which is what GGG publishes. Any in-game tooltip on a node within a Timeless Jewel's radius will differ from this (we caught the Endurance case earlier this week). Today the only way to verify is to ask the user for the in-game tooltip. The jewel-aware tool eliminates that round-trip.
+
+**Proposed tool:** `get_tree_node_with_jewels(node_id, build_name?)` — returns the node's stats *as transformed by the build's socketed Timeless Jewels*.
+
+**Building blocks needed (in dependency order):**
+
+1. **Game-data extractor service** (new module, ~150-200 lines).
+   - Wrapper around `pathofexile-dat` (already validated in `data-extraction-poc/`).
+   - Spawns the CLI in a user-local cache dir (suggest `pob-mcp/.cache/jewel-data/` — gitignored per `legal_considerations.md`).
+   - Extracts on first use, cached thereafter keyed by PoE install mtime.
+   - Tables to extract: `AlternatePassiveSkills`, `AlternatePassiveAdditions`, `PassiveJewelRadii`, `Stats`, `AlternateTreeVersions`, `LegionFactions`.
+   - Files to extract: `Metadata/StatDescriptions/passive_skill_stat_descriptions.txt`.
+   - **Per `legal_considerations.md`:** these go to user-local cache only, NEVER to any committed repo. Add `pob-mcp/.cache/` to `.gitignore`.
+
+2. **Seed-to-historic-character resolver** (~50 lines).
+   - Each Timeless Jewel type has 5 historic characters keyed by seed range.
+   - Lethal Pride (Karui): Akoya/Kaom/Rakiata/etc. by seed range.
+   - Glorious Vanity (Vaal), Militant Faith (Templar), Brutal Restraint (Maraketh), Elegant Hubris (Eternal).
+   - Algorithm is well-documented publicly. Hardcode the mapping table.
+
+3. **Radius check** (~30 lines).
+   - Get the jewel socket's group position (use existing `pobTreeDataLoader.ts`).
+   - Get the candidate node's group position.
+   - Compute Euclidean distance vs the jewel's radius (Small=800, Medium=1200, Large=1500 — confirmable via `PassiveJewelRadii`).
+   - Note: actual node position = group center + orbit offset; for first-cut, group-center distance is a good enough approximation.
+
+4. **Transformation engine** (~100 lines).
+   - For (jewel_type, historic_character, node_size, node_id), look up the replacement in `AlternatePassiveSkills`.
+   - Additions: look up in `AlternatePassiveAdditions`.
+   - Apply: replace or append to the node's `stats` array.
+
+5. **Stat description template renderer** (~200-400 lines, the hardest piece).
+   - `passive_skill_stat_descriptions.txt` is a domain-specific template file with conditionals, ranges, plural forms, and value substitutions.
+   - Community parsers exist (PyPoE has one, PoB has Lua logic). Worth porting from PoB's `src/Modules/StatDesc.lua` rather than RE'ing.
+   - **Alternative shortcut:** for jewel-transformed nodes, look up the rendered stat from PoB's `tree.lua` for nodes in the AlternatePassiveSkills table. This avoids reimplementing the template engine for the common case. Falls back to template rendering only for nodes PoB hasn't pre-rendered (rare).
+
+6. **MCP tool wiring** (~50 lines).
+   - Schema, handler, router case.
+   - Output: the node's stats with a "jewel-modified" marker indicating which jewel and historic character is transforming it.
+
+**Estimated effort:** 1-2 focused days. The template renderer (item 5) is the longest single piece; the rest is straightforward integration.
+
+**Open architectural decision:** the game-data extractor introduces a new dependency layer (pathofexile-dat + Oodle DLL from the user's PoE install). Options:
+- (a) Add as a pob-mcp dep; ship the suite with everything needed in one place. Heavier suite.
+- (b) Build as a separate sibling package (`game-data-extractor/`) that pob-mcp shells out to. Cleaner separation, more files.
+- (c) Make extraction optional — only the jewel-aware tool requires it; `get_tree_node` keeps working without.
+
+Recommend (c): keep the existing tools dependency-free, gate the new feature on whether the cache has been populated. Surface a clear "run the extractor once" instruction in the tool description.
 
 ### Why this matters (re-stated for clarity)
 
