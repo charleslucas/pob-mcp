@@ -584,7 +584,7 @@ export function getLuaToolSchemas(): any[] {
           },
           node_type: {
             type: "string",
-            description: "Filter by type: 'keystone', 'notable', 'jewel', or 'any' (default)",
+            description: "Filter by node type: 'keystone', 'notable', 'jewel', 'mastery', 'ascendancy', or 'normal' (small travel nodes). Omit to search all types.",
           },
           limit: {
             type: "number",

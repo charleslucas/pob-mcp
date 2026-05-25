@@ -329,10 +329,12 @@ export async function routeToolCall(
       if (!searchQuery || String(searchQuery).trim().length === 0) {
         throw new Error(`search_tree_nodes requires a 'query' parameter (received args: ${JSON.stringify(Object.keys(args))})`);
       }
+      const rawNodeType = args.node_type as string | undefined;
+      const nodeTypeFilter = (rawNodeType && rawNodeType.toLowerCase() !== 'any') ? rawNodeType : undefined;
       return await handleSearchTreeNodes(
         luaContext,
         String(searchQuery).trim(),
-        args.node_type as string | undefined,
+        nodeTypeFilter,
         (args.limit || args.max_results) as number | undefined,
         args.include_allocated as boolean | undefined
       );
