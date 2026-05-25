@@ -165,19 +165,48 @@ This is the larger sibling of the patches MCP tool. Instead of patching GGG's pu
 - **`Metadata/PassiveSkillGraph.psg`** (binary, 76 KB) extracted via pathofexile-dat. Contains tree topology.
 - **dat-schema** (community-maintained at `poe-tool-dev/dat-schema`) is the source of truth for column schemas. Downloaded as `data-extraction-poc/poe-schema.json`. 1,401 tables defined.
 
-### The blocker: PSG parser
+### PSG parser: deprecated approach
 
-The `.psg` file format documented in PoB's `src/Export/psg.lua` (header=7 bytes, simple per-group/per-node loop) **has shifted** in current PoE builds. The proof-of-concept parser in `data-extraction-poc/psg-parser.mjs` got the header offset right (10 bytes now, not 7) and successfully extracted the root-node list (21 entries including known class-start IDs like 47175 Marauder, 50459 Duelist). But the group/node record structure has grown beyond the documented format — runs out of bounds during group iteration. Each group record appears to be ~40 bytes of metadata before any node count, suggesting per-group fields were added that aren't in PoB's old parser.
+Initial plan was to parse `Metadata/PassiveSkillGraph.psg` directly. We started porting PoB's `src/Export/psg.lua` to TypeScript. Hit format drift: PSG header is now 10 bytes (not 7 as PoB documents) and per-group records grew beyond the documented schema. Then we discovered **PoB community itself has abandoned `psg.lua`** — the 3.28 tree commit (`fcae41cb`) added `tree.lua` directly without touching any Export tools. PoB devs have an offline workflow we don't have access to.
 
-**Two paths forward:**
+**Better path discovered: use PoB's `tree.lua` directly.** See next section. The partial PSG parser in `data-extraction-poc/psg-parser.mjs` is kept as a reference but won't be the production approach.
 
-1. **Find a current parser.** The `poe-dat-viewer` library (npm `pathofexile-dat`) doesn't have a `.psg` reader (it's focused on `.datc64` tables), but related projects may. Check:
-   - `LibGGPK3` (C# successor to LibGGPK2; actively maintained)
-   - PoB's `dev` branch (might have an updated `psg.lua` we missed)
-   - poe-tool-dev org for any PSG schema definition
-2. **Reverse-engineer the current format.** From the hex dump at offset 98, each group record looks like:
-   - f32 x, f32 y, ~32 bytes of new metadata (flags, IDs, padding), then probably node count + nodes.
-   - Validate by counting record boundaries (next group's `x` float appears 40 bytes after the previous group's `x`).
+### The actual path forward: parse PoB's tree.lua
+
+PoB community maintains `PathOfBuilding/src/TreeData/{ver}/tree.lua` (~2.9 MB Lua table per PoE version, updated each league via PR). The schema is **identical to GGG's published data.json** — same readable field names (`name`, `stats`, `group`, `orbit`, `orbitIndex`, `isNotable`, etc.), same node structure, same in/out connection format.
+
+**Proof-of-concept in `data-extraction-poc/tree-from-pob.mjs`** already validates this end-to-end:
+
+- Parses `PathOfBuilding/src/TreeData/3_28/tree.lua` (~2.9 MB) in ~70 ms using `luaparse` (npm)
+- Emits 1.4 MB JSON matching GGG's data.json schema
+- Spot-check on node 11730 "Endurance" — every field matches GGG's published version EXCEPT `group` (PoB uses 109, GGG uses 136 — they use different internal group numbering).
+- Pipeline: `tree.lua` → luaparse AST → JS object → minor coercion (empty Lua tables → empty arrays) → JSON.
+
+**Known difference: group renumbering.** PoB reassigns group IDs in their own order. Node IDs are stable across both, but `groups` indexing differs. Workarounds:
+- Build a remapping table: for each PoB group, look up which node IDs it contains, find those IDs in GGG's data.json, derive the corresponding GGG group ID.
+- Or: accept PoB's numbering and document the difference (tools doing group-by-group analysis would need to use the PoB-flavored output consistently).
+
+**Why this is better than bundle extraction:**
+- No Oodle DLL dependency (lighter, more portable)
+- No `.datc64` schema maintenance (those schemas drift, PoB's tree.lua schema is stable)
+- No PSG binary parsing
+- No stat description rendering (PoB already did it; stats arrive pre-rendered)
+- PoB ships the data publicly — using it is provably safer than direct extraction (see `reference_data/skilltree/legal_considerations.md`)
+
+**Trade-off:** depends on PoB community keeping `tree.lua` current. They typically update within days of each PoE league launch (the 3.28 update landed within ~3 weeks of game release). If we need data faster than PoB ships, we'd fall back to extraction. For the vast majority of cases, PoB's pace is sufficient.
+
+### Recommended implementation
+
+A new module `pob-mcp/src/services/treeDataLoader.ts` that:
+1. Reads `PathOfBuilding/src/TreeData/{POE_VERSION}/tree.lua` from the submodule (use `POE_VERSION` env var or default to latest dir alphabetically).
+2. Uses `luaparse` (npm) to parse the Lua table → JS object.
+3. Coerces empty Lua `{}` tables to `[]` for fields known to be arrays (`stats`, `in`, `out`, etc.).
+4. Caches the parsed result in memory keyed by version + file mtime.
+5. Provides a `getNode(nodeId)` API for the MCP tool layer.
+
+Total: probably 200-300 lines including the Lua-to-JS conversion (which we've already validated in the PoC).
+
+The `get_tree_node` MCP tool described earlier in this doc then layers on top: it reads from `treeDataLoader` (always-current PoB data), falls back to GGG's published `data.json` if PoB hasn't updated yet, and applies `data_patches.json` overrides on top for edge cases.
 
 ### Full pipeline once PSG is parsed
 
