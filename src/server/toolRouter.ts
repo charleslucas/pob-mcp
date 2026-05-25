@@ -38,6 +38,7 @@ import { handleSuggestWatchersEye } from "../handlers/jewelAdvisorHandlers.js";
 import { handleSuggestCrafting } from "../handlers/craftingAdvisorHandler.js";
 import { handleFindItemUpgrades as handleFindItemUpgradesNew } from "../handlers/itemShoppingHandler.js";
 import { handleGetTreeNode } from "../handlers/pobTreeDataHandlers.js";
+import { handleReportTreeNodeDiscrepancy, handleListTreePatches, handleGetTreeNodePatch } from "../handlers/skilltreePatchesHandlers.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -155,6 +156,27 @@ export async function routeToolCall(
         args.tree_version as string | undefined,
         args.raw_json as boolean | undefined
       );
+
+    case "report_tree_node_discrepancy":
+      if (!args) throw new Error("Missing arguments");
+      return await handleReportTreeNodeDiscrepancy(
+        args.node_id as string,
+        args.operation as string,
+        args.value,
+        args.verified_from as string,
+        args.verified_by as string,
+        args.note as string | undefined
+      );
+
+    case "list_tree_patches":
+      return await handleListTreePatches(
+        args?.filter_source as string | undefined,
+        args?.min_age_days as number | undefined
+      );
+
+    case "get_tree_node_patch":
+      if (!args) throw new Error("Missing arguments");
+      return await handleGetTreeNodePatch(args.node_id as string);
 
     // Lua bridge tools
     case "lua_start":

@@ -250,6 +250,76 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "report_tree_node_discrepancy",
+      description: "Record a correction to GGG's passive tree data for a single node — writes to the skilltree fork's `data_patches.json` overlay file. Use only after applying the verification protocol in `reference_data/skilltree/PATCHES.md`: in particular, confirm the discrepancy is NOT a Timeless Jewel transformation (the blank-line tooltip test). After this tool writes to disk, the maintainer must commit and push the fork submodule to share the correction with the community — this tool only modifies the local file. Stamps `verified_date` with today's date automatically.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          node_id: {
+            type: "string",
+            description: "Passive node ID (e.g., '11730').",
+          },
+          operation: {
+            type: "string",
+            enum: ["stats_add", "stats_replace", "name_replace", "flags_set"],
+            description: "stats_add appends to the existing stats array. stats_replace replaces the whole stats array. name_replace replaces the node's name. flags_set updates flag values like isNotable/isKeystone. See PATCHES.md for guidance on when to use each.",
+          },
+          value: {
+            // Shape depends on operation — see description. Schema validator
+            // accepts the broadest type; the handler enforces operation-specific
+            // shape with a clear error message.
+            type: "string",
+            description: "Operation-specific value. For stats_add/stats_replace: pass an array of stat strings (the schema lists type=string for broad compatibility, but the handler accepts arrays/objects too). For name_replace: a single string. For flags_set: an object mapping flag names to values.",
+          },
+          verified_from: {
+            type: "string",
+            enum: ["in-game tooltip", "PoB tree data", "PoB lua_get_passive_detail", "wiki", "reddit/forum"],
+            description: "Where the correct value was verified. In-game tooltip is the most authoritative source.",
+          },
+          verified_by: {
+            type: "string",
+            description: "Who verified the correction (e.g., 'Memophage#4428' or 'Claude').",
+          },
+          note: {
+            type: "string",
+            description: "Optional context — why this patch is needed, any caveats.",
+          },
+        },
+        required: ["node_id", "operation", "value", "verified_from", "verified_by"],
+      },
+    },
+    {
+      name: "list_tree_patches",
+      description: "Audit the current patches in `reference_data/skilltree/data_patches.json`. Lists each entry with its operations, verification metadata, and age in days. Useful for finding stale patches that should be re-verified after a GGG export refresh, or for collecting candidates to submit upstream to GGG.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filter_source: {
+            type: "string",
+            description: "Only return patches verified from this source (e.g., 'in-game tooltip').",
+          },
+          min_age_days: {
+            type: "number",
+            description: "Only return patches older than this many days. Useful for finding stale entries.",
+          },
+        },
+      },
+    },
+    {
+      name: "get_tree_node_patch",
+      description: "Read the current patch entry (if any) for a single node from `data_patches.json`. Returns null/empty if no patch exists. Read-only; use `report_tree_node_discrepancy` to add or update.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          node_id: {
+            type: "string",
+            description: "Passive node ID (e.g., '11730').",
+          },
+        },
+        required: ["node_id"],
+      },
+    },
+    {
       name: "get_build_notes",
       description: "Read the notes/documentation from a PoB build file",
       inputSchema: {
