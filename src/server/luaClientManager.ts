@@ -8,7 +8,7 @@
  *
  *   TCP mode: connects to a running PoB GUI launched with POB_API_TCP=1.
  *     POB_LUA_ENABLED=true + POB_API_TCP=true
- *     Optional: POB_API_TCP_HOST (default 127.0.0.1), POB_API_TCP_PORT (default 31337)
+ *     Optional: POB_API_TCP_HOST (default 127.0.0.1), POB_API_TCP_PORT (default 59166)
  */
 
 import { exec } from 'child_process';
@@ -94,7 +94,7 @@ export class LuaClientManager {
 
   private async startTcpClient(): Promise<void> {
     const host = process.env.POB_API_TCP_HOST || '127.0.0.1';
-    const port = process.env.POB_API_TCP_PORT ? parseInt(process.env.POB_API_TCP_PORT) : 31337;
+    const port = process.env.POB_API_TCP_PORT ? parseInt(process.env.POB_API_TCP_PORT) : 59166;
     // Per-attempt timeout: how long to wait for PoB to respond to a single connect + banner.
     const timeoutMs = process.env.POB_TIMEOUT_MS ? parseInt(process.env.POB_TIMEOUT_MS) : 10000;
     // Total reconnect window: how long to keep retrying before giving up.

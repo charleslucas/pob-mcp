@@ -62,7 +62,7 @@ This guide provides comprehensive test cases for all features of the Path of Bui
         "POB_LUA_ENABLED": "true",
         "POB_API_TCP": "true",
         "POB_API_TCP_HOST": "127.0.0.1",
-        "POB_API_TCP_PORT": "31337"
+        "POB_API_TCP_PORT": "59166"
       }
     }
   }
@@ -447,7 +447,7 @@ Expected:
 **Prerequisites**:
 - Windows machine with PoB GUI installed
 - Environment variable `POB_API_TCP=1` set before launching PoB
-- TCP server running in PoB (status bar shows "API: Listening on port 31337")
+- TCP server running in PoB (status bar shows "API: Listening on port 59166")
 
 **Steps**:
 1. Configure MCP server with TCP settings
@@ -906,8 +906,8 @@ sudo apt-get install luajit
 **Solution**:
 - Verify PoB GUI launched with POB_API_TCP=1
 - Check firewall settings
-- Verify port 31337 not in use
-- Try telnet 127.0.0.1 31337 to test connection
+- Verify port 59166 not in use
+- Try telnet 127.0.0.1 59166 to test connection
 
 ## Test Result Template
 

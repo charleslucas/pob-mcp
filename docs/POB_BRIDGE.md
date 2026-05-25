@@ -20,7 +20,7 @@ This document describes the Path of Building headless API integration powering h
 - Fork API (implemented): `load_build_xml`, `get_stats`, `get_tree`, `set_tree`, `quit`.
 
 TCP (GUI) mode
-- Enable with `POB_API_TCP=1` (and optional `POB_API_TCP_PORT`, default 31337) when launching PoB GUI.
+- Enable with `POB_API_TCP=1` (and optional `POB_API_TCP_PORT`, default 59166) when launching PoB GUI.
 - Server is embedded via `src/API/TcpServer.lua` and pumped from `Modules/Main.lua` each frame.
 - Same JSON actions as stdio server (ping, load_build_xml, get_stats, get_tree, set_tree, update_tree_delta, calc_with, export_build_xml, get_build_info, set_level, get_config, set_config).
 
@@ -28,13 +28,13 @@ TCP (GUI) mode
 - Start PoB from a PowerShell where the env var is set:
   ```powershell
   # Optional: pick a custom port
-  $env:POB_API_TCP_PORT = 31337
+  $env:POB_API_TCP_PORT = 59166
   # Required to enable the embedded TCP server
   $env:POB_API_TCP = 1
   & "C:\\Path\\To\\Path of Building\\Path of Building.exe"
   ```
 - Binding: the server binds to `127.0.0.1` only (loopback). It is not reachable over LAN by design.
-- Default port: `31337` unless overridden by `POB_API_TCP_PORT`.
+- Default port: `59166` unless overridden by `POB_API_TCP_PORT`.
 - Ready banner: on connect, the first line is JSON like:
   ```json
   { "ok": true, "ready": true, "version": { "number": "x.y.z", "branch": "...", "platform": "..." } }
@@ -45,7 +45,7 @@ Run these while the PoB GUI is open (with a build loaded) and TCP mode enabled.
 
 1) PowerShell using TcpClient
 ```powershell
-$c = New-Object System.Net.Sockets.TcpClient("127.0.0.1", 31337)
+$c = New-Object System.Net.Sockets.TcpClient("127.0.0.1", 59166)
 $s = $c.GetStream()
 $r = New-Object IO.StreamReader($s)
 $w = New-Object IO.StreamWriter($s); $w.AutoFlush = $true
@@ -69,7 +69,7 @@ $c.Close()
 // save as tcp_test.js and run: node tcp_test.js
 import net from 'node:net';
 
-const host = '127.0.0.1', port = 31337;
+const host = '127.0.0.1', port = 59166;
 const sock = net.createConnection({ host, port });
 sock.setEncoding('utf8');
 
@@ -109,22 +109,22 @@ Notes
 - Actions supported in TCP mode include: `ping`, `version`, `get_build_info`, `get_stats`, `get_tree`, `update_tree_delta`, `calc_with`, `export_build_xml`, `set_level`, `get_config`, `set_config`.
 
 ### Diagnostics
-- Port check (Windows): `Test-NetConnection localhost -Port 31337`
-- Listener check (Windows): `netstat -ano | findstr :31337` then `Get-Process -Id <PID>`
+- Port check (Windows): `Test-NetConnection localhost -Port 59166`
+- Listener check (Windows): `netstat -ano | findstr :59166` then `Get-Process -Id <PID>`
 - If the TCP test fails but PoB is running, verify the env vars were set in the same shell that launched PoB.
 
 ### Remote testing from macOS (SSH tunnel)
 Because the server binds to `127.0.0.1` on the Windows PC, it is not reachable across the network. Use SSH port forwarding:
 1) From macOS, create a tunnel to Windows (replace IP and user):
 ```bash
-ssh -L 31337:127.0.0.1:31337 youruser@192.168.x.x
+ssh -L 59166:127.0.0.1:59166 youruser@192.168.x.x
 ```
-2) On macOS, point your client to `127.0.0.1:31337` (traffic tunnels to Windows PoB).
+2) On macOS, point your client to `127.0.0.1:59166` (traffic tunnels to Windows PoB).
 
 Tip: You can also use the bundled Node client in this repo (`PoBLuaTcpClient` in `build/pobLuaBridge.js`):
 ```js
 import { PoBLuaTcpClient } from './build/pobLuaBridge.js';
-const api = new PoBLuaTcpClient({ host: '127.0.0.1', port: 31337 });
+const api = new PoBLuaTcpClient({ host: '127.0.0.1', port: 59166 });
 await api.start();
 console.log('ping:', await api.ping());
 console.log('info:', await api.getBuildInfo());
@@ -134,7 +134,7 @@ await api.stop();
 
 ### Common issues
 - Hostname resolution (SSH): Hostname-only SSH may fail if not in DNS. Use the machine’s IP address or add an `/etc/hosts` entry.
-- `TcpTestSucceeded: false`: Indicates nothing is listening on the tested port. Ensure PoB GUI was launched with `POB_API_TCP=1` and that you’re testing `localhost:31337` on the Windows machine (or via an SSH tunnel).
+- `TcpTestSucceeded: false`: Indicates nothing is listening on the tested port. Ensure PoB GUI was launched with `POB_API_TCP=1` and that you’re testing `localhost:59166` on the Windows machine (or via an SSH tunnel).
 - Remote access: Changing `TcpServer.lua` to bind `0.0.0.0` would expose the port, but is not recommended. Prefer tunneling for safety.
 
 ## MCP Tools (to add)
@@ -252,7 +252,7 @@ Notes
 
 Node TCP client
 - Use `PoBLuaTcpClient` from `src/pobLuaBridge.ts` when talking to a live GUI instance:
-  - `const api = new PoBLuaTcpClient({ host: '127.0.0.1', port: 31337 });`
+  - `const api = new PoBLuaTcpClient({ host: '127.0.0.1', port: 59166 });`
   - `await api.start();`
   - Then call `loadBuildXml`, `getStats`, `getTree`, `setTree`, etc.
   - `await api.stop();`

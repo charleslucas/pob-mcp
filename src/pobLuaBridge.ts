@@ -576,7 +576,7 @@ export class PoBLuaTcpClient extends PoBApiBase {
     super();
     this.options = {
       host: options.host || "127.0.0.1",
-      port: options.port || 31337,
+      port: options.port || 59166,
       timeoutMs: options.timeoutMs ?? 30000,
     };
   }

@@ -4,7 +4,7 @@
 :: Auto-patches Modules\Main.lua on each launch so PoB updates don't break things.
 
 set POB_API_TCP=1
-set POB_API_TCP_PORT=31337
+set POB_API_TCP_PORT=59166
 set POB_DIR=%APPDATA%\Path of Building Community
 
 :: Check that both the Main.lua patch AND the API Lua files are present.

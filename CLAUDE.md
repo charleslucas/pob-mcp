@@ -50,7 +50,7 @@ When the TCP connection is lost (PoB closed, crashed, or updated), the next tool
 ## Launching PoB with the TCP server
 
 Use `LaunchPoBWithAPI.bat` (in this repo). It:
-1. Sets `POB_API_TCP=1` and `POB_API_TCP_PORT=31337` in the environment.
+1. Sets `POB_API_TCP=1` and `POB_API_TCP_PORT=59166` in the environment.
 2. Checks whether the TCP patch is still in `Modules/Main.lua`; re-applies it if PoB updated and overwrote it.
 3. Launches `Path of Building.exe`.
 

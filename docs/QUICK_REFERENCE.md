@@ -20,7 +20,7 @@ POB_TIMEOUT_MS="10000"                         # per-request timeout (ms); bridg
 POB_LUA_ENABLED="true"
 POB_API_TCP="true"                            # skip headless, connect via TCP instead
 POB_API_TCP_HOST="127.0.0.1"                 # optional, loopback default
-POB_API_TCP_PORT="31337"                      # optional, default port
+POB_API_TCP_PORT="59166"                      # optional, default port
 POB_RECONNECT_TIMEOUT_MS="300000"            # how long to retry after disconnect (default 5 min)
 ```
 Launch PoB with `LaunchPoBWithAPI.bat` (in pob-mcp repo) — sets env vars, auto-patches Main.lua, handles self-healing after updates. PoB works in background; console (~) shows all API events.

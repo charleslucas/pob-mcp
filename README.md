@@ -96,7 +96,7 @@ Three scripts ship with this repo for wiring up the live TCP connection to the P
 | Script | When to run | What it does |
 |--------|-------------|--------------|
 | `InstallTcpApi.ps1` | Once (or after a clean PoB reinstall) | Copies `TcpServer.lua`, `Handlers.lua`, `BuildOps.lua` into `%APPDATA%\Path of Building Community\API\` and patches `Modules\Main.lua` to start the TCP server when `POB_API_TCP=1` is set. Creates a `Main.lua.bak` backup before patching. |
-| `LaunchPoBWithAPI.bat` | **Every time you start PoB** | Sets `POB_API_TCP=1` and `POB_API_TCP_PORT=31337`, checks whether the patch is still in `Main.lua` (re-runs `InstallTcpApi.ps1` automatically if PoB updated and overwrote it), then launches PoB. |
+| `LaunchPoBWithAPI.bat` | **Every time you start PoB** | Sets `POB_API_TCP=1` and `POB_API_TCP_PORT=59166`, checks whether the patch is still in `Main.lua` (re-runs `InstallTcpApi.ps1` automatically if PoB updated and overwrote it), then launches PoB. |
 | `UninstallTcpApi.ps1` | If you want to remove the API | Restores `Main.lua` from the `.bak` backup, removes the three API Lua files, and removes the `API\` directory if empty. |
 
 ```powershell
@@ -190,7 +190,7 @@ No `POB_FORK_PATH` or `POB_CMD` needed — PoB is already running. Open a build 
 | `POB_TIMEOUT_MS` | `10000` | Per-request timeout (ms). On timeout the bridge auto-restarts. |
 | `POB_API_TCP` | `false` | Set `"true"` to connect to a running PoB GUI instead of spawning headless LuaJIT |
 | `POB_API_TCP_HOST` | `127.0.0.1` | TCP mode: hostname/IP of the PoB GUI (loopback only by default) |
-| `POB_API_TCP_PORT` | `31337` | TCP mode: port PoB listens on (set `POB_API_TCP_PORT` in PoB's env too) |
+| `POB_API_TCP_PORT` | `59166` | TCP mode: port PoB listens on (set `POB_API_TCP_PORT` in PoB's env too) |
 | `POB_RECONNECT_TIMEOUT_MS` | `300000` | TCP mode: how long to keep retrying a lost connection (default 5 min). |
 | `POE_TRADE_ENABLED` | `false` | Enable Trade API tools |
 | `POE_SESSION_ID` | (none) | POESESSID cookie value. Required for private PoE profiles (`lua_import_character`, `lua_list_characters`) and for weighted trade queries (`find_weighted_trade_items`). **Sensitive** — treat like a password; do not commit or share. |
@@ -239,7 +239,7 @@ TCP mode lets Claude and you work on the same build simultaneously in the PoB GU
 
 This is the recommended way. It sets the required env vars, auto-patches `Modules/Main.lua` if PoB updated and overwrote it, and launches PoB. On startup you'll see in PoB's console (`~` key):
 ```
-[PoB API] TCP server started on port 31337
+[PoB API] TCP server started on port 59166
 [PoB API] Background keepalive active (~60 fps)
 ```
 
@@ -540,7 +540,7 @@ ls "$POB_FORK_PATH/Modules/"              # must exist
 - Ensure the correct tree spec is active — use `list_specs` and `select_spec` to switch
 - Verify your PathOfBuilding fork (`charleslucas/PathOfBuilding`, `api-stdio` branch) is up to date
 
-**TCP mode: `Cannot connect to PoB GUI at 127.0.0.1:31337`**
+**TCP mode: `Cannot connect to PoB GUI at 127.0.0.1:59166`**
 - Make sure PoB was started with `$env:POB_API_TCP = "1"` set in the *same shell* before launching
 - Verify PoB printed `[PoB API] TCP server started` in its console
 - If no console is visible, try launching PoB from PowerShell directly
