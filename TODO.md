@@ -55,7 +55,7 @@ if (fromNodeId) {
 
 GGG's published skilltree export (`reference_data/skilltree/data.json`) lags real game state. Stats change between patches without the export being re-tagged. Today, ad-hoc Python scripts that read `data.json` see stale stats — e.g. node 11730 "Endurance" is missing its `0.4% of Attack Damage Leeched as Life` line as of 3.28.0 export.
 
-The full overlay protocol is documented in `reference_data/skilltree/PATCHES.md`. This task implements the MCP surface for it.
+The full overlay protocol is documented in `reference_data/SKILLTREE_PATCHES.md`. This task implements the MCP surface for it.
 
 ### Tool 1: `get_tree_node`
 
