@@ -17,8 +17,8 @@
  * read here.
  */
 
-import { readFileSync, statSync, readdirSync } from "fs";
-import { join, resolve } from "path";
+import { readFileSync, statSync, readdirSync, existsSync } from "fs";
+import { join, dirname } from "path";
 import luaparse from "luaparse";
 
 export interface PobNode {
@@ -184,16 +184,52 @@ interface CacheEntry {
 const treeCache = new Map<string, CacheEntry>();
 
 /**
- * Resolve the PathOfBuilding submodule directory. Defaults to the path the
- * suite uses (`PathOfBuilding/` sibling to `pob-mcp/`), but can be overridden
- * via the POB_DIRECTORY env var.
+ * Resolve the suite root.
+ *
+ * `process.cwd()` is unreliable in production — the MCP server is launched
+ * by Claude Code from PoB's user-builds directory, not from the suite root.
+ * `import.meta.url` would be reliable but is incompatible with our CJS test
+ * config (Jest+ts-jest+ESM is fragile to configure).
+ *
+ * Strategy: walk up from `process.argv[1]` (the entry script). In production
+ * the entry is `<suite>/pob-mcp/build/index.js`, so walking up reliably finds
+ * the suite. In tests the entry is the jest runner; we fall through to the
+ * env-var or cwd fallback.
+ *
+ * Resolution order:
+ *   1. POE_MCP_SUITE_ROOT env var (preferred for explicit configuration)
+ *   2. Walk up from `process.argv[1]` looking for a `pob-mcp/package.json` marker
+ *   3. Walk up from `process.cwd()` looking for the same marker
+ *   4. Last-resort: `process.cwd()` itself (will produce a clear ENOENT)
+ */
+function searchUpwardForSuite(start: string): string | null {
+  let dir = start;
+  while (dir && dir !== dirname(dir)) {
+    if (existsSync(join(dir, "pob-mcp", "package.json"))) return dir;
+    dir = dirname(dir);
+  }
+  return null;
+}
+
+function resolveSuiteRoot(): string {
+  if (process.env.POE_MCP_SUITE_ROOT) return process.env.POE_MCP_SUITE_ROOT;
+  const entry = process.argv[1];
+  if (entry) {
+    const found = searchUpwardForSuite(dirname(entry));
+    if (found) return found;
+  }
+  const cwdFound = searchUpwardForSuite(process.cwd());
+  if (cwdFound) return cwdFound;
+  return process.cwd();
+}
+
+/**
+ * PathOfBuilding submodule directory. Override with POE_MCP_SUITE_POB_DIR if
+ * the submodule isn't at the canonical `<suite>/PathOfBuilding/` location.
  */
 function resolvePobDir(): string {
-  if (process.env.POB_DIRECTORY) return process.env.POB_DIRECTORY;
-  // pob-mcp is at <suite>/pob-mcp/, PathOfBuilding at <suite>/PathOfBuilding/
-  // Walk up from this file's directory.
-  // dist/services/pobTreeDataLoader.js or src/services/pobTreeDataLoader.ts
-  return resolve(process.cwd(), "..", "PathOfBuilding");
+  if (process.env.POE_MCP_SUITE_POB_DIR) return process.env.POE_MCP_SUITE_POB_DIR;
+  return join(resolveSuiteRoot(), "PathOfBuilding");
 }
 
 /**

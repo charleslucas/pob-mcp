@@ -23,7 +23,7 @@
  */
 
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from "fs";
-import { join, resolve, dirname } from "path";
+import { join, dirname } from "path";
 
 export type PatchOperation = "stats_add" | "stats_replace" | "name_replace" | "flags_set";
 
@@ -51,10 +51,39 @@ export type PatchesFile = Record<string, PatchEntry>;
 // Path resolution
 // ---------------------------------------------------------------------------
 
+/**
+ * Locate the skilltree fork submodule. process.cwd() is unreliable in MCP
+ * deployments (server typically launches from PoB's builds dir, not the
+ * suite). Resolve from this module's filesystem location instead.
+ *   <suite>/pob-mcp/{src,build}/services/skilltreePatchesService.{ts,js}
+ * walk up 3 dirs -> <suite>/, then into reference_data/skilltree/.
+ */
+// Walks up from the given dir looking for a `pob-mcp/package.json` marker.
+// See pobTreeDataLoader.resolveSuiteRoot for the full reasoning.
+function searchUpwardForSuite(start: string): string | null {
+  let dir = start;
+  while (dir && dir !== dirname(dir)) {
+    if (existsSync(join(dir, "pob-mcp", "package.json"))) return dir;
+    dir = dirname(dir);
+  }
+  return null;
+}
+
+function resolveSuiteRoot(): string {
+  if (process.env.POE_MCP_SUITE_ROOT) return process.env.POE_MCP_SUITE_ROOT;
+  const entry = process.argv[1];
+  if (entry) {
+    const found = searchUpwardForSuite(dirname(entry));
+    if (found) return found;
+  }
+  const cwdFound = searchUpwardForSuite(process.cwd());
+  if (cwdFound) return cwdFound;
+  return process.cwd();
+}
+
 function resolveSkilltreeDir(): string {
   if (process.env.SKILLTREE_DIRECTORY) return process.env.SKILLTREE_DIRECTORY;
-  // pob-mcp is at <suite>/pob-mcp/, skilltree fork at <suite>/reference_data/skilltree/
-  return resolve(process.cwd(), "..", "reference_data", "skilltree");
+  return join(resolveSuiteRoot(), "reference_data", "skilltree");
 }
 
 function patchesFilePath(): string {
