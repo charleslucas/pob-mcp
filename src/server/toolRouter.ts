@@ -41,6 +41,7 @@ import { handleGetTreeNode } from "../handlers/pobTreeDataHandlers.js";
 import { handleReportTreeNodeDiscrepancy, handleListTreePatches, handleGetTreeNodePatch } from "../handlers/skilltreePatchesHandlers.js";
 import { handleFindJewelAffectedNodes } from "../handlers/timelessJewelHandlers.js";
 import { handleListClusterJewelNodes } from "../handlers/clusterJewelListHandler.js";
+import { handleEvaluateThresholdJewels } from "../handlers/thresholdJewelHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -188,6 +189,12 @@ export async function routeToolCall(
 
     case "list_cluster_jewel_nodes":
       return await handleListClusterJewelNodes({
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      });
+
+    case "evaluate_threshold_jewels":
+      return await handleEvaluateThresholdJewels({
         getLuaClient: deps.getLuaClient,
         ensureLuaClient: deps.ensureLuaClient,
       });

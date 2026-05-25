@@ -306,6 +306,14 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "evaluate_threshold_jewels",
+      description: "Evaluate each socketed jewel's 'With at least N <Attribute> in Radius' threshold mods against the build's current tree. Reports whether each threshold is triggered, the current attribute sum in radius, and the margin (positive = triggered with headroom, negative = short by N points). Useful for jewel shopping ('would this Brawn fit my tree?') and for diagnosing missing effects ('I think I have +6% Reservation Efficiency from Conqueror's Efficiency, but the threshold isn't met'). Phase-1 scope: handles Str/Dex/Int attribute thresholds; 'Notable in Radius' and 'Total Attributes' patterns are Phase-2. Reads from the live build via PoB.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "list_cluster_jewel_nodes",
       description: "Summarize what each socketed Cluster Jewel (Large/Medium/Small) contributes to the passive tree — total passives, jewel sockets, the small-passive enchant bonus, additional small-passive mods, and the specific notables added. Reads from the live build via PoB. Cluster jewels often drive the biggest build-shape differences (their notables are frequently the highest-value stats in a build), so this is useful for build comparisons, DPS analyses, and cluster shopping. PoB also stores the actual generated node entries — those still show up in lua_get_tree — but this tool provides the high-level cluster-by-cluster view that's hard to extract otherwise.",
       inputSchema: {
