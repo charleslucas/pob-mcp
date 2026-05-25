@@ -77,6 +77,33 @@ These require the Lua bridge (`lua_start`) and, in TCP mode, a running PoB GUI l
 
 ---
 
+## Passive Tree — Per-Node Data & Patches
+
+Tools sourced from PoB community's `tree.lua` (always-current with each PoE league) and the community-fork `data_patches.json` overlay for the rare cases where even PoB's data is wrong. See `reference_data/skilltree/PATCHES.md` for the overlay protocol.
+
+| Tool | Description |
+|------|-------------|
+| `get_tree_node` | Look up a single passive node's name, stats, type, position, and in/out connections from PoB tree.lua. Replaces ad-hoc Python BFS on `data.json` for single-node "what does this give me?" queries. |
+| `get_tree_node_patch` | Read the current patch entry (if any) for a single node from `data_patches.json`. |
+| `report_tree_node_discrepancy` | Record a verified correction to a node's stats. Writes to the skilltree fork's `data_patches.json` overlay; stamps the patch with today's date. Use ONLY after the verification protocol in PATCHES.md (notably: confirm the node is not jewel-transformed). |
+| `list_tree_patches` | Audit the current patches with filters by source and age. Useful for finding stale entries after a GGG export refresh. |
+
+---
+
+## Passive Tree — Jewel Awareness
+
+Comprehensive coverage of how socketed jewels affect the passive tree. Built on top of `pobTreeDataLoader` and the shared `radiusUtils` infrastructure.
+
+| Tool | Description |
+|------|-------------|
+| `find_jewel_affected_nodes` | Identify which allocated nodes are being transformed by socketed Timeless Jewels (Lethal Pride, Glorious Vanity, Militant Faith, Brutal Restraint, Elegant Hubris). Reports per-jewel: which historic character is doing the transformation and which nodes are in radius. Phase-1 indicator tool. |
+| `get_tree_node_with_timeless_jewels` | Return a single node's stats including any Timeless Jewel transformation. Reads PoB's already-computed post-transformation `node.sd` via the `get_node_state` Lua action — no game-data extraction or template rendering needed. Phase-2 of Timeless-Jewel awareness. |
+| `evaluate_threshold_jewels` | Evaluate each socketed jewel's "With at least N <Attribute> in Radius" thresholds against the current tree allocation. Reports triggered/not-triggered with margin. Useful for jewel shopping (e.g., would this Brawn fit my tree?). |
+| `list_cluster_jewel_nodes` | Summarize what each socketed Cluster Jewel (Large/Medium/Small) contributes — total passives, jewel sockets, small-passive enchant, notable list, additional bonuses. Cluster differences are often the biggest build-shape divergences in build comparisons. |
+| `list_radius_effect_jewels` | Catch the long tail of "in Radius" uniques that aren't Timeless or threshold jewels — Energy From Within, Healthy Mind, Fertile Mind, Might of the Meek, Brute Force Solution, etc. Categorizes each (transform / grant / multiplier / other) and lists allocated nodes in the jewel's radius. |
+
+---
+
 ## Lua Bridge — Specs & Item Sets
 
 | Tool | Description |
