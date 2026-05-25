@@ -306,6 +306,14 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "find_jewel_affected_nodes",
+      description: "Identify which allocated passive nodes are being TRANSFORMED in-game by socketed Timeless Jewels (Lethal Pride, Glorious Vanity, Militant Faith, Brutal Restraint, Elegant Hubris). Phase-1 scope: identifies AFFECTED nodes by computing each Timeless Jewel's radius and listing the allocated nodes inside it — does NOT yet render the transformed stats. Primary use case: when an in-game tooltip doesn't match `get_tree_node` output, this tool answers \"is the discrepancy attributable to a jewel?\" and prevents false patches (the Endurance/Lethal-Pride case from 2026-05-25). Requires PoB Lua client (live TCP build or loaded XML).",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "get_tree_node_patch",
       description: "Read the current patch entry (if any) for a single node from `data_patches.json`. Returns null/empty if no patch exists. Read-only; use `report_tree_node_discrepancy` to add or update.",
       inputSchema: {

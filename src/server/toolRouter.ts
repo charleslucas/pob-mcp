@@ -39,6 +39,7 @@ import { handleSuggestCrafting } from "../handlers/craftingAdvisorHandler.js";
 import { handleFindItemUpgrades as handleFindItemUpgradesNew } from "../handlers/itemShoppingHandler.js";
 import { handleGetTreeNode } from "../handlers/pobTreeDataHandlers.js";
 import { handleReportTreeNodeDiscrepancy, handleListTreePatches, handleGetTreeNodePatch } from "../handlers/skilltreePatchesHandlers.js";
+import { handleFindJewelAffectedNodes } from "../handlers/timelessJewelHandlers.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -177,6 +178,12 @@ export async function routeToolCall(
     case "get_tree_node_patch":
       if (!args) throw new Error("Missing arguments");
       return await handleGetTreeNodePatch(args.node_id as string);
+
+    case "find_jewel_affected_nodes":
+      return await handleFindJewelAffectedNodes({
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      });
 
     // Lua bridge tools
     case "lua_start":
