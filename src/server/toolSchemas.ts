@@ -306,6 +306,14 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "list_cluster_jewel_nodes",
+      description: "Summarize what each socketed Cluster Jewel (Large/Medium/Small) contributes to the passive tree — total passives, jewel sockets, the small-passive enchant bonus, additional small-passive mods, and the specific notables added. Reads from the live build via PoB. Cluster jewels often drive the biggest build-shape differences (their notables are frequently the highest-value stats in a build), so this is useful for build comparisons, DPS analyses, and cluster shopping. PoB also stores the actual generated node entries — those still show up in lua_get_tree — but this tool provides the high-level cluster-by-cluster view that's hard to extract otherwise.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "find_jewel_affected_nodes",
       description: "Identify which allocated passive nodes are being TRANSFORMED in-game by socketed Timeless Jewels (Lethal Pride, Glorious Vanity, Militant Faith, Brutal Restraint, Elegant Hubris). Phase-1 scope: identifies AFFECTED nodes by computing each Timeless Jewel's radius and listing the allocated nodes inside it — does NOT yet render the transformed stats. Primary use case: when an in-game tooltip doesn't match `get_tree_node` output, this tool answers \"is the discrepancy attributable to a jewel?\" and prevents false patches (the Endurance/Lethal-Pride case from 2026-05-25). Requires PoB Lua client (live TCP build or loaded XML).",
       inputSchema: {
