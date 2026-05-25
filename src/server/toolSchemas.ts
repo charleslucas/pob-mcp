@@ -228,6 +228,28 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "get_tree_node",
+      description: "Look up a single passive tree node by ID, sourced from PoB community's `tree.lua` (parsed locally, always-current with each PoE league). Returns the node's name, type (Notable/Keystone/Jewel Socket/Mastery/Travel), stats (already rendered to human-readable strings), positional fields (group/orbit/orbitIndex), and in/out connection lists. The schema matches GGG's published data.json EXCEPT for `group`, which uses PoB's internal numbering (stable per-load but differs from GGG). Node IDs and connection IDs ARE stable across both — only group IDs differ. This tool does NOT apply Timeless Jewel transformations; pass through to in-game tooltip for jewel-transformed nodes. See `tree-analysis.md` pitfall on Timeless Jewels.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          node_id: {
+            type: "string",
+            description: "Passive node ID (e.g., '11730' for Endurance)",
+          },
+          tree_version: {
+            type: "string",
+            description: "PoE tree version directory under PathOfBuilding/src/TreeData/ (e.g., '3_28'). Optional — defaults to the latest version directory present.",
+          },
+          raw_json: {
+            type: "boolean",
+            description: "Return the raw JSON node object instead of a human-readable summary (default: false).",
+          },
+        },
+        required: ["node_id"],
+      },
+    },
+    {
       name: "get_build_notes",
       description: "Read the notes/documentation from a PoB build file",
       inputSchema: {

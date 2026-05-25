@@ -37,6 +37,7 @@ import { handleCheckBossReadiness } from "../handlers/bossReadinessHandlers.js";
 import { handleSuggestWatchersEye } from "../handlers/jewelAdvisorHandlers.js";
 import { handleSuggestCrafting } from "../handlers/craftingAdvisorHandler.js";
 import { handleFindItemUpgrades as handleFindItemUpgradesNew } from "../handlers/itemShoppingHandler.js";
+import { handleGetTreeNode } from "../handlers/pobTreeDataHandlers.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -145,6 +146,14 @@ export async function routeToolCall(
         args.target_node_id as string,
         args.show_alternatives as boolean | undefined,
         args.from_node_id as string | undefined
+      );
+
+    case "get_tree_node":
+      if (!args) throw new Error("Missing arguments");
+      return await handleGetTreeNode(
+        args.node_id as string,
+        args.tree_version as string | undefined,
+        args.raw_json as boolean | undefined
       );
 
     // Lua bridge tools
