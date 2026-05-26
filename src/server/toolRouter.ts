@@ -47,6 +47,8 @@ import { handleListRadiusEffectJewels } from "../handlers/radiusEffectJewelHandl
 import { handleGetAtlasNode, handleSearchAtlasNodes, handleFindAtlasPathToNode } from "../handlers/atlasTreeHandlers.js";
 import { handleSearchCraftingMods } from "../handlers/craftingModSearchHandler.js";
 import { handleListCraftableModsForBase } from "../handlers/listCraftableModsHandler.js";
+import { resolveLeague } from "../services/leagueResolver.js";
+import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -681,23 +683,22 @@ export async function routeToolCall(
       if (!deps.tradeClient) {
         throw new Error("Trade API is not enabled. Set POE_TRADE_ENABLED=true to enable.");
       }
-      if (!args || !args.league) {
-        throw new Error("Missing required argument: league");
-      }
+      if (!args) throw new Error("Missing arguments");
       const tradeContext = {
         tradeClient: deps.tradeClient,
         statMapper: deps.statMapper || undefined,
         ninjaClient: deps.ninjaClient
       };
-      return await handleSearchTradeItems(tradeContext, args as any);
+      const merged = { ...args, league: resolveLeague(args.league as string | undefined) };
+      return await handleSearchTradeItems(tradeContext, merged as any);
     }
 
     case "find_weighted_trade_items": {
       if (!deps.tradeClient) {
         throw new Error("Trade API is not enabled. Set POE_TRADE_ENABLED=true to enable.");
       }
-      if (!args || !args.league || !args.slot) {
-        throw new Error("Missing required arguments: league and slot");
+      if (!args || !args.slot) {
+        throw new Error("Missing required argument: slot");
       }
       const tradeContext = {
         tradeClient: deps.tradeClient,
@@ -706,7 +707,8 @@ export async function routeToolCall(
         getLuaClient: deps.getLuaClient,
         ensureLuaClient: deps.ensureLuaClient,
       };
-      return await handleFindWeightedTradeItems(tradeContext, args as any);
+      const merged = { ...args, league: resolveLeague(args.league as string | undefined) };
+      return await handleFindWeightedTradeItems(tradeContext, merged as any);
     }
 
     case "get_item_price": {
@@ -738,6 +740,9 @@ export async function routeToolCall(
       };
       return await handleGetLeagues(tradeContext);
     }
+
+    case "get_active_leagues":
+      return await handleGetActiveLeagues({ tradeClient: deps.tradeClient ?? null });
 
     case "search_stats": {
       if (!deps.tradeClient || !deps.statMapper) {
@@ -827,7 +832,7 @@ export async function routeToolCall(
       };
       return await handleGenerateShoppingList(shoppingContext, {
         build_name: args.build_name as string,
-        league: args.league as string,
+        league: resolveLeague(args.league as string | undefined),
         budget: args.budget as 'budget' | 'medium' | 'endgame' | undefined
       });
     }
@@ -836,19 +841,19 @@ export async function routeToolCall(
     // poe.ninja API Tools
     // ========================================
     case "get_currency_rates": {
-      if (!args) throw new Error("Missing arguments");
       const ninjaContext = {
         ninjaClient: deps.ninjaClient
       };
-      return await handleGetCurrencyRates(ninjaContext, args as any);
+      const merged = { ...(args ?? {}), league: resolveLeague(args?.league as string | undefined) };
+      return await handleGetCurrencyRates(ninjaContext, merged as any);
     }
 
     case "find_arbitrage": {
-      if (!args) throw new Error("Missing arguments");
       const ninjaContext = {
         ninjaClient: deps.ninjaClient
       };
-      return await handleFindArbitrage(ninjaContext, args as any);
+      const merged = { ...(args ?? {}), league: resolveLeague(args?.league as string | undefined) };
+      return await handleFindArbitrage(ninjaContext, merged as any);
     }
 
     case "calculate_trading_profit": {
@@ -856,7 +861,8 @@ export async function routeToolCall(
       const ninjaContext = {
         ninjaClient: deps.ninjaClient
       };
-      return await handleCalculateTradingProfit(ninjaContext, args as any);
+      const merged = { ...args, league: resolveLeague(args.league as string | undefined) };
+      return await handleCalculateTradingProfit(ninjaContext, merged as any);
     }
 
     // Build Goals Tools

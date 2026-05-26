@@ -232,7 +232,8 @@ Require `POE_TRADE_ENABLED=true`.
 | `find_weighted_trade_items` | Find upgrades using PoB's weighted-search engine (real DPS/EHP impact) |
 | `compare_trade_items` | Compare two trade items with DPS/defense calculations |
 | `get_item_price` | Quick price check for a specific item by name |
-| `get_leagues` | List active PoE leagues |
+| `get_leagues` | List active PoE leagues (raw trade-API passthrough) |
+| `get_active_leagues` | League status with parent-league mapping and stale-`POE_LEAGUE` warning; pairs with `playbooks/league-transition.md` |
 | `search_stats` | Look up trade stat/mod IDs by keyword |
 | `search_cluster_jewels` | Search for cluster jewels with specific enchants/notables |
 | `generate_shopping_list` | Prioritized gear upgrade shopping list within a budget |

@@ -7,6 +7,7 @@ import { ItemListing, SearchOptions, ItemRecommendation, ResistanceRequirements,
 import { CostBenefitAnalyzer } from '../services/costBenefitAnalyzer.js';
 import { PoeNinjaClient } from '../services/poeNinjaClient.js';
 import type { AnyLuaClient } from '../pobLuaBridge.js';
+import { resolveLeague } from '../services/leagueResolver.js';
 
 interface TradeContext {
   tradeClient: TradeApiClient;
@@ -182,7 +183,8 @@ export async function handleGetItemPrice(
   }>;
 }> {
   return wrapHandler('get item price', async () => {
-    const { item_name, league = 'Standard', item_type, rarity } = args;
+    const { item_name, item_type, rarity } = args;
+    const league = resolveLeague(args.league);
 
     // Build query
     const builder = new TradeQueryBuilder()

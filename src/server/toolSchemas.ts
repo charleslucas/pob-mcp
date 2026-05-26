@@ -1844,6 +1844,14 @@ export function getTradeToolSchemas(): any[] {
       },
     },
     {
+      name: "get_active_leagues",
+      description: "Status snapshot of PoE leagues from the suite's perspective. Calls the trade-leagues API, then cross-references against the POE_LEAGUE env var (the suite's default league for trade/ninja queries when no explicit league is given). Reports: current temp/challenge leagues with their parent-league mapping (where characters move when the league ends), the current set of permanent leagues, and a warning if POE_LEAGUE points to a league that's no longer active (signal that a league ended and the env var is stale). Pairs with `playbooks/league-transition.md` for the migration checklist. REQUIRES: POE_TRADE_ENABLED=true.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "search_stats",
       description: "Search for item stat/mod IDs to use in trade searches. Use this to find the correct stat_id values for mods you want to filter by. REQUIRES: POE_TRADE_ENABLED environment variable set to true.",
       inputSchema: {

@@ -2,6 +2,7 @@ import type { AnyLuaClient } from '../pobLuaBridge.js';
 import type { PoeNinjaClient } from '../services/poeNinjaClient.js';
 import { fetchBaseModData } from '../services/craftingDataService.js';
 import { wrapHandler } from '../utils/errorHandling.js';
+import { resolveLeague } from '../services/leagueResolver.js';
 
 export interface CraftingAdvisorContext {
   getLuaClient: () => AnyLuaClient | null;
@@ -96,7 +97,8 @@ export async function handleSuggestCrafting(
   }
 ) {
   return wrapHandler('suggest crafting', async () => {
-    const { slot, desired_mods = [], league = 'Standard' } = args;
+    const { slot, desired_mods = [] } = args;
+    const league = resolveLeague(args.league);
 
     let base = args.base;
     let buildContext: Record<string, any> | null = null;
