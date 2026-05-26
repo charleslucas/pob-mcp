@@ -21,6 +21,21 @@ import { readFileSync, statSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import luaparse from "luaparse";
 
+/**
+ * Where a successful tree load came from. Surfaced so callers can warn when
+ * we fell back off the primary source.
+ *
+ *   pob-tree-lua   — preferred. PathOfBuilding/src/TreeData/{ver}/tree.lua.
+ *   ggg-data-json  — fallback. reference_data/skilltree/data.json.
+ *                     Used only if the PoB submodule is missing or its
+ *                     tree.lua failed to parse.
+ *
+ * Known divergence between the two: PoB renumbers `group` IDs internally.
+ * Node IDs and connection IDs (`in`/`out`) are stable across both. Stat
+ * descriptions, names, type flags, orbits — all stable.
+ */
+export type TreeDataSource = "pob-tree-lua" | "ggg-data-json";
+
 export interface PobNode {
   skill: number;
   name: string;
@@ -261,16 +276,17 @@ function treeLuaPath(version?: string): { path: string; version: string } {
   return { path: join(pobDir, "src", "TreeData", ver, "tree.lua"), version: ver };
 }
 
-/**
- * Load and parse PoB's tree.lua for a given PoE version (default: latest
- * directory under PathOfBuilding/src/TreeData/). Cached in memory keyed by
- * the file's mtime; subsequent calls are O(1).
- */
-export function getPobTreeData(version?: string): PobTreeData {
+// Tracks which source the cached tree came from, for the version most
+// recently loaded. Reset on every successful load.
+let loadedSource: TreeDataSource = "pob-tree-lua";
+
+function loadFromPobTreeLua(version?: string): { data: PobTreeData; resolvedVersion: string } {
   const { path, version: resolvedVersion } = treeLuaPath(version);
   const stat = statSync(path);
   const cached = treeCache.get(resolvedVersion);
-  if (cached && cached.mtimeMs === stat.mtimeMs) return cached.data;
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return { data: cached.data, resolvedVersion };
+  }
 
   const source = readFileSync(path, "utf-8");
   const ast = luaparse.parse(source, { comments: false, ranges: false });
@@ -289,7 +305,6 @@ export function getPobTreeData(version?: string): PobTreeData {
     throw new Error(`Failed to parse ${path}: top-level is not an object`);
   }
 
-  // Normalize node entries (coerce empty Lua tables to empty arrays).
   const nodes: Record<string, PobNode> = {};
   const rawNodes = (parsed.nodes ?? {}) as Record<string, Record<string, unknown>>;
   for (const [id, node] of Object.entries(rawNodes)) {
@@ -303,7 +318,82 @@ export function getPobTreeData(version?: string): PobTreeData {
   };
 
   treeCache.set(resolvedVersion, { mtimeMs: stat.mtimeMs, data });
-  return data;
+  return { data, resolvedVersion };
+}
+
+function loadFromGggDataJson(): { data: PobTreeData; resolvedVersion: string } {
+  const gggPath = join(resolveSuiteRoot(), "reference_data", "skilltree", "data.json");
+  if (!existsSync(gggPath)) {
+    throw new Error(`GGG fallback data not found at ${gggPath}`);
+  }
+  const stat = statSync(gggPath);
+  const cacheKey = "__ggg__";
+  const cached = treeCache.get(cacheKey);
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return { data: cached.data, resolvedVersion: "ggg" };
+  }
+  const raw = readFileSync(gggPath, "utf-8");
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`Failed to parse ${gggPath}: top-level is not an object`);
+  }
+
+  // GGG's data.json node fields already match PoB's tree.lua shape — same
+  // names, same structure. Just normalize array fields like in the PoB path.
+  const nodes: Record<string, PobNode> = {};
+  const rawNodes = (parsed.nodes ?? {}) as Record<string, Record<string, unknown>>;
+  for (const [id, node] of Object.entries(rawNodes)) {
+    nodes[id] = normalizeNode(node);
+  }
+
+  const data: PobTreeData = {
+    ...(parsed as PobTreeData),
+    nodes,
+    groups: (parsed.groups ?? {}) as Record<string, PobGroup>,
+  };
+  treeCache.set(cacheKey, { mtimeMs: stat.mtimeMs, data });
+  return { data, resolvedVersion: "ggg" };
+}
+
+/**
+ * Load and parse the passive tree, preferring PoB's tree.lua and falling
+ * back to GGG's published data.json if PoB is unavailable.
+ *
+ * Failure mode: if both sources fail, throws a combined error so the caller
+ * knows what went wrong with each path.
+ */
+export function getPobTreeData(version?: string): PobTreeData {
+  try {
+    const { data } = loadFromPobTreeLua(version);
+    loadedSource = "pob-tree-lua";
+    return data;
+  } catch (pobErr) {
+    try {
+      const { data } = loadFromGggDataJson();
+      loadedSource = "ggg-data-json";
+      // Emit a one-line warning so the calling handler can mention it. Uses
+      // stderr so it doesn't pollute MCP JSON output.
+      const msg = pobErr instanceof Error ? pobErr.message : String(pobErr);
+      process.stderr.write(
+        `[pobTreeDataLoader] PoB tree.lua unavailable (${msg}), using GGG data.json fallback\n`
+      );
+      return data;
+    } catch (gggErr) {
+      const pobMsg = pobErr instanceof Error ? pobErr.message : String(pobErr);
+      const gggMsg = gggErr instanceof Error ? gggErr.message : String(gggErr);
+      throw new Error(
+        `Both tree data sources failed.\n  PoB tree.lua: ${pobMsg}\n  GGG data.json: ${gggMsg}\nEnsure either the PathOfBuilding submodule or the reference_data/skilltree submodule is checked out.`
+      );
+    }
+  }
+}
+
+/**
+ * Which source the most-recently-loaded tree data came from. Useful for
+ * handlers that want to surface a "fell back to GGG" note in their output.
+ */
+export function getLoadedSource(): TreeDataSource {
+  return loadedSource;
 }
 
 /**

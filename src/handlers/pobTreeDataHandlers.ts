@@ -5,7 +5,7 @@
  * each PoE league). See pobTreeDataLoader.ts for the underlying mechanics.
  */
 
-import { getPobNode, getLoadedVersion, type PobNode } from "../services/pobTreeDataLoader.js";
+import { getPobNode, getLoadedVersion, getLoadedSource, type PobNode } from "../services/pobTreeDataLoader.js";
 
 function nodeTypeLabel(n: PobNode): string {
   if (n.isKeystone) return "Keystone";
@@ -31,16 +31,26 @@ export async function handleGetTreeNode(
 
   let node: PobNode | null;
   let resolvedVersion: string;
+  let fellBackToGgg = false;
   try {
-    resolvedVersion = getLoadedVersion(treeVersion);
+    // Try to resolve PoB's version first (cheap and informative). If the
+    // PoB submodule is missing, this throws and we fall through to the
+    // GGG-fallback path. getPobNode below then triggers the actual load,
+    // which has its own PoB→GGG fallback baked in.
+    try {
+      resolvedVersion = getLoadedVersion(treeVersion);
+    } catch {
+      resolvedVersion = "ggg (no PoB version)";
+    }
     node = getPobNode(nodeId, treeVersion);
+    fellBackToGgg = getLoadedSource() === "ggg-data-json";
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
       content: [
         {
           type: "text",
-          text: `Error loading PoB tree data: ${msg}\n\nNote: this tool reads from PathOfBuilding/src/TreeData/<version>/tree.lua. Ensure the PathOfBuilding submodule is checked out and POB_DIRECTORY (if set) points at a valid PoB clone.`,
+          text: `Error loading tree data: ${msg}`,
         },
       ],
       isError: true,
@@ -73,7 +83,11 @@ export async function handleGetTreeNode(
   const label = nodeTypeLabel(node);
   const lines: string[] = [];
   lines.push(`=== Node ${nodeId}: ${node.name ?? "?"} (${label}) ===`);
-  lines.push(`Source: PoB tree.lua, version ${resolvedVersion}`);
+  if (fellBackToGgg) {
+    lines.push(`Source: GGG data.json (fallback — PoB tree.lua unavailable)`);
+  } else {
+    lines.push(`Source: PoB tree.lua, version ${resolvedVersion}`);
+  }
   if (node.ascendancyName) lines.push(`Ascendancy: ${node.ascendancyName}`);
   lines.push("");
   if (node.stats && node.stats.length > 0) {

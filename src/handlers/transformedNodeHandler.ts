@@ -13,10 +13,79 @@
  */
 
 import type { AnyLuaClient } from "../pobLuaBridge.js";
+import { getPobNode } from "../services/pobTreeDataLoader.js";
 
 export interface TransformedNodeHandlerContext {
   getLuaClient: () => AnyLuaClient | null;
   ensureLuaClient: () => Promise<void>;
+}
+
+/**
+ * Detect "PoB TCP not available" style failures so we can fall back to
+ * static base-data instead of erroring. Covers ECONNREFUSED, timeouts,
+ * missing-client states, and the bridge's own "no client" errors.
+ */
+function isTcpUnavailableError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes("econnrefused") ||
+    msg.includes("cannot connect") ||
+    msg.includes("not initialized") ||
+    msg.includes("not connected") ||
+    msg.includes("not running") ||
+    msg.includes("timeout") ||
+    msg.includes("etimedout")
+  );
+}
+
+/**
+ * Format a base-data-only response when PoB TCP isn't available. Returns
+ * the node's intrinsic stats from PoB's tree.lua (or GGG's data.json
+ * fallback), with a loud note that jewel transformations have NOT been
+ * applied. Caller should treat this as a graceful degradation, not as a
+ * complete answer.
+ */
+function renderBaseFallback(nodeId: string, reason: string) {
+  const baseNode = getPobNode(nodeId);
+  if (!baseNode) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Node ${nodeId} not found in base tree data (TCP also unavailable: ${reason}).`,
+        },
+      ],
+    };
+  }
+  const lines: string[] = [];
+  const typeLabel = baseNode.isKeystone
+    ? "Keystone"
+    : baseNode.isJewelSocket
+      ? "Jewel Socket"
+      : baseNode.isMastery
+        ? "Mastery"
+        : baseNode.isNotable
+          ? "Notable"
+          : "Travel";
+  lines.push(`=== Node ${nodeId}: ${baseNode.name ?? "?"} (${typeLabel}) ===`);
+  lines.push(`Source: PoB tree.lua / GGG data.json (BASE DATA — TCP unavailable)`);
+  if (baseNode.ascendancyName) lines.push(`Ascendancy: ${baseNode.ascendancyName}`);
+  lines.push("");
+  lines.push("Base stats (jewel transformations NOT applied — see warning below):");
+  if (baseNode.stats && baseNode.stats.length > 0) {
+    for (const s of baseNode.stats) lines.push(`  - ${s}`);
+  } else {
+    lines.push("  (none)");
+  }
+  lines.push("");
+  lines.push("⚠ DEGRADED MODE — PoB TCP API is unavailable, so we can't read the");
+  lines.push("post-Timeless-Jewel-transformation node state. The stats above are");
+  lines.push("the base (untransformed) values from PoB's tree.lua.");
+  lines.push("");
+  lines.push(`  Reason: ${reason}`);
+  lines.push("  To get real transformed stats: launch PoB via LaunchPoBWithAPI.bat,");
+  lines.push("  then re-run this tool.");
+  return { content: [{ type: "text", text: lines.join("\n") }] };
 }
 
 interface NodeStateResult {
@@ -47,24 +116,33 @@ export async function handleGetTreeNodeWithTimelessJewels(
       isError: true,
     };
   }
-  await context.ensureLuaClient();
-  const luaClient = context.getLuaClient();
-  if (!luaClient) {
+  // Try to bring up the Lua client. If PoB isn't running (or anything in the
+  // TCP path fails), gracefully fall back to base data with a degraded-mode
+  // notice instead of erroring out.
+  try {
+    await context.ensureLuaClient();
+  } catch (err) {
+    if (isTcpUnavailableError(err)) {
+      return renderBaseFallback(nodeId, err instanceof Error ? err.message : String(err));
+    }
+    const msg = err instanceof Error ? err.message : String(err);
     return {
-      content: [
-        {
-          type: "text",
-          text: "Error: PoB Lua client not initialized. Use `lua_start` or `lua_load_build` first.",
-        },
-      ],
+      content: [{ type: "text", text: `Error initializing PoB Lua client: ${msg}` }],
       isError: true,
     };
+  }
+  const luaClient = context.getLuaClient();
+  if (!luaClient) {
+    return renderBaseFallback(nodeId, "PoB Lua client not initialized");
   }
 
   let node: NodeStateResult;
   try {
     node = (await luaClient.getNodeState({ node_id: nodeId })) as NodeStateResult;
   } catch (err) {
+    if (isTcpUnavailableError(err)) {
+      return renderBaseFallback(nodeId, err instanceof Error ? err.message : String(err));
+    }
     const msg = err instanceof Error ? err.message : String(err);
     return {
       content: [{ type: "text", text: `Error reading node state: ${msg}` }],
