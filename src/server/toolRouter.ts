@@ -45,6 +45,7 @@ import { handleEvaluateThresholdJewels } from "../handlers/thresholdJewelHandler
 import { handleGetTreeNodeWithTimelessJewels } from "../handlers/transformedNodeHandler.js";
 import { handleListRadiusEffectJewels } from "../handlers/radiusEffectJewelHandler.js";
 import { handleGetAtlasNode, handleSearchAtlasNodes, handleFindAtlasPathToNode } from "../handlers/atlasTreeHandlers.js";
+import { handleSearchCraftingMods } from "../handlers/craftingModSearchHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -241,6 +242,20 @@ export async function routeToolCall(
       return await handleEvaluateThresholdJewels({
         getLuaClient: deps.getLuaClient,
         ensureLuaClient: deps.ensureLuaClient,
+      });
+
+    case "search_crafting_mods":
+      return await handleSearchCraftingMods({
+        stat_contains: args?.stat_contains as string | undefined,
+        item_tags: args?.item_tags as string[] | undefined,
+        type: args?.type as string | undefined,
+        min_level: args?.min_level as number | undefined,
+        max_level: args?.max_level as number | undefined,
+        group: args?.group as string | undefined,
+        has_tags: args?.has_tags as string[] | undefined,
+        affix_contains: args?.affix_contains as string | undefined,
+        limit: args?.limit as number | undefined,
+        raw_json: args?.raw_json as boolean | undefined,
       });
 
     // Lua bridge tools

@@ -314,6 +314,25 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "search_crafting_mods",
+      description: "Search PoB's structured item-mod table (parsed from `PathOfBuilding/src/Data/ModItem.lua`) for prefixes/suffixes matching combined filters. Returns the *actual* mod entries — affix name, stat lines with roll ranges, mod group (conflict key), minimum ilvl, mod tags, and per-item-class spawn weights. This is the concrete-numbers complement to `suggest_crafting`: use it for 'what mods can roll for +Life on a body armour at ilvl 75?', 'what's the highest tier of fire resistance on a ring?', 'all mods in the IncreasedLife group sorted by level', etc. Require at least one filter — the table has thousands of entries.\n\n`item_tags` carries the item's PoE tag hierarchy in priority order. For accuracy pass the full chain — body armours, helmets, gloves, boots, and shields all carry `armour` plus a base-specific tag like `body_armour` plus an attribute tag like `str_armour` / `str_dex_armour` / `int_armour`. Examples: an Astral Plate is `[\"body_armour\",\"armour\",\"str_armour\"]`; a Sapphire Ring is `[\"ring\"]`; a Hubris Circlet is `[\"helmet\",\"armour\",\"int_armour\"]`; a Vaal Axe is `[\"two_hand_weapon\",\"weapon\",\"axe\"]`. The mod's first weight-entry matching any of these tags wins; if none match, the mod's `default` weight applies.\n\n`type`: 'Prefix' or 'Suffix'. `has_tags` examples: `attribute`, `resource`, `life`, `mana`, `defences`, `damage`, `fire`, `cold`, `lightning`, `physical`, `caster`, `attack`, `critical`, `speed`. The `group` field is PoB's mod-conflict key — two mods with the same group can't roll together (e.g. all `IncreasedLife*` share group `IncreasedLife`).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          stat_contains: { type: "string", description: "Case-insensitive substring match against any stat line text (e.g. 'Life', 'Fire Resistance', 'increased Spell Damage')." },
+          item_tags: { type: "array", items: { type: "string" }, description: "Item-tag chain (priority order) — restricts to mods rollable on an item carrying any of these tags. Pass the FULL hierarchy: e.g. ['body_armour','armour','str_armour'] for an Astral Plate. See description for examples." },
+          type: { type: "string", description: "'Prefix' or 'Suffix' (case-insensitive)." },
+          min_level: { type: "number", description: "Minimum item-level for the mod to roll (PoE's mod tier gating)." },
+          max_level: { type: "number", description: "Maximum mod level — useful for finding low-tier rolls available at any ilvl." },
+          group: { type: "string", description: "Exact PoB mod-group key (e.g. 'IncreasedLife', 'Strength', 'FireResistance'). All mods in a group conflict — only one rolls per item." },
+          has_tags: { type: "array", items: { type: "string" }, description: "Mod must include ALL listed PoE mod tags (e.g. ['fire','damage'] for fire damage mods)." },
+          affix_contains: { type: "string", description: "Case-insensitive substring match against the affix display name (e.g. 'Tyrannical', 'of the Brute')." },
+          limit: { type: "number", description: "Cap on returned results. Default 50, pass 0 for no cap (use with caution)." },
+          raw_json: { type: "boolean", description: "Return the raw JSON list of mod entries instead of formatted text. Default false." },
+        },
+      },
+    },
+    {
       name: "get_atlas_node",
       description: "Look up a single Atlas of Worlds tree node by ID. Returns name, stats, type (Notable/Keystone/Jewel Socket/Mastery/Travel/Wormhole/Ascendancy), positional fields, and in/out connections. Data sourced from `reference_data/atlastree/data.json` (GGG's official atlas-export, mirrored in our community fork submodule). The data_patches.json overlay is applied if present. Unlike `get_tree_node` for the passive tree, there's no jewel-transformation layer — atlas doesn't have Timeless-Jewel-equivalent mechanics. Variants supported: `default`, `league` (current league), `ruthless`, `ruthless-league`.",
       inputSchema: {

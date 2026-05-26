@@ -116,6 +116,16 @@ Read-only lookups against the atlas tree data in `reference_data/atlastree/`. Mi
 
 ---
 
+## Crafting — Structured Mod Lookup
+
+Concrete-numbers complement to `suggest_crafting` (which produces poedb-derived strategic advice). Sourced from PoB community's `PathOfBuilding/src/Data/ModItem.lua` — every prefix/suffix that can roll on equipment, including essences, fossil-only mods, and influence/synthesis tiers. Parsed once and cached; auto-reloads on submodule update.
+
+| Tool | Description |
+|------|-------------|
+| `search_crafting_mods` | Search PoB's mod table with combinable filters: stat-text keyword, item-tag chain (e.g. `["body_armour","armour","str_armour"]` for an Astral Plate), Prefix/Suffix, ilvl range, mod group (conflict key), mod tags, affix name. Returns actual roll ranges, levels, mod groups, and per-tag spawn weights — the concrete data needed to answer "what mods exist that match X, and what's the spawn weight on this base?". |
+
+---
+
 ## Lua Bridge — Specs & Item Sets
 
 | Tool | Description |
