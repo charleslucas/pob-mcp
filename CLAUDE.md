@@ -56,6 +56,24 @@ Use `LaunchPoBWithAPI.bat` (in this repo). It:
 
 Normal double-clicking of the PoB executable does **not** set the env vars — the TCP server will not start.
 
+## PoB update suppression + manual-update workflow
+
+When the TCP API is active, our patch in `Modules/Main.lua` suppresses three PoB update UI surfaces:
+
+1. The "Update Ready" button at the bottom-left (hidden via `applyUpdate.shown = false`)
+2. The "Update Available" toast notification (suppressed by stubbing `launch.CheckForUpdate` and pre-clearing `launch.updateAvailable`)
+3. The update popup (gated by the hidden button, so unreachable)
+
+This is intentional: any of those, if triggered, would replace `Main.lua` mid-session and break the API connection. The startup banner in PoB's console (`~` key) re-states the suppression every launch.
+
+**Tell the user to manually check for PoB updates every few weeks:**
+
+1. Close PoB.
+2. Relaunch PoB via the normal shortcut (NOT `LaunchPoBWithAPI.bat`).
+3. Click *Check for Update* — apply if available.
+4. Close PoB again.
+5. Relaunch via `LaunchPoBWithAPI.bat` — it auto-reinstalls the patch over the updated `Main.lua`.
+
 ## PoB integrity check warnings
 
 PoB's built-in updater compares file hashes against the remote manifest. Our patch to `Modules/Main.lua` will always fail this check, producing:
