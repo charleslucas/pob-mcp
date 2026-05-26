@@ -104,6 +104,18 @@ Comprehensive coverage of how socketed jewels affect the passive tree. Built on 
 
 ---
 
+## Atlas Tree Analysis
+
+Read-only lookups against the atlas tree data in `reference_data/atlastree/`. Minimal parity with the passive-tree tools — atlas allocation isn't visible to the public PoE API, so there's no "from build frontier" pathing and no jewel-awareness layer (the atlas has no jewel-affects-nodes mechanic).
+
+| Tool | Description |
+|------|-------------|
+| `get_atlas_node` | Look up a single atlas node by ID; returns name, stats, type, position, and in/out connections. Supports `default`/`league`/`ruthless`/`ruthless-league` variants. |
+| `search_atlas_nodes` | Keyword/stat-text search of atlas nodes with optional type filter (notable, keystone, jewel, mastery, wormhole, ascendancy, normal). Useful for finding all atlas notables tied to a mechanic. |
+| `find_atlas_path_to_node` | BFS shortest path between two atlas nodes. Requires both `target_node_id` and `from_node_id` since the atlas tree's allocated state isn't API-visible. |
+
+---
+
 ## Lua Bridge — Specs & Item Sets
 
 | Tool | Description |
