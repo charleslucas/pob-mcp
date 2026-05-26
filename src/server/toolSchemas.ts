@@ -314,6 +314,46 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "get_atlas_node",
+      description: "Look up a single Atlas of Worlds tree node by ID. Returns name, stats, type (Notable/Keystone/Jewel Socket/Mastery/Travel/Wormhole/Ascendancy), positional fields, and in/out connections. Data sourced from `reference_data/atlastree/data.json` (GGG's official atlas-export, mirrored in our community fork submodule). The data_patches.json overlay is applied if present. Unlike `get_tree_node` for the passive tree, there's no jewel-transformation layer — atlas doesn't have Timeless-Jewel-equivalent mechanics. Variants supported: `default`, `league` (current league), `ruthless`, `ruthless-league`.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          node_id: { type: "string", description: "Atlas node ID (e.g., '1670' for Fortune's Favour)." },
+          variant: { type: "string", description: "Atlas tree variant. Defaults to 'default' (standard atlas).", enum: ["default", "league", "ruthless", "ruthless-league"] },
+          raw_json: { type: "boolean", description: "Return raw JSON node object instead of a human-readable summary. Default false." },
+        },
+        required: ["node_id"],
+      },
+    },
+    {
+      name: "search_atlas_nodes",
+      description: "Search the atlas tree for nodes matching a keyword (name or stat text). Optional node-type filter (`keystone`, `notable`, `jewel`, `mastery`, `wormhole`, `ascendancy`, `normal`). Useful for finding all atlas notables related to a mechanic (e.g., 'breach', 'expedition', 'heist'). Variant-aware (default/league/ruthless/ruthless-league).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Substring to match against node names or stat text (case-insensitive)." },
+          node_type: { type: "string", description: "Filter to a node type. Omit or pass 'any' for no filter.", enum: ["keystone", "notable", "jewel", "mastery", "wormhole", "ascendancy", "normal", "any"] },
+          limit: { type: "number", description: "Max results (default 30)." },
+          variant: { type: "string", description: "Atlas tree variant. Defaults to 'default'.", enum: ["default", "league", "ruthless", "ruthless-league"] },
+        },
+        required: ["query"],
+      },
+    },
+    {
+      name: "find_atlas_path_to_node",
+      description: "Find the shortest path of passive nodes between two atlas tree nodes (BFS over the undirected in/out graph). The atlas tree's allocation state isn't visible to our tools via the public PoE API, so this tool requires an explicit `from_node_id` — there's no 'from build frontier' mode like in the passive-tree equivalent. Use it to measure distance between two notables, or to plan a route from your current allocation frontier (which you'd tell the tool manually) to a target notable.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target_node_id: { type: "string", description: "Destination atlas node ID." },
+          from_node_id: { type: "string", description: "Source atlas node ID (required — atlas allocation isn't API-visible)." },
+          variant: { type: "string", description: "Atlas tree variant. Defaults to 'default'.", enum: ["default", "league", "ruthless", "ruthless-league"] },
+        },
+        required: ["target_node_id", "from_node_id"],
+      },
+    },
+    {
       name: "list_radius_effect_jewels",
       description: "Scan equipped jewels for 'in Radius' mods that aren't Timeless-Jewel transformations and aren't attribute thresholds — i.e. the long tail: Energy From Within, Healthy Mind, Fertile Mind, Might of the Meek, Brute Force Solution, etc. For each match, reports the radius mod lines, a best-effort category (transform / grant / multiplier / other), and the allocated nodes in the jewel's radius. Useful for build-comparison and for noticing when a radius jewel is socketed but not actually affecting much of the tree. PoB already applies the numeric effect in lua_get_stats totals; this tool surfaces WHICH jewels and WHICH nodes so the caller can reason about scope.",
       inputSchema: {

@@ -44,6 +44,7 @@ import { handleListClusterJewelNodes } from "../handlers/clusterJewelListHandler
 import { handleEvaluateThresholdJewels } from "../handlers/thresholdJewelHandler.js";
 import { handleGetTreeNodeWithTimelessJewels } from "../handlers/transformedNodeHandler.js";
 import { handleListRadiusEffectJewels } from "../handlers/radiusEffectJewelHandler.js";
+import { handleGetAtlasNode, handleSearchAtlasNodes, handleFindAtlasPathToNode } from "../handlers/atlasTreeHandlers.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -210,6 +211,31 @@ export async function routeToolCall(
         getLuaClient: deps.getLuaClient,
         ensureLuaClient: deps.ensureLuaClient,
       });
+
+    case "get_atlas_node":
+      if (!args) throw new Error("Missing arguments");
+      return await handleGetAtlasNode(
+        args.node_id as string,
+        (args.variant as "default" | "league" | "ruthless" | "ruthless-league") ?? "default",
+        args.raw_json as boolean | undefined
+      );
+
+    case "search_atlas_nodes":
+      if (!args) throw new Error("Missing arguments");
+      return await handleSearchAtlasNodes(
+        args.query as string,
+        args.node_type as string | undefined,
+        (args.limit as number) ?? 30,
+        (args.variant as "default" | "league" | "ruthless" | "ruthless-league") ?? "default"
+      );
+
+    case "find_atlas_path_to_node":
+      if (!args) throw new Error("Missing arguments");
+      return await handleFindAtlasPathToNode(
+        args.target_node_id as string,
+        args.from_node_id as string,
+        (args.variant as "default" | "league" | "ruthless" | "ruthless-league") ?? "default"
+      );
 
     case "evaluate_threshold_jewels":
       return await handleEvaluateThresholdJewels({
