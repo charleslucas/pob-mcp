@@ -333,6 +333,23 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "list_craftable_mods_for_base",
+      description: "Dump the entire craftable mod space for a specific base item — every prefix and suffix that can roll on it, grouped by mod-group (conflict key) with the highest tier first. Builds on `search_crafting_mods` but resolves the base's tag chain automatically: pass 'Astral Plate' and the tool reads PoB's `Data/Bases/body.lua` to learn the base is `['armour','body_armour','default','str_armour','top_tier_base_item_type']`, then walks ModItem.lua applying PoE's first-match-wins weight resolution per group. Use this for 'what's the entire craftable space on a Hubris Circlet at ilvl 86?', 'what suffixes can I roll on a Steel Ring?', 'show me every life-related mod available on this base'. Output is split PREFIXES / SUFFIXES, with mods within each group sorted by descending level so the highest available tier is on top. Base name lookup is case-insensitive; if the name doesn't resolve, the tool surfaces fuzzy suggestions.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          base_name: { type: "string", description: "Exact (case-insensitive) PoE base name, e.g. 'Astral Plate', 'Hubris Circlet', 'Sapphire Ring', 'Vaal Axe'. If not found, the tool returns 5 fuzzy-match suggestions." },
+          ilvl: { type: "number", description: "Item level — gates mods whose `level` exceeds this. Omit to list every tier regardless of ilvl." },
+          type: { type: "string", description: "Filter to 'Prefix' or 'Suffix' only. Omit for both." },
+          tiers_per_group: { type: "number", description: "How many top tiers per mod group to display. Default 1 (top tier only — useful for 'what's the ceiling on this base'). Pass a higher number (e.g. 3) for tier ladders, or 0 for all tiers." },
+          hide_unrollable: { type: "boolean", description: "Hide mods whose resolved weight is 0 on this base (essence-only / fossil-only / influenced-only entries that aren't naturally rollable). Default true." },
+          stat_contains: { type: "string", description: "Optional substring filter on stat text (e.g. 'Life' to narrow the dump to life-related mods)." },
+          raw_json: { type: "boolean", description: "Return structured JSON instead of formatted text. Default false." },
+        },
+        required: ["base_name"],
+      },
+    },
+    {
       name: "get_atlas_node",
       description: "Look up a single Atlas of Worlds tree node by ID. Returns name, stats, type (Notable/Keystone/Jewel Socket/Mastery/Travel/Wormhole/Ascendancy), positional fields, and in/out connections. Data sourced from `reference_data/atlastree/data.json` (GGG's official atlas-export, mirrored in our community fork submodule). The data_patches.json overlay is applied if present. Unlike `get_tree_node` for the passive tree, there's no jewel-transformation layer — atlas doesn't have Timeless-Jewel-equivalent mechanics. Variants supported: `default`, `league` (current league), `ruthless`, `ruthless-league`.",
       inputSchema: {

@@ -46,6 +46,7 @@ import { handleGetTreeNodeWithTimelessJewels } from "../handlers/transformedNode
 import { handleListRadiusEffectJewels } from "../handlers/radiusEffectJewelHandler.js";
 import { handleGetAtlasNode, handleSearchAtlasNodes, handleFindAtlasPathToNode } from "../handlers/atlasTreeHandlers.js";
 import { handleSearchCraftingMods } from "../handlers/craftingModSearchHandler.js";
+import { handleListCraftableModsForBase } from "../handlers/listCraftableModsHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -256,6 +257,18 @@ export async function routeToolCall(
         affix_contains: args?.affix_contains as string | undefined,
         limit: args?.limit as number | undefined,
         raw_json: args?.raw_json as boolean | undefined,
+      });
+
+    case "list_craftable_mods_for_base":
+      if (!args) throw new Error("Missing arguments");
+      return await handleListCraftableModsForBase({
+        base_name: args.base_name as string,
+        ilvl: args.ilvl as number | undefined,
+        type: args.type as string | undefined,
+        tiers_per_group: args.tiers_per_group as number | undefined,
+        hide_unrollable: args.hide_unrollable as boolean | undefined,
+        stat_contains: args.stat_contains as string | undefined,
+        raw_json: args.raw_json as boolean | undefined,
       });
 
     // Lua bridge tools

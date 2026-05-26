@@ -118,11 +118,12 @@ Read-only lookups against the atlas tree data in `reference_data/atlastree/`. Mi
 
 ## Crafting — Structured Mod Lookup
 
-Concrete-numbers complement to `suggest_crafting` (which produces poedb-derived strategic advice). Sourced from PoB community's `PathOfBuilding/src/Data/ModItem.lua` — every prefix/suffix that can roll on equipment, including essences, fossil-only mods, and influence/synthesis tiers. Parsed once and cached; auto-reloads on submodule update.
+Concrete-numbers complement to `suggest_crafting` (which produces poedb-derived strategic advice). Sourced from PoB community's `PathOfBuilding/src/Data/ModItem.lua` (mods) and `PathOfBuilding/src/Data/Bases/*.lua` (981 equipment bases). Parsed once and cached; auto-reloads on submodule update.
 
 | Tool | Description |
 |------|-------------|
-| `search_crafting_mods` | Search PoB's mod table with combinable filters: stat-text keyword, item-tag chain (e.g. `["body_armour","armour","str_armour"]` for an Astral Plate), Prefix/Suffix, ilvl range, mod group (conflict key), mod tags, affix name. Returns actual roll ranges, levels, mod groups, and per-tag spawn weights — the concrete data needed to answer "what mods exist that match X, and what's the spawn weight on this base?". |
+| `search_crafting_mods` | Search PoB's mod table with combinable filters: stat-text keyword, item-tag chain (e.g. `["body_armour","armour","str_armour"]` for an Astral Plate), Prefix/Suffix, ilvl range, mod group (conflict key), mod tags, affix name. Returns actual roll ranges, levels, mod groups, and per-tag spawn weights. |
+| `list_craftable_mods_for_base` | Given a base name (e.g. `Astral Plate`, `Hubris Circlet`, `Sapphire Ring`) and optional ilvl, dump the entire craftable space for that base — every prefix and suffix that can roll, grouped by mod-group with the highest tier first. The tool reads the base's tag chain from `Data/Bases/` automatically and applies PoE's first-match-wins weight resolution per group. Output is split PREFIXES / SUFFIXES with `tiers_per_group` controlling how many tiers per group to show (default 1 = top tier only). |
 
 ---
 
