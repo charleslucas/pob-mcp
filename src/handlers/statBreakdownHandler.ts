@@ -172,9 +172,10 @@ export async function handleGetStatBreakdown(
     lines.push("");
     lines.push(
       "If you expected contributions: the stat name may differ from PoB's " +
-        "internal mod name (e.g. use 'FireResistance' not 'Fire Resistance', " +
-        "'LightningResistance', 'EnergyShield', 'LifeRegen'), or the stat is " +
-        "skill-conditional (damage stats) which this tool can't fully capture."
+        "internal mod name. Resistances use the SHORT form — 'FireResist', " +
+        "'ColdResist', 'LightningResist', 'ChaosResist' (NOT '...Resistance'). " +
+        "Also try 'EnergyShield', 'LifeRegen', 'Armour'. Or the stat is " +
+        "skill-conditional (damage stats), which this tool can't fully capture."
     );
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
