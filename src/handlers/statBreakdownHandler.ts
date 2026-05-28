@@ -171,11 +171,15 @@ export async function handleGetStatBreakdown(
     lines.push("No contributing modifiers found.");
     lines.push("");
     lines.push(
-      "If you expected contributions: the stat name may differ from PoB's " +
-        "internal mod name. Resistances use the SHORT form — 'FireResist', " +
-        "'ColdResist', 'LightningResist', 'ChaosResist' (NOT '...Resistance'). " +
-        "Also try 'EnergyShield', 'LifeRegen', 'Armour'. Or the stat is " +
-        "skill-conditional (damage stats), which this tool can't fully capture."
+      "If you expected contributions, the stat name probably differs from " +
+        "PoB's internal mod name. Common traps: resistances are the SHORT " +
+        "form 'FireResist'/'ColdResist'/'LightningResist'/'ChaosResist' (NOT " +
+        "'...Resistance'); attributes are 'Str'/'Dex'/'Int' (NOT " +
+        "'Strength'/'Dexterity'/'Intelligence'). Verified-working names " +
+        "include Life, Mana, EnergyShield, Armour, Evasion, LifeRegen, " +
+        "ManaRegen, MovementSpeed, CritChance, CritMultiplier. Skill-" +
+        "conditional stats (AttackSpeed, CastSpeed, damage) can't be " +
+        "captured without active-skill config and may return empty."
     );
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
