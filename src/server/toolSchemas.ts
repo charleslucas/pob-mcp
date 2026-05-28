@@ -362,16 +362,16 @@ export function getToolSchemas(): ToolSchema[] {
     },
     {
       name: "analyze_item_mods",
-      description: "Identify each mod line on an item against PoB's ModItem.lua and report tier info + next-tier upgrade target. Pass `mod_lines` as the array of explicit prefix/suffix lines from the item (one per array entry, exactly as PoE shows them, e.g. '+150 to maximum Life'). Optional `base_name` (e.g. 'Astral Plate') gates matching by tag chain, sharpens disambiguation, and makes the tier ladder reflect only mods actually rollable on the base. Optional `ilvl` further filters the tier ladder to what was achievable on the item.\n\nFor each line, the tool reports the matched mod ID, affix name (the 'of X' / 'X-prefix' name), mod group, tier rank (e.g. T3 of 13 naturally-rollable life prefixes), and the next-tier mod with its required ilvl + new value range. Adjacent lines belonging to the same hybrid mod (e.g. life+armour, life+ES) are collapsed into the mod above them.\n\nRecognises `{crafted}`, `{fractured}`, `{enchanted}` source tags in the input and reports them separately — only natural prefix/suffix mods come from ModItem.lua. Master crafts are not yet indexed (ModMaster.lua support is a future addition).",
+      description: "Identify each mod line on an item against PoB's data and report tier info + next-tier upgrade target. Two input modes:\n1. `mod_lines` — array of explicit prefix/suffix lines, exactly as PoE shows them (e.g. '+150 to maximum Life'). Append ` {crafted}` / ` {fractured}` to tag those.\n2. `item_slot` — read a live equipped item straight from the open PoB build over TCP (e.g. 'Body Armour', 'Helmet', 'Ring 1', 'Weapon 1'). The tool fetches the item, extracts its explicit/crafted/fractured mods, and auto-derives base_name + ilvl from the item. Requires PoB launched via LaunchPoBWithAPI.bat. (item_slot takes precedence over mod_lines.)\n\nOptional `base_name` (e.g. 'Astral Plate') gates matching by tag chain — sharpens disambiguation and makes tier ladders reflect only mods rollable on the base. Optional `ilvl` filters the tier ladder. Both are auto-filled when item_slot is used.\n\nFor each line: matched mod ID, affix name, mod group, tier rank (e.g. T3 of 13), and the next-tier mod with required ilvl + new value range. `{crafted}` lines match the bench-craft pool (ModMaster.lua). Hybrid-mod continuation lines are collapsed. Provide one of mod_lines or item_slot.",
       inputSchema: {
         type: "object",
         properties: {
-          mod_lines: { type: "array", items: { type: "string" }, description: "Array of explicit-mod text lines from the item (one prefix or suffix per array entry). Implicit and unique-specific mods should be omitted." },
-          base_name: { type: "string", description: "PoE base name (e.g. 'Astral Plate', 'Sapphire Ring'). Improves disambiguation and tier-ladder accuracy. Case-insensitive; fuzzy suggestions returned on miss." },
-          ilvl: { type: "number", description: "Item level — filters tier ladder to mods achievable at this ilvl." },
+          mod_lines: { type: "array", items: { type: "string" }, description: "Array of explicit-mod text lines from the item (one per entry). Omit implicit/unique-specific mods. Append ' {crafted}' or ' {fractured}' to tag those sources." },
+          item_slot: { type: "string", description: "Read the item from the live PoB build instead of mod_lines. PoB slot label: 'Body Armour', 'Helmet', 'Gloves', 'Boots', 'Belt', 'Amulet', 'Ring 1', 'Ring 2', 'Weapon 1', 'Weapon 2'. Requires a connected PoB TCP bridge." },
+          base_name: { type: "string", description: "PoE base name (e.g. 'Astral Plate'). Auto-derived when item_slot is used. Case-insensitive; fuzzy suggestions on miss." },
+          ilvl: { type: "number", description: "Item level — filters tier ladder. Auto-derived when item_slot is used." },
           raw_json: { type: "boolean", description: "Return structured JSON instead of formatted text. Default false." },
         },
-        required: ["mod_lines"],
       },
     },
     {

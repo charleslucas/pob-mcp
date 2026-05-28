@@ -102,4 +102,64 @@ describeIfPob('handleAnalyzeItemMods', () => {
     expect(text).toMatch(/No base supplied/);
     expect(text).toMatch(/Strength/);
   });
+
+  it('requires mod_lines or item_slot', async () => {
+    const r = await handleAnalyzeItemMods({});
+    expect(r.isError).toBe(true);
+    expect(getText(r)).toMatch(/mod_lines.*item_slot|item_slot/);
+  });
+
+  describe('item_slot (live PoB)', () => {
+    const fakeItem = {
+      slot: 'Body Armour',
+      name: 'Doom Shell',
+      baseName: 'Astral Plate',
+      type: 'Body Armour',
+      raw: [
+        'Rarity: RARE',
+        'Doom Shell',
+        'Astral Plate',
+        'Item Level: 84',
+        'Implicits: 1',
+        '+8% to all Elemental Resistances',
+        '+150 to maximum Life',
+        '+45% to Fire Resistance',
+        '{crafted}+30% to Cold and Lightning Resistances',
+        'Corrupted',
+      ].join('\n'),
+    };
+
+    function makeContext(items: unknown[]) {
+      return {
+        ensureLuaClient: async () => {},
+        getLuaClient: () =>
+          ({
+            getItems: async () => items,
+          }) as unknown as import('../../src/pobLuaBridge').AnyLuaClient,
+      };
+    }
+
+    it('reads an equipped item, auto-derives base + ilvl, and analyzes', async () => {
+      const r = await handleAnalyzeItemMods({ item_slot: 'Body Armour' }, makeContext([fakeItem]));
+      const text = getText(r);
+      expect(text).toMatch(/Read "Doom Shell" from slot "Body Armour"/);
+      expect(text).toMatch(/Base: Astral Plate/);
+      expect(text).toMatch(/ilvl: 84/);
+      expect(text).toMatch(/IncreasedLife/);
+      expect(text).toMatch(/FireResistance/);
+      // crafted line should be matched against bench-craft pool
+      expect(text).toMatch(/bench craft/);
+    });
+
+    it('errors cleanly when the slot is empty', async () => {
+      const r = await handleAnalyzeItemMods({ item_slot: 'Gloves' }, makeContext([fakeItem]));
+      const text = getText(r);
+      expect(text).toMatch(/No item found in slot "Gloves"/);
+    });
+
+    it('errors when item_slot is used without a context', async () => {
+      const r = await handleAnalyzeItemMods({ item_slot: 'Body Armour' });
+      expect(r.isError).toBe(true);
+    });
+  });
 });

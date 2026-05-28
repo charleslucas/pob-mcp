@@ -34,9 +34,22 @@ import {
   matchMasterCraft,
   type MasterCraft,
 } from "../services/pobCraftDataLoader.js";
+import type { AnyLuaClient } from "../pobLuaBridge.js";
+import { parseItemRawMods, parseItemLevel } from "../utils/itemRawParser.js";
+
+export interface AnalyzeItemModsContext {
+  getLuaClient: () => AnyLuaClient | null;
+  ensureLuaClient: () => Promise<void>;
+}
 
 export interface AnalyzeItemModsArgs {
-  mod_lines: string[];
+  mod_lines?: string[];
+  /**
+   * Read the item from the live PoB build instead of mod_lines. The slot
+   * name as PoB labels it ("Body Armour", "Weapon 1", "Ring 1", "Helmet",
+   * etc). Requires a connected PoB TCP bridge.
+   */
+  item_slot?: string;
   base_name?: string;
   ilvl?: number;
   raw_json?: boolean;
@@ -92,22 +105,10 @@ function nextString(r: MatchResult): string {
   return `${r.nextTier.id} "${r.nextTier.affix}" L${r.nextTier.level} → ${r.nextTier.statLines.join(" / ")}`;
 }
 
-export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
-  if (!Array.isArray(args.mod_lines) || args.mod_lines.length === 0) {
-    return {
-      content: [
-        {
-          type: "text",
-          text:
-            "Error: mod_lines must be a non-empty array of strings. " +
-            "Pass each prefix/suffix line as a separate array entry " +
-            "(e.g. ['+150 to maximum Life', '+45% to Fire Resistance']).",
-        },
-      ],
-      isError: true,
-    };
-  }
-
+export async function handleAnalyzeItemMods(
+  args: AnalyzeItemModsArgs,
+  context?: AnalyzeItemModsContext
+) {
   try {
     ensureLoaded();
     ensureBasesLoaded();
@@ -122,21 +123,99 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
     };
   }
 
+  // Resolve inputs: either explicit mod_lines, or a live item slot read
+  // from PoB over TCP. item_slot wins when both are present.
+  let modLines = args.mod_lines ?? [];
+  let resolvedBaseName = args.base_name;
+  let resolvedIlvl = args.ilvl;
+  let liveItemNote: string | null = null;
+
+  if (args.item_slot) {
+    if (!context) {
+      return {
+        content: [{ type: "text", text: "Error: item_slot requires a live PoB connection (internal context missing)." }],
+        isError: true,
+      };
+    }
+    try {
+      await context.ensureLuaClient();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        content: [{ type: "text", text: `Error connecting to PoB: ${msg}\nLaunch PoB via LaunchPoBWithAPI.bat, then retry.` }],
+        isError: true,
+      };
+    }
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      return {
+        content: [{ type: "text", text: "Error: PoB Lua client not initialized — can't read the equipped item." }],
+        isError: true,
+      };
+    }
+    let items: Array<{ slot?: string; name?: string; baseName?: string; type?: string; raw?: string }>;
+    try {
+      items = (await luaClient.getItems()) as typeof items;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        content: [{ type: "text", text: `Error reading equipped items: ${msg}` }],
+        isError: true,
+      };
+    }
+    const wanted = args.item_slot.toLowerCase();
+    const item = items.find((it) => it.slot && it.slot.toLowerCase() === wanted && it.name);
+    if (!item) {
+      const occupied = items.filter((it) => it.name).map((it) => it.slot).join(", ");
+      return {
+        content: [{ type: "text", text: `No item found in slot "${args.item_slot}". Occupied slots: ${occupied || "(none)"}.` }],
+      };
+    }
+    // Convert raw mods to tagged lines (only explicit/crafted/fractured —
+    // implicit/enchant aren't natural prefix/suffix mods).
+    const parsed = parseItemRawMods(item.raw);
+    const usable = parsed.filter((m) => ["explicit", "crafted", "fractured"].includes(m.type));
+    modLines = usable.map((m) => {
+      if (m.type === "crafted") return `${m.line} {crafted}`;
+      if (m.type === "fractured") return `${m.line} {fractured}`;
+      return m.line;
+    });
+    // Auto-derive base + ilvl from the live item unless explicitly overridden.
+    if (!resolvedBaseName && item.baseName) resolvedBaseName = item.baseName;
+    if (resolvedIlvl === undefined) resolvedIlvl = parseItemLevel(item.raw);
+    liveItemNote = `Read "${item.name}" from slot "${item.slot}" (${item.baseName ?? item.type ?? "?"})`;
+  }
+
+  if (!Array.isArray(modLines) || modLines.length === 0) {
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            "Error: provide either mod_lines (array of prefix/suffix text) or " +
+            "item_slot (to read a live equipped item via PoB). " +
+            "Example mod_lines: ['+150 to maximum Life', '+45% to Fire Resistance'].",
+        },
+      ],
+      isError: true,
+    };
+  }
+
   // Resolve the base (optional) — gives us the tag chain for accurate matching.
   let base: PobBase | null = null;
   let baseSuggestions: string[] = [];
-  if (args.base_name) {
-    base = getBase(args.base_name);
+  if (resolvedBaseName) {
+    base = getBase(resolvedBaseName);
     if (!base) {
-      const matches = findBasesMatching(args.base_name, 5);
+      const matches = findBasesMatching(resolvedBaseName, 5);
       baseSuggestions = matches.map((b) => b.name);
     }
   }
   const itemTags = base?.tags;
-  const ilvl = args.ilvl;
+  const ilvl = resolvedIlvl;
 
   // Per-line analysis pass
-  const analyses: LineAnalysis[] = args.mod_lines.map((raw, i) => {
+  const analyses: LineAnalysis[] = modLines.map((raw, i) => {
     const { text, source } = cleanLine(raw);
     if (text.length === 0) {
       return { inputLine: i + 1, raw, cleaned: "", source, match: null };
@@ -224,17 +303,18 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
   // Human-readable output
   const lines: string[] = [];
   lines.push("=== Item Mod Analysis ===");
+  if (liveItemNote) lines.push(liveItemNote);
   if (base) {
     lines.push(`Base: ${base.name} (${base.type}${base.subType ? `, ${base.subType}` : ""})`);
     lines.push(`Tags used for matching: ${base.tags.join(", ")}`);
-  } else if (args.base_name) {
-    lines.push(`Base "${args.base_name}" not found — matching without tag gating.`);
+  } else if (resolvedBaseName) {
+    lines.push(`Base "${resolvedBaseName}" not found — matching without tag gating.`);
     if (baseSuggestions.length > 0) {
       lines.push(`Did you mean: ${baseSuggestions.join(", ")}?`);
     }
   } else {
     lines.push(`No base supplied — matching without tag gating (accuracy reduced).`);
-    lines.push(`Pass base_name (e.g. 'Astral Plate') for precise tier ladders.`);
+    lines.push(`Pass base_name (e.g. 'Astral Plate') or item_slot for precise tier ladders.`);
   }
   if (ilvl !== undefined) lines.push(`ilvl: ${ilvl}`);
   lines.push("");

@@ -1,5 +1,6 @@
 import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { wrapHandler } from "../utils/errorHandling.js";
+import { parseItemRawMods } from "../utils/itemRawParser.js";
 
 export interface ItemSkillHandlerContext {
   getLuaClient: () => AnyLuaClient | null;
@@ -37,81 +38,6 @@ export async function handleAddItem(
       ],
     };
   });
-}
-
-// Known non-mod trailer lines that appear after mods in PoB raw item text
-const ITEM_TRAILER_LINES = new Set([
-  'Corrupted', 'Fractured Item', 'Mirrored', 'Split', 'Synthesised Item',
-  'Veiled Prefix', 'Veiled Suffix', 'Elder Item', 'Shaper Item',
-  'Warlord Item', 'Crusader Item', 'Redeemer Item', 'Hunter Item',
-]);
-
-interface ModLine { line: string; type: string; }
-
-/**
- * Parse PoB internal item raw text to extract mod lines.
- * Handles both formats: with and without "Rarity:" prefix.
- * After "Implicits: N", lines are mods — first N are implicit, rest explicit.
- */
-function parseItemRawMods(raw: string | undefined): ModLine[] {
-  if (!raw) return [];
-  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  const mods: ModLine[] = [];
-  let implicitTotal = 0;
-  let pastImplicitsLine = false;
-  let enchantCount = 0;
-  let implicitCount = 0;
-
-  for (const rawLine of lines) {
-    const implicitsMatch = rawLine.match(/^Implicits:\s*(\d+)/);
-    if (implicitsMatch) {
-      implicitTotal = parseInt(implicitsMatch[1], 10);
-      pastImplicitsLine = true;
-      continue;
-    }
-    if (!pastImplicitsLine) continue;
-    if (ITEM_TRAILER_LINES.has(rawLine)) continue;
-    // Skip any remaining spec lines that sneak in (e.g. "Note: ...")
-    if (/^[A-Z][A-Za-z ]+:\s/.test(rawLine) && !/^[+\-\d]/.test(rawLine)) continue;
-
-    // Strip {tag} markers, collect flags
-    let crafted = false, fractured = false, scourge = false, crucible = false;
-    const displayLine = rawLine
-      .replace(/\{(\w+)(?::[^}]*)?\}/g, (_m, tag) => {
-        if (tag === 'crafted') crafted = true;
-        else if (tag === 'fractured') fractured = true;
-        else if (tag === 'scourge') scourge = true;
-        else if (tag === 'crucible') crucible = true;
-        return '';
-      })
-      .replace(/\s*\((implicit|enchant|crafted|fractured)\)\s*$/, '')
-      .trim();
-
-    if (!displayLine) continue;
-
-    // Determine type using the same logic as PoB's Item.lua:
-    // crafted mods within the implicit count go to enchant
-    const totalSoFar = enchantCount + implicitCount;
-    let type: string;
-    if (crafted && totalSoFar < implicitTotal) {
-      type = 'enchant'; enchantCount++;
-    } else if (!crafted && totalSoFar < implicitTotal) {
-      type = 'implicit'; implicitCount++;
-    } else if (fractured) {
-      type = 'fractured';
-    } else if (scourge) {
-      type = 'scourge';
-    } else if (crucible) {
-      type = 'crucible';
-    } else if (crafted) {
-      type = 'crafted';
-    } else {
-      type = 'explicit';
-    }
-
-    mods.push({ line: displayLine, type });
-  }
-  return mods;
 }
 
 export async function handleClearItemSlot(

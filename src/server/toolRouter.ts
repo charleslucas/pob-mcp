@@ -277,12 +277,19 @@ export async function routeToolCall(
 
     case "analyze_item_mods":
       if (!args) throw new Error("Missing arguments");
-      return await handleAnalyzeItemMods({
-        mod_lines: args.mod_lines as string[],
-        base_name: args.base_name as string | undefined,
-        ilvl: args.ilvl as number | undefined,
-        raw_json: args.raw_json as boolean | undefined,
-      });
+      return await handleAnalyzeItemMods(
+        {
+          mod_lines: args.mod_lines as string[] | undefined,
+          item_slot: args.item_slot as string | undefined,
+          base_name: args.base_name as string | undefined,
+          ilvl: args.ilvl as number | undefined,
+          raw_json: args.raw_json as boolean | undefined,
+        },
+        {
+          getLuaClient: deps.getLuaClient,
+          ensureLuaClient: deps.ensureLuaClient,
+        }
+      );
 
     case "search_master_crafts":
       return await handleSearchMasterCrafts({
