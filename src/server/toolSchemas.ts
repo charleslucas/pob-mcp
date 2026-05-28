@@ -361,6 +361,19 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "get_stat_breakdown",
+      description: "Explain WHY a stat has its value: tabulates every modifier contributing to it from the live PoB build, with source attribution (which passive, item, or config). Answers 'where does my Life / resistance / armour come from?'. Groups contributions by type — BASE (flat), INC (increased/reduced %), MORE (multiplicative %), OVERRIDE, FLAG — and resolves passive-tree sources to node names.\n\n`stat` is PoB's internal MODIFIER name, which often differs from the displayed label — use no-spaces CamelCase: 'Life', 'Mana', 'EnergyShield', 'Armour', 'Evasion', 'Strength', 'Dexterity', 'Intelligence', 'FireResistance', 'ColdResistance', 'LightningResistance', 'ChaosResistance', 'LifeRegen', 'ManaRegen', 'CritChance', 'CritMultiplier', 'Speed'.\n\nACCURACY: complete for unconditional stats (life, resistances, attributes, armour/evasion/ES, regen). INCOMPLETE for damage and other skill-conditional stats — the breakdown uses no active-skill config, so conditional modifiers are omitted. Requires a live PoB build (LaunchPoBWithAPI.bat).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          stat: { type: "string", description: "PoB internal modifier name (CamelCase, no spaces): 'Life', 'FireResistance', 'Strength', 'Armour', 'EnergyShield', 'LifeRegen', etc." },
+          actor: { type: "string", enum: ["player", "minion"], description: "Whose modifiers to tabulate. Default 'player'." },
+          raw_json: { type: "boolean", description: "Return structured JSON (with both raw and humanized sources) instead of formatted text. Default false." },
+        },
+        required: ["stat"],
+      },
+    },
+    {
       name: "analyze_item_mods",
       description: "Identify each mod line on an item against PoB's data and report tier info + next-tier upgrade target. Two input modes:\n1. `mod_lines` — array of explicit prefix/suffix lines, exactly as PoE shows them (e.g. '+150 to maximum Life'). Append ` {crafted}` / ` {fractured}` to tag those.\n2. `item_slot` — read a live equipped item straight from the open PoB build over TCP (e.g. 'Body Armour', 'Helmet', 'Ring 1', 'Weapon 1'). The tool fetches the item, extracts its explicit/crafted/fractured mods, and auto-derives base_name + ilvl from the item. Requires PoB launched via LaunchPoBWithAPI.bat. (item_slot takes precedence over mod_lines.)\n\nOptional `base_name` (e.g. 'Astral Plate') gates matching by tag chain — sharpens disambiguation and makes tier ladders reflect only mods rollable on the base. Optional `ilvl` filters the tier ladder. Both are auto-filled when item_slot is used.\n\nFor each line: matched mod ID, affix name, mod group, tier rank (e.g. T3 of 13), and the next-tier mod with required ilvl + new value range. `{crafted}` lines match the bench-craft pool (ModMaster.lua). Hybrid-mod continuation lines are collapsed. Provide one of mod_lines or item_slot.",
       inputSchema: {

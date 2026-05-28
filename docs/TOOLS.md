@@ -67,6 +67,7 @@ These require the Lua bridge (`lua_start`) and, in TCP mode, a running PoB GUI l
 | Tool | Description |
 |------|-------------|
 | `lua_get_stats` | Get calculated stats (offense, defense, or all categories) |
+| `get_stat_breakdown` | Explain WHY a stat has its value — tabulates every contributing modifier from the live build with source attribution (passive node names, items, config), grouped by BASE/INC/MORE/OVERRIDE/FLAG. `stat` is PoB's internal CamelCase mod name ('Life', 'FireResistance', 'Strength', ...). Complete for unconditional stats; incomplete for skill-conditional damage. |
 | `lua_get_tree` | Get the current passive tree node allocation |
 | `lua_set_tree` | Replace the full passive tree (all nodes must be connected to class start) |
 | `update_tree_delta` | Add or remove specific nodes; auto-paths to connect them |

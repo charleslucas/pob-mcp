@@ -51,6 +51,7 @@ import { resolveLeague } from "../services/leagueResolver.js";
 import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
 import { handleAnalyzeItemMods } from "../handlers/analyzeItemModsHandler.js";
 import { handleSearchMasterCrafts, handleGetEssenceDetail } from "../handlers/craftQueryHandlers.js";
+import { handleGetStatBreakdown } from "../handlers/statBreakdownHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -308,6 +309,17 @@ export async function routeToolCall(
         item_type: args?.item_type as string | undefined,
         raw_json: args?.raw_json as boolean | undefined,
       });
+
+    case "get_stat_breakdown":
+      if (!args) throw new Error("Missing arguments");
+      return await handleGetStatBreakdown(
+        { getLuaClient: deps.getLuaClient, ensureLuaClient: deps.ensureLuaClient },
+        {
+          stat: args.stat as string,
+          actor: args.actor as "player" | "minion" | undefined,
+          raw_json: args.raw_json as boolean | undefined,
+        }
+      );
 
     // Lua bridge tools
     case "lua_start":

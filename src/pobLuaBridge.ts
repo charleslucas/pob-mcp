@@ -293,6 +293,19 @@ abstract class PoBApiBase {
     return res.node;
   }
 
+  /**
+   * Tabulate the modifiers contributing to a stat, with source attribution.
+   * Returns { stat, actor, output_value, contributions: [{modType, value,
+   * source, name, flags}] }. Accurate for unconditional stats (Life,
+   * resists, attributes, armour/ES, regen); incomplete for skill-conditional
+   * damage stats (uses a nil config).
+   */
+  async getStatBreakdown(params: { stat: string; actor?: "player" | "minion" }): Promise<any> {
+    const res = await this.send({ action: "get_stat_breakdown", params });
+    if (!res.ok) throw new Error(res.error || "get_stat_breakdown failed");
+    return res.breakdown;
+  }
+
   async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{ tree: any; autoPathedNodes?: number[]; skippedAscendancyNodes?: number[] }> {
     const res = await this.send({ action: "update_tree_delta", params });
     if (!res.ok) throw new Error(res.error || "update_tree_delta failed");
