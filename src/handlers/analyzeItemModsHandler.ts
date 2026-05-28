@@ -29,6 +29,11 @@ import {
   getBase,
   type PobBase,
 } from "../services/pobBaseDataLoader.js";
+import {
+  ensureCraftDataLoaded,
+  matchMasterCraft,
+  type MasterCraft,
+} from "../services/pobCraftDataLoader.js";
 
 export interface AnalyzeItemModsArgs {
   mod_lines: string[];
@@ -48,6 +53,8 @@ interface LineAnalysis {
   source: "natural" | "crafted" | "fractured" | "enchanted" | "unknown";
   /** The matched mod (or null if no match found). */
   match: MatchResult | null;
+  /** Matched bench craft, for `{crafted}` lines (null otherwise). */
+  masterMatch?: MasterCraft | null;
   /** True if this line is the second line of a hybrid mod above it. */
   isHybridContinuation?: boolean;
 }
@@ -104,6 +111,7 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
   try {
     ensureLoaded();
     ensureBasesLoaded();
+    ensureCraftDataLoaded();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
@@ -134,11 +142,17 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
       return { inputLine: i + 1, raw, cleaned: "", source, match: null };
     }
     // Natural and fractured both come from the prefix/suffix pool.
-    // Crafted and enchanted come from separate tables we don't yet index.
     if (source === "natural" || source === "fractured") {
       const m = matchStatLine(text, { itemTags, ilvl });
       return { inputLine: i + 1, raw, cleaned: text, source, match: m };
     }
+    // Crafted lines come from the bench (ModMaster.lua). Match against it
+    // using the base's item TYPE (e.g. "Body Armour"), not the tag chain.
+    if (source === "crafted") {
+      const mc = matchMasterCraft(text, base?.type);
+      return { inputLine: i + 1, raw, cleaned: text, source, match: null, masterMatch: mc };
+    }
+    // Enchanted (lab) mods aren't indexed here.
     return { inputLine: i + 1, raw, cleaned: text, source, match: null };
   });
 
@@ -193,6 +207,15 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
               meaningful_candidate_count: a.match.meaningfulCandidateCount,
             }
           : null,
+        master_craft: a.masterMatch
+          ? {
+              type: a.masterMatch.type,
+              affix: a.masterMatch.affix,
+              level: a.masterMatch.level,
+              group: a.masterMatch.group,
+              statLines: a.masterMatch.statLines,
+            }
+          : null,
       })),
     };
     return { content: [{ type: "text", text: JSON.stringify(json, null, 2) }] };
@@ -223,7 +246,7 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
   for (const a of analyses) {
     if (a.cleaned === "") continue;
     if (a.isHybridContinuation) continue;
-    const t = a.match?.best?.type.toLowerCase();
+    const t = (a.match?.best?.type ?? a.masterMatch?.type)?.toLowerCase();
     if (t === "prefix") prefixes.push(a);
     else if (t === "suffix") suffixes.push(a);
     else other.push(a);
@@ -233,6 +256,16 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
     const out: string[] = [];
     out.push(`  Line ${a.inputLine}: ${a.raw}`);
     if (a.source !== "natural") out.push(`    Source: ${a.source}`);
+    // Bench-crafted line: report the master craft if we matched one.
+    if (a.source === "crafted") {
+      if (a.masterMatch) {
+        const mc = a.masterMatch;
+        out.push(`    -> bench craft "${mc.affix}" [${mc.type}] L${mc.level} group=${mc.group} → ${mc.statLines.join(" / ")}`);
+      } else {
+        out.push(`    Match: (bench-craft text not found in ModMaster.lua${base ? "" : " — supply base_name to match by item type"})`);
+      }
+      return out;
+    }
     if (!a.match || !a.match.best) {
       out.push(`    Match: (none — line text did not match any natural prefix/suffix template)`);
       return out;
@@ -277,9 +310,9 @@ export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
 
   if (craftedCount + fracturedCount + enchantedCount + hybridCount > 0) {
     lines.push("Notes:");
-    if (craftedCount > 0) lines.push(`  - ${craftedCount} bench-crafted mod(s) detected — not from the natural prefix/suffix pool (ModMaster.lua, not yet indexed).`);
+    if (craftedCount > 0) lines.push(`  - ${craftedCount} bench-crafted mod(s) — matched against ModMaster.lua (the bench-craft pool, deterministic; no tiers/weights).`);
     if (fracturedCount > 0) lines.push(`  - ${fracturedCount} fractured mod(s) detected — frozen at the rolled value but otherwise from the natural pool.`);
-    if (enchantedCount > 0) lines.push(`  - ${enchantedCount} enchanted mod(s) — labyrinth enchantments, not from the natural pool.`);
+    if (enchantedCount > 0) lines.push(`  - ${enchantedCount} enchanted mod(s) — labyrinth enchantments, not from the natural pool (not indexed).`);
     if (hybridCount > 0) lines.push(`  - ${hybridCount} hybrid-mod continuation line(s) collapsed into the mod above them.`);
   }
 

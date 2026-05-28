@@ -333,6 +333,34 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "search_master_crafts",
+      description: "Search PoB's bench (master) craft table (`Data/ModMaster.lua`) — the deterministic mods you can add at the crafting bench. Answers 'what can I bench-craft on a ring?', 'what bench crafts give cold resistance?', 'is there a bench craft for movement speed?'. Filters: `stat_contains` (substring on stat text), `item_type` (PoE TYPE name: 'Body Armour', 'Ring', 'Amulet', 'Belt', 'Gloves', 'Boots', 'Helmet', 'Shield', 'Quiver', 'One Handed Sword', 'Two Handed Axe', 'Wand', 'Staff', etc.), `type` (Prefix/Suffix), `has_tags`. Bench crafts are deterministic (no spawn weight / random tier) and occupy a prefix or suffix slot. Multiple level-tiers exist per group; higher level = stronger.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          stat_contains: { type: "string", description: "Case-insensitive substring match against the craft's stat text (e.g. 'Cold Resistance', 'Movement Speed', 'maximum Life')." },
+          item_type: { type: "string", description: "PoE item TYPE name (NOT a tag) the craft must apply to. Examples: 'Body Armour', 'Ring', 'One Handed Sword'." },
+          type: { type: "string", description: "'Prefix' or 'Suffix'." },
+          has_tags: { type: "array", items: { type: "string" }, description: "Craft must include all listed mod tags (e.g. ['resistance'])." },
+          limit: { type: "number", description: "Max results. Default 50, 0 = no cap." },
+          raw_json: { type: "boolean", description: "Return raw JSON. Default false." },
+        },
+      },
+    },
+    {
+      name: "get_essence_detail",
+      description: "Inspect essences (`Data/Essence.lua`). Two modes:\n1. Pass `essence_name` (e.g. 'Deafening Essence of Greed') to see exactly what mod that essence guarantees on each item type — resolved to real stat text from ModItem.lua. Optional `item_type` narrows to one type.\n2. Pass `stat_contains` (e.g. 'maximum Life') to list which essences provide that stat and on which item types.\nEssences reroll a rare and guarantee one specific mod for the item's type. Tier order (strongest first): Deafening > Shrieking > Screaming > Wailing > Weeping > Muttering > Whispering. Essence name lookup is case-insensitive with fuzzy suggestions on miss.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          essence_name: { type: "string", description: "Full or partial essence name (e.g. 'Deafening Essence of Greed'). Mode 1." },
+          stat_contains: { type: "string", description: "Stat-text substring to find essences that provide it (e.g. 'Fire Resistance'). Mode 2." },
+          item_type: { type: "string", description: "Optional PoE item TYPE name to narrow mode-1 results to a single type." },
+          raw_json: { type: "boolean", description: "Return raw JSON. Default false." },
+        },
+      },
+    },
+    {
       name: "analyze_item_mods",
       description: "Identify each mod line on an item against PoB's ModItem.lua and report tier info + next-tier upgrade target. Pass `mod_lines` as the array of explicit prefix/suffix lines from the item (one per array entry, exactly as PoE shows them, e.g. '+150 to maximum Life'). Optional `base_name` (e.g. 'Astral Plate') gates matching by tag chain, sharpens disambiguation, and makes the tier ladder reflect only mods actually rollable on the base. Optional `ilvl` further filters the tier ladder to what was achievable on the item.\n\nFor each line, the tool reports the matched mod ID, affix name (the 'of X' / 'X-prefix' name), mod group, tier rank (e.g. T3 of 13 naturally-rollable life prefixes), and the next-tier mod with its required ilvl + new value range. Adjacent lines belonging to the same hybrid mod (e.g. life+armour, life+ES) are collapsed into the mod above them.\n\nRecognises `{crafted}`, `{fractured}`, `{enchanted}` source tags in the input and reports them separately — only natural prefix/suffix mods come from ModItem.lua. Master crafts are not yet indexed (ModMaster.lua support is a future addition).",
       inputSchema: {

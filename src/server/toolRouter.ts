@@ -50,6 +50,7 @@ import { handleListCraftableModsForBase } from "../handlers/listCraftableModsHan
 import { resolveLeague } from "../services/leagueResolver.js";
 import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
 import { handleAnalyzeItemMods } from "../handlers/analyzeItemModsHandler.js";
+import { handleSearchMasterCrafts, handleGetEssenceDetail } from "../handlers/craftQueryHandlers.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -281,6 +282,24 @@ export async function routeToolCall(
         base_name: args.base_name as string | undefined,
         ilvl: args.ilvl as number | undefined,
         raw_json: args.raw_json as boolean | undefined,
+      });
+
+    case "search_master_crafts":
+      return await handleSearchMasterCrafts({
+        stat_contains: args?.stat_contains as string | undefined,
+        item_type: args?.item_type as string | undefined,
+        type: args?.type as string | undefined,
+        has_tags: args?.has_tags as string[] | undefined,
+        limit: args?.limit as number | undefined,
+        raw_json: args?.raw_json as boolean | undefined,
+      });
+
+    case "get_essence_detail":
+      return await handleGetEssenceDetail({
+        essence_name: args?.essence_name as string | undefined,
+        stat_contains: args?.stat_contains as string | undefined,
+        item_type: args?.item_type as string | undefined,
+        raw_json: args?.raw_json as boolean | undefined,
       });
 
     // Lua bridge tools
