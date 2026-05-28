@@ -52,6 +52,7 @@ import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
 import { handleAnalyzeItemMods } from "../handlers/analyzeItemModsHandler.js";
 import { handleSearchMasterCrafts, handleGetEssenceDetail } from "../handlers/craftQueryHandlers.js";
 import { handleGetStatBreakdown } from "../handlers/statBreakdownHandler.js";
+import { handleCalculateModOdds } from "../handlers/calculateModOddsHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -320,6 +321,19 @@ export async function routeToolCall(
           raw_json: args.raw_json as boolean | undefined,
         }
       );
+
+    case "calculate_mod_odds":
+      if (!args) throw new Error("Missing arguments");
+      return await handleCalculateModOdds({
+        base_name: args.base_name as string,
+        ilvl: args.ilvl as number,
+        targets: args.targets as Array<{ stat?: string; group?: string; min_tier?: number }>,
+        method: args.method as "chaos" | "alt" | "essence" | undefined,
+        essence_name: args.essence_name as string | undefined,
+        prefix_count: args.prefix_count as number | undefined,
+        suffix_count: args.suffix_count as number | undefined,
+        raw_json: args.raw_json as boolean | undefined,
+      });
 
     // Lua bridge tools
     case "lua_start":

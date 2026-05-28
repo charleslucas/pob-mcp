@@ -5,12 +5,22 @@
  * These schemas describe the available tools, their parameters, and documentation.
  */
 
+export interface JsonSchemaProp {
+  type: string;
+  description?: string;
+  enum?: string[];
+  items?: JsonSchemaProp;
+  properties?: Record<string, JsonSchemaProp>;
+  required?: string[];
+  default?: unknown;
+}
+
 export interface ToolSchema {
   name: string;
   description: string;
   inputSchema: {
     type: "object";
-    properties: Record<string, { type: string; description?: string; enum?: string[]; items?: { type: string }; default?: unknown }>;
+    properties: Record<string, JsonSchemaProp>;
     required?: string[];
   };
 }
@@ -330,6 +340,35 @@ export function getToolSchemas(): ToolSchema[] {
           limit: { type: "number", description: "Cap on returned results. Default 50, pass 0 for no cap (use with caution)." },
           raw_json: { type: "boolean", description: "Return the raw JSON list of mod entries instead of formatted text. Default false." },
         },
+      },
+    },
+    {
+      name: "calculate_mod_odds",
+      description: "Compute the probability of hitting target modifiers when rolling a base item, using the game's real spawn weights (from ModItem.lua). Answers 'what are my odds of T1 Life + T1 Fire Resistance on this base at ilvl 86?'. EXACT for the modeled cases: mods drawn weighted from the prefix/suffix pool, one mod per mod-group (sampling without replacement at group level), prefixes/suffixes independent given the slot counts.\n\nEach target is `{stat}` (keyword, e.g. 'maximum Life' — must resolve to a single mod group or you'll get a disambiguation list) OR `{group}` (exact PoB group key, e.g. 'IncreasedLife'), plus optional `min_tier` (worst acceptable tier rank; e.g. 2 = T1 or T2). `method`: 'chaos' (full rare reroll, default, 3/3 slots), 'alt' (magic item, 1 prefix + 1 suffix), or 'essence' (pass `essence_name` — the forced mod is guaranteed and pre-placed). Override slot assumptions with `prefix_count`/`suffix_count` (0–3).\n\nOutput: per-target weight share, P(prefix targets), P(suffix targets), tier-filter factor, combined probability, and estimated full rerolls (1/P). LIMITATIONS (deliberately not modeled — use Craft of Exile for these): fossil/harvest weight changes, meta-craft sequences, exact per-orb affix-count variance, and currency cost.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          base_name: { type: "string", description: "PoE base name (e.g. 'Astral Plate', 'Sapphire Ring'). Case-insensitive." },
+          ilvl: { type: "number", description: "Item level — gates which tiers are in the pool." },
+          targets: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                stat: { type: "string", description: "Stat-text keyword (must resolve to one mod group; ambiguous keywords return a disambiguation list)." },
+                group: { type: "string", description: "Exact PoB mod-group key (e.g. 'IncreasedLife', 'FireResistance'). Use this to disambiguate." },
+                min_tier: { type: "number", description: "Worst acceptable tier rank (1=best). e.g. 2 means T1 or T2 acceptable. Omit = any tier." },
+              },
+            },
+            description: "Target mods you want to hit (1 or more).",
+          },
+          method: { type: "string", enum: ["chaos", "alt", "essence"], description: "Rolling method. 'chaos' = full rare reroll (default). 'alt' = magic 1p/1s. 'essence' = forced mod (needs essence_name)." },
+          essence_name: { type: "string", description: "Required for method 'essence' (e.g. 'Deafening Essence of Greed'). The forced mod is guaranteed." },
+          prefix_count: { type: "number", description: "Assumed prefix slots filled (0–3, default 3 for chaos / 1 for alt)." },
+          suffix_count: { type: "number", description: "Assumed suffix slots filled (0–3, default 3 for chaos / 1 for alt)." },
+          raw_json: { type: "boolean", description: "Return structured JSON. Default false." },
+        },
+        required: ["base_name", "ilvl", "targets"],
       },
     },
     {
