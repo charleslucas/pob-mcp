@@ -333,6 +333,20 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "analyze_item_mods",
+      description: "Identify each mod line on an item against PoB's ModItem.lua and report tier info + next-tier upgrade target. Pass `mod_lines` as the array of explicit prefix/suffix lines from the item (one per array entry, exactly as PoE shows them, e.g. '+150 to maximum Life'). Optional `base_name` (e.g. 'Astral Plate') gates matching by tag chain, sharpens disambiguation, and makes the tier ladder reflect only mods actually rollable on the base. Optional `ilvl` further filters the tier ladder to what was achievable on the item.\n\nFor each line, the tool reports the matched mod ID, affix name (the 'of X' / 'X-prefix' name), mod group, tier rank (e.g. T3 of 13 naturally-rollable life prefixes), and the next-tier mod with its required ilvl + new value range. Adjacent lines belonging to the same hybrid mod (e.g. life+armour, life+ES) are collapsed into the mod above them.\n\nRecognises `{crafted}`, `{fractured}`, `{enchanted}` source tags in the input and reports them separately — only natural prefix/suffix mods come from ModItem.lua. Master crafts are not yet indexed (ModMaster.lua support is a future addition).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mod_lines: { type: "array", items: { type: "string" }, description: "Array of explicit-mod text lines from the item (one prefix or suffix per array entry). Implicit and unique-specific mods should be omitted." },
+          base_name: { type: "string", description: "PoE base name (e.g. 'Astral Plate', 'Sapphire Ring'). Improves disambiguation and tier-ladder accuracy. Case-insensitive; fuzzy suggestions returned on miss." },
+          ilvl: { type: "number", description: "Item level — filters tier ladder to mods achievable at this ilvl." },
+          raw_json: { type: "boolean", description: "Return structured JSON instead of formatted text. Default false." },
+        },
+        required: ["mod_lines"],
+      },
+    },
+    {
       name: "list_craftable_mods_for_base",
       description: "Dump the entire craftable mod space for a specific base item — every prefix and suffix that can roll on it, grouped by mod-group (conflict key) with the highest tier first. Builds on `search_crafting_mods` but resolves the base's tag chain automatically: pass 'Astral Plate' and the tool reads PoB's `Data/Bases/body.lua` to learn the base is `['armour','body_armour','default','str_armour','top_tier_base_item_type']`, then walks ModItem.lua applying PoE's first-match-wins weight resolution per group. Use this for 'what's the entire craftable space on a Hubris Circlet at ilvl 86?', 'what suffixes can I roll on a Steel Ring?', 'show me every life-related mod available on this base'. Output is split PREFIXES / SUFFIXES, with mods within each group sorted by descending level so the highest available tier is on top. Base name lookup is case-insensitive; if the name doesn't resolve, the tool surfaces fuzzy suggestions.",
       inputSchema: {

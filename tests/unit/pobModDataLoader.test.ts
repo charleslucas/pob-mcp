@@ -7,8 +7,13 @@ import {
   getMod,
   getModCount,
   getModGroup,
+  matchStatLine,
+  normalizeStatLine,
+  parseRolledValues,
+  parseTemplateRanges,
   resolveWeightForTag,
   resolveWeightForTags,
+  rolledValuesFitTemplate,
   searchMods,
 } from '../../src/services/pobModDataLoader';
 
@@ -151,6 +156,131 @@ describeIfPob('pobModDataLoader', () => {
     it('returns empty when no mod matches the filters', () => {
       const hits = searchMods({ statContains: 'definitely-not-a-real-stat-text', limit: 10 });
       expect(hits).toEqual([]);
+    });
+  });
+
+  describe('matchStatLine', () => {
+    const armourBodyTags = ['body_armour', 'armour', 'str_armour'];
+
+    it('identifies a flat life roll to its specific tier', () => {
+      const r = matchStatLine('+150 to maximum Life', { itemTags: armourBodyTags, ilvl: 86 });
+      expect(r.best).not.toBeNull();
+      expect(r.best?.group).toBe('IncreasedLife');
+      // +150 falls in the (145-159) tier
+      expect(r.best?.statLines[0]).toMatch(/145-159/);
+      expect(r.tier).toBeGreaterThanOrEqual(1);
+      expect(r.tierMax).toBeGreaterThan(r.tier!);
+      expect(r.nextTier).toBeDefined();
+      expect(r.nextTier!.level).toBeGreaterThan(r.best!.level);
+    });
+
+    it('selects the tier whose range contains the rolled value', () => {
+      const low = matchStatLine('+15 to maximum Life', { itemTags: armourBodyTags });
+      const high = matchStatLine('+150 to maximum Life', { itemTags: armourBodyTags });
+      expect(low.best?.level).toBeLessThan(high.best!.level);
+    });
+
+    it('reports top tier with no next-tier upgrade', () => {
+      const r = matchStatLine('+48% to Fire Resistance', { itemTags: armourBodyTags, ilvl: 86 });
+      expect(r.best?.group).toBe('FireResistance');
+      expect(r.tier).toBe(1);
+      expect(r.nextTier).toBeUndefined();
+    });
+
+    it('prefers affixed mods over empty-affix (Hellscape/implicit) entries', () => {
+      const r = matchStatLine('+25% to Fire Resistance', { itemTags: armourBodyTags, ilvl: 86 });
+      expect(r.best?.affix).toBeTruthy();
+      expect(r.best?.affix.length).toBeGreaterThan(0);
+    });
+
+    it('returns best=null for text that matches no template', () => {
+      const r = matchStatLine('Florble gnarp wibble zonk quux');
+      expect(r.candidates.length).toBe(0);
+      expect(r.best).toBeNull();
+      expect(r.meaningfulCandidateCount).toBe(0);
+    });
+
+    it('matches multi-value mods (Adds X to Y Physical Damage)', () => {
+      const r = matchStatLine('Adds 5 to 9 Physical Damage to Attacks', { itemTags: ['ring'], ilvl: 80 });
+      expect(r.best).not.toBeNull();
+      expect(r.best?.group).toMatch(/Physical/i);
+    });
+  });
+});
+
+// These are pure functions — no PoB data required, so always run.
+describe('pobModDataLoader pure helpers', () => {
+  describe('normalizeStatLine', () => {
+    it('replaces ranges and bare numbers with #', () => {
+      expect(normalizeStatLine('+(8-12) to Strength')).toBe('+# to strength');
+      expect(normalizeStatLine('+10 to Strength')).toBe('+# to strength');
+    });
+
+    it('normalizes multi-value templates and rolls to the same key', () => {
+      const tpl = normalizeStatLine('Adds (2-3) to (4-5) Physical Damage to Attacks');
+      const rolled = normalizeStatLine('Adds 7 to 12 Physical Damage to Attacks');
+      expect(tpl).toBe(rolled);
+    });
+
+    it('handles decimals', () => {
+      expect(normalizeStatLine('Regenerate 12.5 Life per second')).toBe('regenerate # life per second');
+    });
+
+    it('preserves the +/% structure that distinguishes mods', () => {
+      // flat life has +, increased life has % — must NOT normalize to the same key
+      expect(normalizeStatLine('+105 to maximum Life')).not.toBe(
+        normalizeStatLine('105% increased maximum Life')
+      );
+    });
+  });
+
+  describe('parseRolledValues', () => {
+    it('extracts the rolled numbers', () => {
+      expect(parseRolledValues('+150 to maximum Life')).toEqual([150]);
+      expect(parseRolledValues('Adds 7 to 12 Physical Damage')).toEqual([7, 12]);
+    });
+
+    it('ignores parenthesized ranges if present', () => {
+      expect(parseRolledValues('+(8-12) to Strength')).toEqual([]);
+    });
+  });
+
+  describe('parseTemplateRanges', () => {
+    it('parses a single range', () => {
+      expect(parseTemplateRanges('+(145-159) to maximum Life')).toEqual([{ min: 145, max: 159 }]);
+    });
+
+    it('parses multiple ranges in order', () => {
+      expect(parseTemplateRanges('Adds (2-3) to (4-5) Physical Damage')).toEqual([
+        { min: 2, max: 3 },
+        { min: 4, max: 5 },
+      ]);
+    });
+
+    it('treats bare numbers as fixed-value ranges', () => {
+      expect(parseTemplateRanges('Adds 1 to 2 Physical Damage')).toEqual([
+        { min: 1, max: 1 },
+        { min: 2, max: 2 },
+      ]);
+    });
+  });
+
+  describe('rolledValuesFitTemplate', () => {
+    it('returns true when value falls in range', () => {
+      expect(rolledValuesFitTemplate([150], '+(145-159) to maximum Life')).toBe(true);
+    });
+
+    it('returns false when value is out of range', () => {
+      expect(rolledValuesFitTemplate([200], '+(145-159) to maximum Life')).toBe(false);
+    });
+
+    it('returns false on arity mismatch', () => {
+      expect(rolledValuesFitTemplate([5], 'Adds (2-3) to (4-5) Physical Damage')).toBe(false);
+    });
+
+    it('checks each value against its own range', () => {
+      expect(rolledValuesFitTemplate([2, 5], 'Adds (2-3) to (4-5) Physical Damage')).toBe(true);
+      expect(rolledValuesFitTemplate([2, 9], 'Adds (2-3) to (4-5) Physical Damage')).toBe(false);
     });
   });
 });

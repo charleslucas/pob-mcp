@@ -49,6 +49,7 @@ import { handleSearchCraftingMods } from "../handlers/craftingModSearchHandler.j
 import { handleListCraftableModsForBase } from "../handlers/listCraftableModsHandler.js";
 import { resolveLeague } from "../services/leagueResolver.js";
 import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
+import { handleAnalyzeItemMods } from "../handlers/analyzeItemModsHandler.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -270,6 +271,15 @@ export async function routeToolCall(
         tiers_per_group: args.tiers_per_group as number | undefined,
         hide_unrollable: args.hide_unrollable as boolean | undefined,
         stat_contains: args.stat_contains as string | undefined,
+        raw_json: args.raw_json as boolean | undefined,
+      });
+
+    case "analyze_item_mods":
+      if (!args) throw new Error("Missing arguments");
+      return await handleAnalyzeItemMods({
+        mod_lines: args.mod_lines as string[],
+        base_name: args.base_name as string | undefined,
+        ilvl: args.ilvl as number | undefined,
         raw_json: args.raw_json as boolean | undefined,
       });
 

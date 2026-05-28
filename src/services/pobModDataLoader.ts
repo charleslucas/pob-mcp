@@ -185,6 +185,78 @@ interface CacheEntry {
   mods: Record<string, PobMod>;
   byGroup: Map<string, PobMod[]>;
   byTag: Map<string, PobMod[]>;
+  /**
+   * Normalized first stat-line → mods sharing that template. Built once
+   * at load time; key shape comes from `normalizeStatLine` (numbers
+   * replaced with `#`, lowercased, whitespace collapsed). Used by
+   * matchStatLine to identify items.
+   */
+  byFirstStatTemplate: Map<string, PobMod[]>;
+}
+
+/**
+ * Strip rolled values from a stat line so two lines with different
+ * numerical values but the same template compare equal. Replaces both
+ * `(N-N)` ranges and bare integers/decimals with `#`, lowercases,
+ * collapses whitespace.
+ *
+ *   "+(8-12) to Strength"             -> "+# to strength"
+ *   "+10 to Strength"                 -> "+# to strength"
+ *   "Adds (2-3) to (4-5) Physical Damage"  -> "adds # to # physical damage"
+ *   "Adds 7 to 12 Physical Damage"    -> "adds # to # physical damage"
+ *   "Regenerate 12.5 Life per second" -> "regenerate # life per second"
+ */
+export function normalizeStatLine(s: string): string {
+  return s
+    .replace(/\(-?\d+(?:\.\d+)?-\d+(?:\.\d+)?\)/g, "#")
+    .replace(/-?\d+(?:\.\d+)?/g, "#")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Extract every numeric value from a rolled stat line (i.e. an item's
+ * actual mod text, not a template). Strips parenthesized ranges first
+ * — those don't appear on identified items but guard against the rare
+ * case where they leak through.
+ */
+export function parseRolledValues(line: string): number[] {
+  const cleaned = line.replace(/\(-?\d+(?:\.\d+)?-\d+(?:\.\d+)?\)/g, "");
+  return Array.from(cleaned.matchAll(/-?\d+(?:\.\d+)?/g), (m) => parseFloat(m[0]));
+}
+
+/**
+ * Extract numeric ranges from a template stat line — each value-position
+ * becomes a {min,max}. A `(N-N)` range yields {min:N,max:N}; a bare N
+ * yields {min:N,max:N} (for low-tier mods that have a single fixed value).
+ */
+export function parseTemplateRanges(tpl: string): Array<{ min: number; max: number }> {
+  const ranges: Array<{ min: number; max: number }> = [];
+  const re = /\((-?\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\)|(-?\d+(?:\.\d+)?)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(tpl)) !== null) {
+    if (m[1] !== undefined && m[2] !== undefined) {
+      ranges.push({ min: parseFloat(m[1]), max: parseFloat(m[2]) });
+    } else if (m[3] !== undefined) {
+      const v = parseFloat(m[3]);
+      ranges.push({ min: v, max: v });
+    }
+  }
+  return ranges;
+}
+
+/**
+ * True iff every rolled value falls inside its corresponding template
+ * range. Mismatched arity returns false (different mods).
+ */
+export function rolledValuesFitTemplate(rolled: number[], tpl: string): boolean {
+  const ranges = parseTemplateRanges(tpl);
+  if (ranges.length !== rolled.length) return false;
+  for (let i = 0; i < rolled.length; i++) {
+    if (rolled[i] < ranges[i].min || rolled[i] > ranges[i].max) return false;
+  }
+  return true;
 }
 
 let cached: CacheEntry | null = null;
@@ -262,6 +334,7 @@ function load(): CacheEntry {
   const mods: Record<string, PobMod> = {};
   const byGroup = new Map<string, PobMod[]>();
   const byTag = new Map<string, PobMod[]>();
+  const byFirstStatTemplate = new Map<string, PobMod[]>();
   for (const [id, rawEntry] of Object.entries(parsed)) {
     const mod = normalizeMod(id, rawEntry);
     mods[id] = mod;
@@ -275,9 +348,15 @@ function load(): CacheEntry {
       arr.push(mod);
       byTag.set(tag, arr);
     }
+    if (mod.statLines.length > 0) {
+      const key = normalizeStatLine(mod.statLines[0]);
+      const arr = byFirstStatTemplate.get(key) ?? [];
+      arr.push(mod);
+      byFirstStatTemplate.set(key, arr);
+    }
   }
 
-  cached = { mtimeMs: stat.mtimeMs, mods, byGroup, byTag };
+  cached = { mtimeMs: stat.mtimeMs, mods, byGroup, byTag, byFirstStatTemplate };
   return cached;
 }
 
@@ -388,6 +467,172 @@ export function searchMods(filters: ModSearchFilters): PobMod[] {
 
 export function getModItemPath(): string {
   return modItemPath();
+}
+
+export interface MatchOptions {
+  /**
+   * Base tag chain to constrain candidates — same shape as searchMods's
+   * itemTags. When present, candidates whose resolved weight on the
+   * base is 0 are deprioritized (still returned, but ranked last so
+   * impossible matches are visible if the only-candidate fallback hits).
+   */
+  itemTags?: string[];
+  /**
+   * Item level — candidates with mod level > ilvl are deprioritized.
+   * Useful when an item has rolled the maximum tier available at its
+   * ilvl: matching against the top tier (which requires higher ilvl)
+   * would be wrong.
+   */
+  ilvl?: number;
+}
+
+export interface MatchResult {
+  /** The rolled line we were trying to identify. */
+  query: string;
+  /** All mods whose first stat-template equals the query template. */
+  candidates: PobMod[];
+  /**
+   * Best-guess single mod after applying itemTags + ilvl ranking. Null
+   * only when there are zero template matches (i.e. the line doesn't
+   * correspond to a known mod — masters / unique implicits / explicit
+   * crafted text that this loader doesn't index).
+   */
+  best: PobMod | null;
+  /**
+   * Tier rank within the matched mod's group: 1 = highest tier, N = lowest.
+   * Useful for "this is T2 of 12 — next tier needs ilvl X".
+   */
+  tier?: number;
+  /** Total mods in the matched group that can actually roll on the base. */
+  tierMax?: number;
+  /**
+   * The next-higher-tier mod in the same group, if any (i.e. an upgrade
+   * target). Null if the rolled tier is already the top.
+   */
+  nextTier?: PobMod;
+  /**
+   * Count of *genuinely* confusable candidates — those that fit the
+   * rolled value AND are affixed AND (if itemTags given) rollable on the
+   * base. Differs from `candidates.length`, which includes technical
+   * range-overlap matches from essence/Hellscape/influence variants that
+   * a player would never confuse with the natural roll. Use this for an
+   * honest "is this ambiguous?" signal.
+   */
+  meaningfulCandidateCount: number;
+}
+
+/**
+ * Identify which ModItem.lua entry a single rolled stat line corresponds
+ * to. Returns all candidates whose template matches plus a best-guess
+ * ranking, tier info, and next-tier upgrade target.
+ *
+ * Limitations:
+ *   - Only matches against the FIRST stat line. Hybrid mods (e.g.
+ *     IncreasedLifeAndPercent with two lines) are returned via the
+ *     first line; the second line will also match the hybrid mod but
+ *     `analyze_item_mods` collapses adjacent matching IDs.
+ *   - Doesn't recognize master-crafted (`{crafted}`), fractured, or
+ *     synthesized prefixes/suffixes on the line. Strip those before
+ *     passing.
+ *   - Doesn't index influence-implicit mods or unique-specific mods.
+ */
+export function matchStatLine(line: string, options: MatchOptions = {}): MatchResult {
+  const c = load();
+  const key = normalizeStatLine(line);
+  const templateMatches = c.byFirstStatTemplate.get(key) ?? [];
+  if (templateMatches.length === 0) {
+    return { query: line, candidates: [], best: null, meaningfulCandidateCount: 0 };
+  }
+
+  // Narrow by rolled-value range: a life mod can roll +145-159; an item
+  // showing "+150 to maximum Life" matches only the tier whose range
+  // contains 150. This collapses the 40-candidate ambiguity for common
+  // mods down to (usually) exactly one.
+  const rolled = parseRolledValues(line);
+  const valueMatches = templateMatches.filter((mod) =>
+    rolledValuesFitTemplate(rolled, mod.statLines[0])
+  );
+
+  // If nothing fits the rolled value (corrupted/synthesized ranges, custom
+  // unique-only values, etc.), fall back to template-only matches so the
+  // caller still gets *something* — but the candidate list reflects that.
+  const candidates = valueMatches.length > 0 ? valueMatches : templateMatches;
+
+  // Rank: prefer rollable-on-base + level <= ilvl + higher weight.
+  const tags = options.itemTags;
+  const ilvl = options.ilvl ?? Infinity;
+
+  const scored = candidates.map((mod) => {
+    const weight = tags ? resolveWeightForTags(mod, tags) : 1;
+    const rollable = weight > 0 ? 1 : 0;
+    const ilvlOk = mod.level <= ilvl ? 1 : 0;
+    // Prefer affixed mods over empty-affix entries. Empty affix usually
+    // indicates a non-standard mod source (Hellscape modifier, certain
+    // influence implicits, Synthesised) that shares stat-text with a
+    // common prefix/suffix. Players almost always want the affixed
+    // (naturally rollable) version.
+    const hasAffix = mod.affix && mod.affix.length > 0 ? 1 : 0;
+    // Prefer rollable, then within-ilvl, then affixed, then highest
+    // LEVEL (top tier among candidates that already passed the range
+    // filter), then weight. Without the level term we'd flip-coin
+    // between tiers that share a range structure.
+    const score =
+      rollable * 100_000_000 +
+      ilvlOk * 1_000_000 +
+      hasAffix * 100_000 +
+      mod.level * 100 +
+      weight / 1000;
+    return { mod, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  const best = scored[0].mod;
+
+  // Tier info from the matched mod's group, restricted to mods rollable
+  // on the base (if tags given) — otherwise tier numbers would include
+  // unrollable essence/fossil-only entries.
+  let tier: number | undefined;
+  let tierMax: number | undefined;
+  let nextTier: PobMod | undefined;
+
+  // Build the tier ladder from mods that are equivalent to `best` for
+  // crafting purposes: same group, with an affix (excludes Hellscape
+  // downsides, synthesis implicits, and other non-standard entries
+  // that share a group key but aren't part of the natural prefix/
+  // suffix ladder), and (if tags given) actually rollable on the base.
+  const group = c.byGroup.get(best.group) ?? [];
+  let ladder = group.filter((m) => m.affix && m.affix.length > 0);
+  if (tags) {
+    ladder = ladder.filter((m) => resolveWeightForTags(m, tags) > 0);
+  }
+  ladder.sort((a, b) => b.level - a.level); // top tier first
+  if (ladder.length > 0) {
+    tierMax = ladder.length;
+    const idx = ladder.findIndex((m) => m.id === best.id);
+    if (idx >= 0) {
+      tier = idx + 1; // 1-indexed, 1 = top
+      if (idx > 0) nextTier = ladder[idx - 1];
+    }
+  }
+
+  // Genuine ambiguity: value-fitting candidates that are also affixed and
+  // (if tags given) rollable on the base. Excludes essence/Hellscape/
+  // influence range-overlaps a player would never confuse with the roll.
+  const meaningfulCandidateCount = candidates.filter((m) => {
+    if (!m.affix || m.affix.length === 0) return false;
+    if (tags && resolveWeightForTags(m, tags) <= 0) return false;
+    return true;
+  }).length;
+
+  return {
+    query: line,
+    candidates,
+    best,
+    tier,
+    tierMax,
+    nextTier,
+    meaningfulCandidateCount,
+  };
 }
 
 /**

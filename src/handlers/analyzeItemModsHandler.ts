@@ -1,0 +1,287 @@
+/**
+ * Handler for the analyze_item_mods MCP tool.
+ *
+ * Given a set of mod lines from an item (the explicit prefix/suffix text
+ * a player sees in PoE), identify each line as a specific entry in PoB's
+ * ModItem.lua and surface tier info + the next-tier upgrade target.
+ *
+ * Adjacent lines that match the same hybrid mod (e.g. Crocodile's
+ * "+to Armour" / "+to Life") are collapsed into a single 2-line mod.
+ *
+ * Recognised input cleaning:
+ *   - Strips master-craft tags (`{crafted}`, `(crafted)`) — those mods
+ *     come from ModMaster.lua, not ModItem.lua. The handler reports them
+ *     separately as "crafted mod, not from natural prefix/suffix pool"
+ *     rather than guessing.
+ *   - Strips `{fractured}`, `{enchanted}`, `[fractured]` tags.
+ *   - Skips blank lines.
+ */
+
+import {
+  ensureLoaded,
+  matchStatLine,
+  type MatchResult,
+  type PobMod,
+} from "../services/pobModDataLoader.js";
+import {
+  ensureBasesLoaded,
+  findBasesMatching,
+  getBase,
+  type PobBase,
+} from "../services/pobBaseDataLoader.js";
+
+export interface AnalyzeItemModsArgs {
+  mod_lines: string[];
+  base_name?: string;
+  ilvl?: number;
+  raw_json?: boolean;
+}
+
+interface LineAnalysis {
+  /** 1-indexed line number from the input. */
+  inputLine: number;
+  /** Original line as given. */
+  raw: string;
+  /** Same line with crafted/fractured/etc markers stripped. */
+  cleaned: string;
+  /** Detected source: natural | crafted | fractured | enchanted | unknown. */
+  source: "natural" | "crafted" | "fractured" | "enchanted" | "unknown";
+  /** The matched mod (or null if no match found). */
+  match: MatchResult | null;
+  /** True if this line is the second line of a hybrid mod above it. */
+  isHybridContinuation?: boolean;
+}
+
+function cleanLine(line: string): { text: string; source: LineAnalysis["source"] } {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return { text: "", source: "natural" };
+  let source: LineAnalysis["source"] = "natural";
+  let text = trimmed;
+  if (/\{crafted\}/i.test(text) || /\(crafted\)/i.test(text)) source = "crafted";
+  else if (/\{fractured\}/i.test(text) || /\[fractured\]/i.test(text)) source = "fractured";
+  else if (/\{enchanted\}/i.test(text)) source = "enchanted";
+  text = text
+    .replace(/\{crafted\}/gi, "")
+    .replace(/\(crafted\)/gi, "")
+    .replace(/\{fractured\}/gi, "")
+    .replace(/\[fractured\]/gi, "")
+    .replace(/\{enchanted\}/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { text, source };
+}
+
+function summarizeMod(mod: PobMod): string {
+  return `${mod.id} [${mod.type}] "${mod.affix || "?"}" L${mod.level} group="${mod.group || "?"}"`;
+}
+
+function tierString(r: MatchResult): string {
+  if (r.tier && r.tierMax) return `tier ${r.tier}/${r.tierMax}`;
+  return "tier (unknown)";
+}
+
+function nextString(r: MatchResult): string {
+  if (!r.nextTier) return "(already top tier on this base)";
+  return `${r.nextTier.id} "${r.nextTier.affix}" L${r.nextTier.level} → ${r.nextTier.statLines.join(" / ")}`;
+}
+
+export async function handleAnalyzeItemMods(args: AnalyzeItemModsArgs) {
+  if (!Array.isArray(args.mod_lines) || args.mod_lines.length === 0) {
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            "Error: mod_lines must be a non-empty array of strings. " +
+            "Pass each prefix/suffix line as a separate array entry " +
+            "(e.g. ['+150 to maximum Life', '+45% to Fire Resistance']).",
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  try {
+    ensureLoaded();
+    ensureBasesLoaded();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [
+        { type: "text", text: `Error loading PoB data: ${msg}\nEnsure the PathOfBuilding submodule is checked out.` },
+      ],
+      isError: true,
+    };
+  }
+
+  // Resolve the base (optional) — gives us the tag chain for accurate matching.
+  let base: PobBase | null = null;
+  let baseSuggestions: string[] = [];
+  if (args.base_name) {
+    base = getBase(args.base_name);
+    if (!base) {
+      const matches = findBasesMatching(args.base_name, 5);
+      baseSuggestions = matches.map((b) => b.name);
+    }
+  }
+  const itemTags = base?.tags;
+  const ilvl = args.ilvl;
+
+  // Per-line analysis pass
+  const analyses: LineAnalysis[] = args.mod_lines.map((raw, i) => {
+    const { text, source } = cleanLine(raw);
+    if (text.length === 0) {
+      return { inputLine: i + 1, raw, cleaned: "", source, match: null };
+    }
+    // Natural and fractured both come from the prefix/suffix pool.
+    // Crafted and enchanted come from separate tables we don't yet index.
+    if (source === "natural" || source === "fractured") {
+      const m = matchStatLine(text, { itemTags, ilvl });
+      return { inputLine: i + 1, raw, cleaned: text, source, match: m };
+    }
+    return { inputLine: i + 1, raw, cleaned: text, source, match: null };
+  });
+
+  // Collapse hybrid mods: if line N and line N+1 both matched the same
+  // mod ID, mark N+1 as a hybrid continuation. Multi-line mods (e.g.
+  // life+armour, life+es) appear as two adjacent stat lines on the item
+  // and would otherwise be reported twice.
+  for (let i = 1; i < analyses.length; i++) {
+    const a = analyses[i];
+    const prev = analyses[i - 1];
+    if (a.match?.best && prev.match?.best && a.match.best.id === prev.match.best.id) {
+      a.isHybridContinuation = true;
+    }
+  }
+
+  if (args.raw_json) {
+    const json = {
+      base: base
+        ? { name: base.name, type: base.type, tags: base.tags, implicit: base.implicit }
+        : null,
+      base_suggestions: baseSuggestions,
+      ilvl,
+      lines: analyses.map((a) => ({
+        input_line: a.inputLine,
+        raw: a.raw,
+        cleaned: a.cleaned,
+        source: a.source,
+        is_hybrid_continuation: a.isHybridContinuation ?? false,
+        match: a.match
+          ? {
+              best: a.match.best
+                ? {
+                    id: a.match.best.id,
+                    type: a.match.best.type,
+                    affix: a.match.best.affix,
+                    level: a.match.best.level,
+                    group: a.match.best.group,
+                    statLines: a.match.best.statLines,
+                  }
+                : null,
+              tier: a.match.tier,
+              tier_max: a.match.tierMax,
+              next_tier: a.match.nextTier
+                ? {
+                    id: a.match.nextTier.id,
+                    affix: a.match.nextTier.affix,
+                    level: a.match.nextTier.level,
+                    statLines: a.match.nextTier.statLines,
+                  }
+                : null,
+              candidate_count: a.match.candidates.length,
+              meaningful_candidate_count: a.match.meaningfulCandidateCount,
+            }
+          : null,
+      })),
+    };
+    return { content: [{ type: "text", text: JSON.stringify(json, null, 2) }] };
+  }
+
+  // Human-readable output
+  const lines: string[] = [];
+  lines.push("=== Item Mod Analysis ===");
+  if (base) {
+    lines.push(`Base: ${base.name} (${base.type}${base.subType ? `, ${base.subType}` : ""})`);
+    lines.push(`Tags used for matching: ${base.tags.join(", ")}`);
+  } else if (args.base_name) {
+    lines.push(`Base "${args.base_name}" not found — matching without tag gating.`);
+    if (baseSuggestions.length > 0) {
+      lines.push(`Did you mean: ${baseSuggestions.join(", ")}?`);
+    }
+  } else {
+    lines.push(`No base supplied — matching without tag gating (accuracy reduced).`);
+    lines.push(`Pass base_name (e.g. 'Astral Plate') for precise tier ladders.`);
+  }
+  if (ilvl !== undefined) lines.push(`ilvl: ${ilvl}`);
+  lines.push("");
+
+  // Group prefixes and suffixes separately for output
+  const prefixes: LineAnalysis[] = [];
+  const suffixes: LineAnalysis[] = [];
+  const other: LineAnalysis[] = [];
+  for (const a of analyses) {
+    if (a.cleaned === "") continue;
+    if (a.isHybridContinuation) continue;
+    const t = a.match?.best?.type.toLowerCase();
+    if (t === "prefix") prefixes.push(a);
+    else if (t === "suffix") suffixes.push(a);
+    else other.push(a);
+  }
+
+  function formatOne(a: LineAnalysis): string[] {
+    const out: string[] = [];
+    out.push(`  Line ${a.inputLine}: ${a.raw}`);
+    if (a.source !== "natural") out.push(`    Source: ${a.source}`);
+    if (!a.match || !a.match.best) {
+      out.push(`    Match: (none — line text did not match any natural prefix/suffix template)`);
+      return out;
+    }
+    const m = a.match.best;
+    out.push(`    -> ${m.id} "${m.affix || "?"}" [${m.type}]  L${m.level}  group=${m.group}`);
+    if (a.match.tier && a.match.tierMax) {
+      out.push(`    Tier: ${a.match.tier} of ${a.match.tierMax} naturally-rollable in this group${itemTags ? " on this base" : ""}`);
+    }
+    if (a.match.nextTier) {
+      const nt = a.match.nextTier;
+      out.push(`    Next tier: ${nt.id} "${nt.affix}" L${nt.level} → ${nt.statLines.join(" / ")}`);
+    } else if (a.match.best) {
+      out.push(`    Next tier: (already top tier${itemTags ? " on this base" : ""})`);
+    }
+    if (a.match.meaningfulCandidateCount > 1) {
+      out.push(`    Ambiguous: ${a.match.meaningfulCandidateCount} naturally-rollable mods fit this value; best chosen by tier + weight. Supply base_name/ilvl to narrow.`);
+    }
+    return out;
+  }
+
+  if (prefixes.length > 0) {
+    lines.push(`--- PREFIXES (${prefixes.length}) ---`);
+    for (const a of prefixes) lines.push(...formatOne(a));
+    lines.push("");
+  }
+  if (suffixes.length > 0) {
+    lines.push(`--- SUFFIXES (${suffixes.length}) ---`);
+    for (const a of suffixes) lines.push(...formatOne(a));
+    lines.push("");
+  }
+  if (other.length > 0) {
+    lines.push(`--- UNCLASSIFIED (${other.length}) ---`);
+    for (const a of other) lines.push(...formatOne(a));
+    lines.push("");
+  }
+
+  const craftedCount = analyses.filter((a) => a.source === "crafted").length;
+  const fracturedCount = analyses.filter((a) => a.source === "fractured").length;
+  const enchantedCount = analyses.filter((a) => a.source === "enchanted").length;
+  const hybridCount = analyses.filter((a) => a.isHybridContinuation).length;
+
+  if (craftedCount + fracturedCount + enchantedCount + hybridCount > 0) {
+    lines.push("Notes:");
+    if (craftedCount > 0) lines.push(`  - ${craftedCount} bench-crafted mod(s) detected — not from the natural prefix/suffix pool (ModMaster.lua, not yet indexed).`);
+    if (fracturedCount > 0) lines.push(`  - ${fracturedCount} fractured mod(s) detected — frozen at the rolled value but otherwise from the natural pool.`);
+    if (enchantedCount > 0) lines.push(`  - ${enchantedCount} enchanted mod(s) — labyrinth enchantments, not from the natural pool.`);
+    if (hybridCount > 0) lines.push(`  - ${hybridCount} hybrid-mod continuation line(s) collapsed into the mod above them.`);
+  }
+
+  return { content: [{ type: "text", text: lines.join("\n") }] };
+}
