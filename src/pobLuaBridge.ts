@@ -300,9 +300,21 @@ abstract class PoBApiBase {
    * resists, attributes, armour/ES, regen); incomplete for skill-conditional
    * damage stats (uses a nil config).
    */
-  async getStatBreakdown(params: { stat: string; actor?: "player" | "minion" }): Promise<any> {
+  async getStatBreakdown(params: { stat: string; actor?: "player" | "minion"; use_skill_config?: boolean }): Promise<any> {
     const res = await this.send({ action: "get_stat_breakdown", params });
     if (!res.ok) throw new Error(res.error || "get_stat_breakdown failed");
+    return res.breakdown;
+  }
+
+  /**
+   * Surface PoB's own computed breakdown (the Calcs-tab multiplier chain) for
+   * an output stat. Returns { stat, found, actor, output_value, lines } or,
+   * when no stat is given / not found, { available: string[] } listing the
+   * stats that currently have a breakdown.
+   */
+  async getCalcBreakdown(params: { stat?: string; actor?: "player" | "minion" }): Promise<any> {
+    const res = await this.send({ action: "get_calc_breakdown", params });
+    if (!res.ok) throw new Error(res.error || "get_calc_breakdown failed");
     return res.breakdown;
   }
 

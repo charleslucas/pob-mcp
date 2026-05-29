@@ -32,7 +32,11 @@ interface Contribution {
 interface BreakdownResult {
   stat: string;
   actor: string;
+  config?: "global" | "skill";
+  config_note?: string;
   output_value?: number | null;
+  inc_sum?: number | null;
+  more_multiplier?: number | null;
   contributions: Contribution[];
 }
 
@@ -80,6 +84,7 @@ function formatValue(modType: string, value: number | boolean | string): string 
 export interface StatBreakdownArgs {
   stat: string;
   actor?: "player" | "minion";
+  use_skill_config?: boolean;
   raw_json?: boolean;
 }
 
@@ -128,7 +133,11 @@ export async function handleGetStatBreakdown(
 
   let result: BreakdownResult;
   try {
-    result = (await client.getStatBreakdown({ stat: args.stat, actor: args.actor })) as BreakdownResult;
+    result = (await client.getStatBreakdown({
+      stat: args.stat,
+      actor: args.actor,
+      use_skill_config: args.use_skill_config,
+    })) as BreakdownResult;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
@@ -162,8 +171,19 @@ export async function handleGetStatBreakdown(
 
   const lines: string[] = [];
   lines.push(`=== Breakdown: ${result.stat} (${result.actor}) ===`);
+  if (result.config === "skill") {
+    lines.push(`Config: main skill${result.config_note ? ` (${result.config_note})` : ""} — captures skill-conditional mods`);
+  } else {
+    lines.push(`Config: global (unconditional mods only — pass use_skill_config for damage/speed/crit on the main skill)`);
+  }
   if (result.output_value !== undefined && result.output_value !== null) {
     lines.push(`Current output value: ${result.output_value}`);
+  }
+  // inc-vs-more diagnosis for this mod name
+  if (typeof result.inc_sum === "number" || typeof result.more_multiplier === "number") {
+    const incPart = typeof result.inc_sum === "number" ? `${result.inc_sum > 0 ? "+" : ""}${result.inc_sum}% increased (summed)` : "";
+    const morePart = typeof result.more_multiplier === "number" ? `${result.more_multiplier.toFixed(2)}× more (product)` : "";
+    lines.push(`Aggregate for "${result.stat}": ${[incPart, morePart].filter(Boolean).join("  |  ")}`);
   }
   lines.push("");
 

@@ -401,15 +401,28 @@ export function getToolSchemas(): ToolSchema[] {
     },
     {
       name: "get_stat_breakdown",
-      description: "Explain WHY a stat has its value: tabulates every modifier contributing to it from the live PoB build, with source attribution (which passive, item, or config). Answers 'where does my Life / resistance / armour come from?'. Groups contributions by type — BASE (flat), INC (increased/reduced %), MORE (multiplicative %), OVERRIDE, FLAG — and resolves passive-tree sources to node names.\n\n`stat` is PoB's internal MODIFIER name (CamelCase, no spaces), which often differs from the displayed label. VERIFIED-WORKING names (live-tested): 'Life', 'Mana', 'EnergyShield', 'Armour', 'Evasion', 'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist', 'Str', 'Dex', 'Int', 'LifeRegen', 'ManaRegen', 'MovementSpeed', 'CritChance', 'CritMultiplier'. COMMON TRAPS: resistances are the short '...Resist' form (NOT '...Resistance'); attributes are 'Str'/'Dex'/'Int' (NOT 'Strength'/'Dexterity'/'Intelligence').\n\nACCURACY: complete for unconditional stats (life, resistances, attributes, armour/evasion/ES, regen, movement speed). INCOMPLETE for damage and other skill-conditional stats (e.g. 'AttackSpeed', 'CastSpeed', damage) — the breakdown uses no active-skill config, so conditional modifiers are omitted and the result may be empty. Requires a live PoB build (LaunchPoBWithAPI.bat).",
+      description: "Explain WHY a stat has its value: tabulates every modifier contributing to it from the live PoB build, with source attribution (which passive, item, or config). Answers 'where does my Life / resistance / armour come from?'. Groups contributions by type — BASE (flat), INC (increased/reduced %), MORE (multiplicative %), OVERRIDE, FLAG — resolves passive-tree sources to node names, and reports the aggregate inc-sum and more-product for the inc-vs-more diagnosis.\n\n`stat` is PoB's internal MODIFIER name (CamelCase, no spaces), which often differs from the displayed label. VERIFIED-WORKING names (live-tested): 'Life', 'Mana', 'EnergyShield', 'Armour', 'Evasion', 'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist', 'Str', 'Dex', 'Int', 'LifeRegen', 'ManaRegen', 'MovementSpeed', 'CritChance', 'CritMultiplier'. COMMON TRAPS: resistances are the short '...Resist' form (NOT '...Resistance'); attributes are 'Str'/'Dex'/'Int' (NOT 'Strength'/'Dexterity'/'Intelligence').\n\nGLOBAL vs SKILL config: by default it tabulates the player modDB with NO skill config — complete for unconditional stats (life, resists, attributes, armour/ES, regen, movement speed) but it OMITS skill-conditional mods. Set `use_skill_config: true` to tabulate the MAIN skill's modList with its config instead — this captures skill-conditional modifiers (e.g. 'Damage', 'FireDamage', 'AttackSpeed', 'CritChance' as they apply to the main skill) with full source attribution. For the *whole* damage multiplier chain (base→added→conversion→inc→more→crit→ailment) use `get_calc_breakdown` instead; this tool is per-modifier-name source attribution. Requires a live PoB build (LaunchPoBWithAPI.bat).",
       inputSchema: {
         type: "object",
         properties: {
-          stat: { type: "string", description: "PoB internal modifier name (CamelCase, no spaces). Resistances use the SHORT form ('FireResist', 'ColdResist', 'LightningResist', 'ChaosResist'); attributes are 'Str'/'Dex'/'Int'. Also 'Life', 'Mana', 'EnergyShield', 'Armour', 'Evasion', 'LifeRegen', 'ManaRegen', 'MovementSpeed', 'CritChance', 'CritMultiplier'." },
+          stat: { type: "string", description: "PoB internal modifier name (CamelCase, no spaces). Resistances use the SHORT form ('FireResist', 'ColdResist', 'LightningResist', 'ChaosResist'); attributes are 'Str'/'Dex'/'Int'. Also 'Life', 'Mana', 'EnergyShield', 'Armour', 'Evasion', 'LifeRegen', 'ManaRegen', 'MovementSpeed', 'CritChance', 'CritMultiplier'. With use_skill_config: damage names like 'Damage', 'FireDamage', 'AttackSpeed'." },
           actor: { type: "string", enum: ["player", "minion"], description: "Whose modifiers to tabulate. Default 'player'." },
+          use_skill_config: { type: "boolean", description: "Tabulate against the MAIN skill's modList + config instead of the global player modDB. Required to capture skill-conditional mods (damage, attack/cast speed, crit for the skill). Default false." },
           raw_json: { type: "boolean", description: "Return structured JSON (with both raw and humanized sources) instead of formatted text. Default false." },
         },
         required: ["stat"],
+      },
+    },
+    {
+      name: "get_calc_breakdown",
+      description: "Show PoB's OWN computed breakdown for an output stat — the multiplier chain exactly as the Calcs tab displays it: base → added → conversion → increased → more → crit → ailment → total. This is the 'why is my damage / stat this number, and which bucket is weak' view, relayed verbatim from PoB's calc engine (no math re-derived on our side). The complement to `get_stat_breakdown`: this gives the PIPELINE; that gives per-modifier SOURCE attribution (where a bucket's value comes from).\n\n`stat` is a PoB output-stat key (e.g. 'AverageDamage', 'TotalDPS', 'Speed', 'CritChance', 'AverageHit', 'ManaCost', and many more). Call with NO stat (or an unknown one) to get the list of stats that currently have a breakdown for the open build — the available set depends on the build (damage breakdowns require a valid main skill + configured enemy). Requires a live PoB build (LaunchPoBWithAPI.bat).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          stat: { type: "string", description: "PoB output-stat key (e.g. 'AverageDamage', 'TotalDPS', 'Speed', 'CritChance'). Omit to list the stats that currently have a breakdown." },
+          actor: { type: "string", enum: ["player", "minion"], description: "Whose breakdown. Default 'player'." },
+          raw_json: { type: "boolean", description: "Return structured JSON instead of formatted text. Default false." },
+        },
       },
     },
     {

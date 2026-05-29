@@ -52,6 +52,7 @@ import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
 import { handleAnalyzeItemMods } from "../handlers/analyzeItemModsHandler.js";
 import { handleSearchMasterCrafts, handleGetEssenceDetail } from "../handlers/craftQueryHandlers.js";
 import { handleGetStatBreakdown } from "../handlers/statBreakdownHandler.js";
+import { handleGetCalcBreakdown } from "../handlers/calcBreakdownHandler.js";
 import { handleCalculateModOdds } from "../handlers/calculateModOddsHandler.js";
 
 export interface ToolRouterDependencies {
@@ -318,7 +319,18 @@ export async function routeToolCall(
         {
           stat: args.stat as string,
           actor: args.actor as "player" | "minion" | undefined,
+          use_skill_config: args.use_skill_config as boolean | undefined,
           raw_json: args.raw_json as boolean | undefined,
+        }
+      );
+
+    case "get_calc_breakdown":
+      return await handleGetCalcBreakdown(
+        { getLuaClient: deps.getLuaClient, ensureLuaClient: deps.ensureLuaClient },
+        {
+          stat: args?.stat as string | undefined,
+          actor: args?.actor as "player" | "minion" | undefined,
+          raw_json: args?.raw_json as boolean | undefined,
         }
       );
 
