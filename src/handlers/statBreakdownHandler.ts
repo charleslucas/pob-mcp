@@ -179,12 +179,6 @@ export async function handleGetStatBreakdown(
   if (result.output_value !== undefined && result.output_value !== null) {
     lines.push(`Current output value: ${result.output_value}`);
   }
-  // inc-vs-more diagnosis for this mod name
-  if (typeof result.inc_sum === "number" || typeof result.more_multiplier === "number") {
-    const incPart = typeof result.inc_sum === "number" ? `${result.inc_sum > 0 ? "+" : ""}${result.inc_sum}% increased (summed)` : "";
-    const morePart = typeof result.more_multiplier === "number" ? `${result.more_multiplier.toFixed(2)}× more (product)` : "";
-    lines.push(`Aggregate for "${result.stat}": ${[incPart, morePart].filter(Boolean).join("  |  ")}`);
-  }
   lines.push("");
 
   if (contributions.length === 0) {
@@ -239,12 +233,22 @@ export async function handleGetStatBreakdown(
     lines.push("");
   }
 
-  lines.push(
-    "Note: source attribution uses PoB's live mod database. Accurate for " +
-      "unconditional stats (life, resistances, attributes, armour/ES, regen). " +
-      "Damage and other skill-conditional stats are INCOMPLETE here — the " +
-      "breakdown uses no active-skill config, so conditional mods are omitted."
-  );
+  if (result.config === "skill") {
+    lines.push(
+      "Note: tabulated against the MAIN skill's modList + config, so skill-" +
+        "conditional mods ARE included. This is per-modifier SOURCE attribution " +
+        "(which passives/items/gems contribute) — it is NOT the skill's total " +
+        "increased/more multiplier. For the actual applied multiplier chain " +
+        "(base→inc→more→crit→ailment→total) use get_calc_breakdown."
+    );
+  } else {
+    lines.push(
+      "Note: source attribution uses PoB's live mod database with NO skill " +
+        "config. Accurate for unconditional stats (life, resistances, " +
+        "attributes, armour/ES, regen). For damage/speed/crit on a skill, pass " +
+        "use_skill_config (and use get_calc_breakdown for the full chain)."
+    );
+  }
 
   return { content: [{ type: "text", text: lines.join("\n") }] };
 }
