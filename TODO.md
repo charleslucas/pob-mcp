@@ -9,23 +9,6 @@ doing** section is probably your answer.
 
 ## Open
 
-### Console bidirectional communication (`poll_console_messages`)
-
-Let the user type messages to Claude directly from PoB's in-game console
-(`~` key) without switching windows — e.g. `claude this build feels squishy,
-can you fix defenses`.
-
-**Approach:**
-- `ConRegisterFunc("claude", handler)` in `TcpServer.lua` to capture typed
-  `claude <message>` commands into a Lua queue.
-- New Lua action `poll_console_messages` returns and clears the queue.
-- Claude polls it at session start or periodically (could ride on the existing
-  `start_watching` cadence).
-
-**Status:** not started. Self-contained, moderate effort. The main unknown is
-whether SimpleGraphic's console API exposes a registration hook usable from the
-API layer.
-
 ### Per-skill damage attribution for `get_stat_breakdown`
 
 `get_stat_breakdown` is accurate for **unconditional** stats (life, resists,
@@ -118,6 +101,21 @@ be a large, perpetually-stale effort for marginal gain. Our niche is the
 `calculate_mod_odds` states this boundary in its own output. (No public API or
 MCP for CoE exists as of this writing; scraping its client-side data was
 considered and rejected as brittle and duplicative.)
+
+### Console bidirectional communication (`poll_console_messages`)
+
+**Decision: not worth it.** The idea was to register a `claude` command in
+PoB's in-game console (`~` key) so the user could type
+`claude this build feels squishy` without switching windows, polled via a new
+`poll_console_messages` Lua action.
+
+**Why we're skipping it:** the chat window is *already* the text input channel —
+the console would be a clunkier, poll-delayed duplicate of it. It's poll-based,
+not push, so there's no responsiveness win over alt-tabbing to the chat. The one
+genuine niche — leaving a note for a future Claude session while playing — is
+already covered by PoB's Notes tab (read via `get_notes`). And feasibility is
+uncertain (depends on SimpleGraphic's console exposing a usable registration
+hook). Cost outranks benefit.
 
 ### Atlas completion / map-progress data
 
