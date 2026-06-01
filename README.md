@@ -1,5 +1,7 @@
 # Path of Building MCP Server
 
+> **This product is not affiliated with or endorsed by Grinding Gear Games in any way.**
+
 An MCP (Model Context Protocol) server that enables Claude to analyze, modify, and optimize Path of Building builds using PoB's actual calculation engine.
 
 ---
