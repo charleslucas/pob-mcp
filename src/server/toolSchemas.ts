@@ -1819,7 +1819,7 @@ export function getTradeToolSchemas(): any[] {
   return [
     {
       name: "search_trade_items",
-      description: "Search the Path of Exile trade site for items with filters. Returns matching items with prices, stats, and seller information. Default limit is 5 items to minimize token usage. REQUIRES: POE_TRADE_ENABLED environment variable set to true.",
+      description: "⚠️ GGG TOS (confirm once per session): hits pathofexile.com/api/trade — GGG's ToS section 7c restricts automated API access; account bans are possible. Warn user and get explicit confirmation the first time this is called in a session. Search the Path of Exile trade site for items with filters. Returns matching items with prices, stats, and seller information. Default limit is 5 items to minimize token usage. REQUIRES: POE_TRADE_ENABLED environment variable set to true.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1891,7 +1891,7 @@ export function getTradeToolSchemas(): any[] {
     },
     {
       name: "find_weighted_trade_items",
-      description: "Find best-in-slot trade items for the LOADED PoB build using PoB's TradeQueryGenerator weighted-search engine. Ranks items by real DPS/eHP impact for THIS build (not generic heuristics). Requires a build to be loaded via lua_load_build / lua_import_character first. REQUIRES: POE_TRADE_ENABLED=true and POB_LUA_ENABLED=true.",
+      description: "⚠️ GGG TOS WARNING — REQUIRES USER CONFIRMATION: This tool makes multiple automated chained requests to pathofexile.com/api/trade (GGG's trade API). GGG's ToS section 7c prohibits automated/bot API access, and a GGG developer confirmed they do not want chained automated requests. Account bans are a real risk. Before calling this tool, warn the user explicitly and require their confirmation. Find best-in-slot trade items for the LOADED PoB build using PoB's TradeQueryGenerator weighted-search engine. Ranks items by real DPS/eHP impact for THIS build (not generic heuristics). Requires a build to be loaded via lua_load_build / lua_import_character first. REQUIRES: POE_TRADE_ENABLED=true and POB_LUA_ENABLED=true.",
       inputSchema: {
         type: "object",
         properties: {
