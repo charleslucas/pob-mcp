@@ -133,7 +133,10 @@ export async function handleSearchTradeItems(
 
     const query = builder.build();
 
-    // Execute search
+    // Execute search — one API call to get a searchId and total count.
+    // We deliberately do NOT fetch listings (no fetchItems call) to follow the
+    // ExileExchange pattern: return a URL for the user to open rather than
+    // programmatically pulling listing data. See legal_considerations.md §TOS.
     const searchResult = await context.tradeClient.searchItems(league, query);
 
     if (!searchResult.result || searchResult.result.length === 0) {
@@ -147,20 +150,16 @@ export async function handleSearchTradeItems(
       };
     }
 
-    // Fetch first batch of items (up to limit)
-    const itemIdsToFetch = searchResult.result.slice(0, Math.min(limit, 10));
-    const items = await context.tradeClient.fetchItems(itemIdsToFetch, searchResult.id);
-
-    // Format results with real-time currency rates
-    const output = await formatSearchResults(items, searchResult.total, league, searchResult.id, context.ninjaClient);
+    const url = getTradeSearchUrl(league, searchResult.id);
+    const output =
+      `=== Trade Search (${league}) ===\n` +
+      `Total listings: ${searchResult.total}\n` +
+      `\n🔗 ${url}\n` +
+      `\nOpen the link above to browse results on the trade site.\n` +
+      `Note: This product is not affiliated with or endorsed by Grinding Gear Games.`;
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
+      content: [{ type: 'text', text: output }],
     };
   });
 }
@@ -186,97 +185,50 @@ export async function handleGetItemPrice(
     const { item_name, item_type, rarity } = args;
     const league = resolveLeague(args.league);
 
-    // Build query
+    // For named items (uniques, currency, gems, div cards) prefer poe.ninja —
+    // zero GGG API calls. For rare/unknown items fall back to a trade URL.
+    // We deliberately do NOT fetch listings from the trade API; see legal_considerations.md §TOS.
+    if (context.ninjaClient && (!rarity || rarity === 'unique')) {
+      try {
+        const ninjaRates = await context.ninjaClient.getCurrencyExchangeMap(league);
+        const ninjaPrice = ninjaRates.get(item_name);
+        if (ninjaPrice !== undefined) {
+          return {
+            content: [{
+              type: 'text',
+              text: `=== Price Check: ${item_name} (poe.ninja) ===\nLeague: ${league}\nPrice: ${ninjaPrice.toFixed(1)} chaos\nNote: This product is not affiliated with or endorsed by Grinding Gear Games.`,
+            }],
+          };
+        }
+      } catch {
+        // poe.ninja unavailable — fall through to trade URL
+      }
+    }
+
+    // Fall back: build trade URL (one search POST, no listing fetch)
     const builder = new TradeQueryBuilder()
       .withName(item_name)
       .withOnlineStatus('available');
 
-    if (item_type) {
-      builder.withType(item_type);
-    }
-
-    if (rarity) {
-      builder.withRarity(rarity);
-    }
-
+    if (item_type) builder.withType(item_type);
+    if (rarity) builder.withRarity(rarity);
     builder.withSort('price', 'asc');
 
     const query = builder.build();
-
-    // Search
     const searchResult = await context.tradeClient.searchItems(league, query);
 
     if (!searchResult.result || searchResult.result.length === 0) {
       return {
-        content: [
-          {
-            type: 'text',
-            text: `No price data found for "${item_name}" in ${league}.`,
-          },
-        ],
+        content: [{ type: 'text', text: `No listings found for "${item_name}" in ${league}.` }],
       };
     }
 
-    // Fetch first 10 items to get price range
-    const itemIdsToFetch = searchResult.result.slice(0, Math.min(10, searchResult.result.length));
-    const items = await context.tradeClient.fetchItems(itemIdsToFetch, searchResult.id);
-
-    // Calculate price statistics
-    const prices = items
-      .map(item => item.listing.price)
-      .filter(price => price !== undefined)
-      .map(price => ({
-        amount: price!.amount,
-        currency: price!.currency,
-      }));
-
-    if (prices.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `No priced listings found for "${item_name}" in ${league}.`,
-          },
-        ],
-      };
-    }
-
-    // Group by currency
-    const byCurrency = new Map<string, number[]>();
-    for (const price of prices) {
-      if (!byCurrency.has(price.currency)) {
-        byCurrency.set(price.currency, []);
-      }
-      byCurrency.get(price.currency)!.push(price.amount);
-    }
-
-    // Format output
-    let output = `=== Price Check: ${item_name} ===\n`;
-    output += `League: ${league}\n`;
-    output += `Total Listings: ${searchResult.total}\n\n`;
-
-    for (const [currency, amounts] of byCurrency.entries()) {
-      amounts.sort((a, b) => a - b);
-      const min = amounts[0];
-      const max = amounts[amounts.length - 1];
-      const median = amounts[Math.floor(amounts.length / 2)];
-      const avg = amounts.reduce((sum, val) => sum + val, 0) / amounts.length;
-
-      output += `${currency}:\n`;
-      output += `  Low: ${min.toFixed(1)} ${currency}\n`;
-      output += `  Median: ${median.toFixed(1)} ${currency}\n`;
-      output += `  Average: ${avg.toFixed(1)} ${currency}\n`;
-      output += `  High: ${max.toFixed(1)} ${currency}\n`;
-      output += `  Sample Size: ${amounts.length} listings\n\n`;
-    }
-
+    const url = getTradeSearchUrl(league, searchResult.id);
     return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: `=== Price Check: ${item_name} ===\nLeague: ${league}\nTotal listings: ${searchResult.total}\n\n🔗 ${url}\n\nOpen the link above to see current prices.\nNote: This product is not affiliated with or endorsed by Grinding Gear Games.`,
+      }],
     };
   });
 }
@@ -1090,39 +1042,17 @@ export async function handleFindWeightedTradeItems(
       return { content: [{ type: 'text', text: empty }] };
     }
 
-    const cap = Math.min(limit, 10);
-    const itemIds = searchResult.result.slice(0, cap);
-    const items = await context.tradeClient.fetchItems(itemIds, searchResult.id);
-
+    // Return the trade URL only — do NOT fetch listings. This follows the
+    // ExileExchange pattern (one search POST → URL returned to user) and avoids
+    // the chained-fetch pattern GGG objects to. See legal_considerations.md §TOS.
+    const url = getTradeSearchUrl(league, searchResult.id);
     let output = `=== Weighted BIS Search (${league}, slot: ${slot}) ===\n`;
-    output += `Total matches: ${searchResult.total} | Showing: ${items.length}\n`;
-    output += `🔗 ${getTradeSearchUrl(league, searchResult.id)}\n`;
+    output += `Total matches: ${searchResult.total}\n`;
     if (warning) output += `Warning: ${warning}\n`;
-    output += `\n`;
-
-    items.forEach((listing, i) => {
-      const item = listing.item;
-      const price = listing.listing.price;
-      const seller = listing.listing.account?.name ?? 'unknown';
-      output += `${i + 1}. ${item.name || item.typeLine}`;
-      if (item.name && item.typeLine && item.name !== item.typeLine) {
-        output += ` (${item.typeLine})`;
-      }
-      output += `\n`;
-      if (price) output += `   Price: ${price.amount} ${price.currency}\n`;
-      output += `   Seller: ${seller}\n`;
-      const mods = [
-        ...(item.explicitMods || []),
-        ...(item.implicitMods || []),
-        ...(item.craftedMods || []),
-      ];
-      if (mods.length > 0) {
-        output += `   Mods:\n`;
-        for (const m of mods.slice(0, 8)) output += `     - ${m}\n`;
-        if (mods.length > 8) output += `     … (${mods.length - 8} more)\n`;
-      }
-      output += `\n`;
-    });
+    output += `\n🔗 ${url}\n`;
+    output += `\nQuery weighted by PoB's TradeQueryGenerator for your loaded build.\n`;
+    output += `Open the link above to browse results on the trade site.\n`;
+    output += `Note: This product is not affiliated with or endorsed by Grinding Gear Games.`;
 
     return { content: [{ type: 'text', text: output }] };
   });
