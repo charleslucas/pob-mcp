@@ -230,14 +230,14 @@ Concrete-numbers complement to `suggest_crafting` (which produces poedb-derived 
 
 ## Trade API
 
-Require `POE_TRADE_ENABLED=true`.
+Require `POE_TRADE_ENABLED=true`. **All search tools return a clickable trade URL + total count (ExileExchange pattern) — they do not fetch listing details. User opens the URL in their browser.**
 
 | Tool | Description |
 |------|-------------|
-| `search_trade_items` | Search the PoE trade site with filters |
-| `find_weighted_trade_items` | Find upgrades using PoB's weighted-search engine (real DPS/EHP impact) |
-| `compare_trade_items` | Compare two trade items with DPS/defense calculations |
-| `get_item_price` | Quick price check for a specific item by name |
+| `search_trade_items` | Search the PoE trade site with filters; returns trade URL + total count |
+| `find_weighted_trade_items` | Find upgrades using PoB's weighted-search engine (real DPS/EHP impact); returns trade URL + total count |
+| `compare_trade_items` | Compare two trade item searches; returns trade URLs |
+| `get_item_price` | Price check: named/unique items via poe.ninja (no GGG call); rare items return a trade URL |
 | `get_leagues` | List active PoE leagues (raw trade-API passthrough) |
 | `get_active_leagues` | League status with parent-league mapping and stale-`POE_LEAGUE` warning; pairs with `playbooks/league-transition.md` |
 | `search_stats` | Look up trade stat/mod IDs by keyword |

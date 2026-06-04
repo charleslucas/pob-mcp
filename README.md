@@ -279,7 +279,7 @@ For **private profiles** (the PoE default), set `POE_SESSION_ID` to your `POESES
 
 ## Available Tools
 
-The server registers **99 tools** across 10 categories.
+The server registers **~123 tools** across 10+ categories.
 
 ### XML-Based Tools (Always Available)
 
