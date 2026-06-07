@@ -70,7 +70,7 @@ $patchTag    = "-- [pob-mcp TCP API patch]"
 $insertBefore = "function main:DetectUnicodeSupport()"
 
 if ($content -match [regex]::Escape($patchTag)) {
-    Write-Host "[3/3] Main.lua already patched — skipping" -ForegroundColor Yellow
+    Write-Host "[3/3] Main.lua already patched - skipping" -ForegroundColor Yellow
 } elseif ($content -notmatch [regex]::Escape($insertBefore)) {
     Write-Error "Could not find '$insertBefore' in Main.lua — PoB version may be incompatible."
     exit 1
@@ -173,3 +173,5 @@ Write-Host "         the update will overwrite Main.lua and the TCP server will 
 Write-Host "         working on the NEXT launch. LaunchPoBWithAPI.bat will detect this" -ForegroundColor Yellow
 Write-Host "         and automatically re-apply the patch, so just relaunch via the" -ForegroundColor Yellow
 Write-Host "         batch file and it will self-heal." -ForegroundColor Yellow
+
+exit 0
