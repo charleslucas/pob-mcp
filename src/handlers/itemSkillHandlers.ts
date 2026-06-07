@@ -238,7 +238,9 @@ export async function handleGetSkillSetup(context: ItemSkillHandlerContext, main
           text += `  Gems (${group.gems.length}):\n`;
           for (const gem of group.gems) {
             const lvlQual = `${gem.level}/${gem.quality}`;
-            text += `    ${gem.index}. ${gem.name} (${lvlQual})${gem.enabled === false ? ' [disabled]' : ''}\n`;
+            const typeTag = gem.is_support ? ' [support]' : '';
+            const disabledTag = gem.enabled === false ? ' [disabled]' : '';
+            text += `    ${gem.index}. ${gem.name} (${lvlQual})${typeTag}${disabledTag}\n`;
           }
         }
         text += "\n";
