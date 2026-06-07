@@ -802,3 +802,29 @@ export async function handleSelectItemSet(context: LuaHandlerContext, id: number
   return { content: [{ type: "text" as const, text }] };
   });
 }
+
+export async function handleCreateItemSet(context: LuaHandlerContext, title?: string, copyFrom?: number, activate?: boolean) {
+  return wrapHandler('create item set', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const params: { title?: string; copyFrom?: number; activate?: boolean } = {};
+    if (title != null) params.title = title;
+    if (copyFrom != null) params.copyFrom = copyFrom;
+    if (activate != null) params.activate = activate;
+    const result = await luaClient.createItemSet(params);
+    if (!result?.itemSets?.length) {
+      return { content: [{ type: "text" as const, text: "Failed to create item set." }] };
+    }
+    const newest = result.itemSets[result.itemSets.length - 1];
+    let text = `✅ Created new item set [${newest.id}] "${newest.title}"`;
+    if (copyFrom != null) text += ` (copied from Item Set ${copyFrom})`;
+    text += `.`;
+    if (activate) {
+      text += `\n\nSwitched to the new item set. Stats have been recalculated.`;
+    } else {
+      text += `\n\nUse select_item_set with id ${newest.id} to switch to it.`;
+    }
+    return { content: [{ type: "text" as const, text }] };
+  });
+}

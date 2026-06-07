@@ -791,6 +791,18 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "create_item_set",
+      description: "Create a new item set in the current build. Use copyFrom to duplicate an existing item set (all equipped items are copied). Use for testing gear changes without affecting the active set.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Name for the new item set (default: source title with ' (copy)' suffix, or 'Item Set N' for blank)" },
+          copyFrom: { type: "number", description: "Item set ID to copy all equipped gear from (use list_item_sets to find IDs). Omit to create a blank set." },
+          activate: { type: "boolean", description: "Switch to the new item set immediately after creation (default: false)" },
+        },
+      },
+    },
+    {
       name: "set_character_level",
       description: "Set the character level for the currently loaded build. Recalculates all stats.",
       inputSchema: {

@@ -400,6 +400,12 @@ abstract class PoBApiBase {
     return res.result;
   }
 
+  async createItemSet(params?: { title?: string; copyFrom?: number; activate?: boolean }): Promise<any> {
+    const res = await this.send({ action: "create_item_set", params: params || {} });
+    if (!res.ok) throw new Error(res.error || "create_item_set failed");
+    return res.result;
+  }
+
   async generateWeightedTradeQuery(slot: string, options?: Record<string, unknown>): Promise<{ query: unknown; warning?: string }> {
     const res = await this.send({ action: "generate_weighted_trade_query", params: { slot, options: options || {} } });
     if (!res.ok) throw new Error(res.error || "generate_weighted_trade_query failed");
