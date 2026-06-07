@@ -865,20 +865,22 @@ export async function handleGetNodePower(
   const data = await (luaClient as any).getNodePower(params);
 
   if (!data.has_data) {
-    return {
-      content: [{
-        type: "text" as const,
-        text: [
-          "=== Node Power ===",
-          "",
-          "No power data available. Either:",
-          "  1. Enable 'Show Node Power' in PoB's Tree tab, or",
-          "  2. Call this tool with recalculate=true to compute it now.",
-          "",
-          `Filter: ${data.filter}  |  Mode: ${data.mode}`,
-        ].join("\n"),
-      }],
-    };
+    const pending = data.recalc_pending;
+    const lines = ["=== Node Power ===", ""];
+    if (pending) {
+      lines.push(
+        "Recalculation in progress — PoB is computing node power in the background.",
+        "Call this tool again in a few seconds to see results.",
+      );
+    } else {
+      lines.push(
+        "No power data available. Either:",
+        "  1. Enable 'Show Node Power' in PoB's Tree tab, or",
+        "  2. Call this tool with recalculate=true to trigger computation.",
+      );
+    }
+    lines.push("", `Filter: ${data.filter}  |  Mode: ${data.mode}`);
+    return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   }
 
   const effectiveMode = data.mode as string;
@@ -914,6 +916,10 @@ export async function handleGetNodePower(
     const depth = node.depth !== null && node.depth !== undefined ? `  ${String(node.depth).padStart(5)}` : "";
     lines.push(`${rank} ${name} ${type} ${off} ${def} ${comb}${maxDepth !== undefined ? depth : ""}`);
   });
+
+  if (data.recalc_pending) {
+    lines.push("", "(Recalculation still in progress — call again for more complete results.)");
+  }
 
   return {
     content: [{ type: "text" as const, text: lines.join("\n") }],
