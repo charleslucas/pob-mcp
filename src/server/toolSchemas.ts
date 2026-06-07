@@ -527,6 +527,37 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "get_node_power",
+      description: "Return passive nodes ranked by PoB's built-in node power score (the same heat-map data shown by 'Show Node Power' on the tree). Each node gets an offence score (DPS contribution) and a defence score (life/armour/ES/evasion contribution). Requires the power to have been calculated — either enable 'Show Node Power' in PoB first, or pass recalculate=true (triggers PoB's PowerBuilder coroutine synchronously; takes a few seconds on large trees). Results are sorted by the chosen mode and filtered/depth-limited as requested.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mode: {
+            type: "string",
+            enum: ["combined", "offence", "defence"],
+            description: "Sort order: combined (offence+defence), offence only, or defence only. Default: combined.",
+          },
+          filter: {
+            type: "string",
+            enum: ["unallocated", "allocated", "all"],
+            description: "Which nodes to include. Default: unallocated (most useful for 'what to take next').",
+          },
+          max_depth: {
+            type: "number",
+            description: "Only return nodes within this many hops from the current allocated tree. Omit for no limit.",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results to return. Default: 20.",
+          },
+          recalculate: {
+            type: "boolean",
+            description: "Force PoB to recompute node power before reading. Use if has_data=false or after changing the build. Default: false.",
+          },
+        },
+      },
+    },
+    {
       name: "find_jewel_affected_nodes",
       description: "Identify which allocated passive nodes are being TRANSFORMED in-game by socketed Timeless Jewels (Lethal Pride, Glorious Vanity, Militant Faith, Brutal Restraint, Elegant Hubris). Phase-1 scope: identifies AFFECTED nodes by computing each Timeless Jewel's radius and listing the allocated nodes inside it — does NOT yet render the transformed stats. Primary use case: when an in-game tooltip doesn't match `get_tree_node` output, this tool answers \"is the discrepancy attributable to a jewel?\" and prevents false patches (the Endurance/Lethal-Pride case from 2026-05-25). Requires PoB Lua client (live TCP build or loaded XML).",
       inputSchema: {

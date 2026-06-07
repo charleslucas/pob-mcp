@@ -839,3 +839,83 @@ function formatTreeComparison(comparison: TreeComparison): string {
 
   return lines.join('\n');
 }
+
+export async function handleGetNodePower(
+  context: TreeHandlerContext,
+  mode?: string,
+  filter?: string,
+  maxDepth?: number,
+  limit?: number,
+  recalculate?: boolean,
+) {
+  const luaClient = context.getLuaClient?.();
+  if (!luaClient) {
+    return {
+      content: [{ type: "text" as const, text: "No live PoB connection. Launch PoB via LaunchPoBWithAPI.bat and connect first." }],
+    };
+  }
+
+  const params: Record<string, any> = {};
+  if (mode) params.mode = mode;
+  if (filter) params.filter = filter;
+  if (maxDepth !== undefined) params.max_depth = maxDepth;
+  if (limit !== undefined) params.limit = limit;
+  if (recalculate !== undefined) params.recalculate = recalculate;
+
+  const data = await (luaClient as any).getNodePower(params);
+
+  if (!data.has_data) {
+    return {
+      content: [{
+        type: "text" as const,
+        text: [
+          "=== Node Power ===",
+          "",
+          "No power data available. Either:",
+          "  1. Enable 'Show Node Power' in PoB's Tree tab, or",
+          "  2. Call this tool with recalculate=true to compute it now.",
+          "",
+          `Filter: ${data.filter}  |  Mode: ${data.mode}`,
+        ].join("\n"),
+      }],
+    };
+  }
+
+  const effectiveMode = data.mode as string;
+  const effectiveFilter = data.filter as string;
+  const nodes = data.nodes as any[];
+  const powerMax = data.power_max as { offence: number; defence: number };
+
+  const modeLabel = effectiveMode === "offence" ? "Offence" : effectiveMode === "defence" ? "Defence" : "Combined";
+  const filterLabel = effectiveFilter === "unallocated" ? "Unallocated" : effectiveFilter === "allocated" ? "Allocated" : "All";
+  const depthLabel = maxDepth !== undefined ? ` | Max depth: ${maxDepth}` : "";
+
+  const lines: string[] = [
+    "=== Node Power Rankings ===",
+    "",
+    `Sort: ${modeLabel}  |  Filter: ${filterLabel}${depthLabel}  |  Showing: ${nodes.length} of ${data.total}`,
+    `Power max — Offence: ${powerMax.offence.toFixed(4)}  Defence: ${powerMax.defence.toFixed(4)}`,
+    "",
+  ];
+
+  // Column header
+  lines.push(
+    `${"Rank".padEnd(5)} ${"Node".padEnd(34)} ${"Type".padEnd(12)} ${"Off".padStart(8)} ${"Def".padStart(8)} ${"Comb".padStart(8)}${maxDepth !== undefined ? "  Depth" : ""}`,
+    `${"----".padEnd(5)} ${"----".padEnd(34)} ${"----".padEnd(12)} ${"---".padStart(8)} ${"---".padStart(8)} ${"----".padStart(8)}${maxDepth !== undefined ? "  -----" : ""}`,
+  );
+
+  nodes.forEach((node: any, i: number) => {
+    const rank = String(i + 1).padEnd(5);
+    const name = (node.name as string).slice(0, 34).padEnd(34);
+    const type = (node.type as string).slice(0, 12).padEnd(12);
+    const off = (node.offence as number).toFixed(4).padStart(8);
+    const def = (node.defence as number).toFixed(4).padStart(8);
+    const comb = (node.combined as number).toFixed(4).padStart(8);
+    const depth = node.depth !== null && node.depth !== undefined ? `  ${String(node.depth).padStart(5)}` : "";
+    lines.push(`${rank} ${name} ${type} ${off} ${def} ${comb}${maxDepth !== undefined ? depth : ""}`);
+  });
+
+  return {
+    content: [{ type: "text" as const, text: lines.join("\n") }],
+  };
+}

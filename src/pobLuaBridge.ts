@@ -293,6 +293,18 @@ abstract class PoBApiBase {
     return res.node;
   }
 
+  async getNodePower(params: {
+    mode?: "combined" | "offence" | "defence";
+    filter?: "unallocated" | "allocated" | "all";
+    max_depth?: number;
+    limit?: number;
+    recalculate?: boolean;
+  }): Promise<any> {
+    const res = await this.send({ action: "get_node_power", params });
+    if (!res.ok) throw new Error(res.error || "get_node_power failed");
+    return res.result;
+  }
+
   /**
    * Tabulate the modifiers contributing to a stat, with source attribution.
    * Returns { stat, actor, output_value, contributions: [{modType, value,

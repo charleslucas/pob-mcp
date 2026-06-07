@@ -15,7 +15,7 @@ import type { PoeNinjaClient } from "../services/poeNinjaClient.js";
 // Import handlers
 import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBuildStats, handleGetBuildNotes, handleSetBuildNotes } from "../handlers/buildHandlers.js";
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
-import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries } from "../handlers/treeHandlers.js";
+import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodePower } from "../handlers/treeHandlers.js";
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet } from "../handlers/luaHandlers.js";
@@ -192,6 +192,16 @@ export async function routeToolCall(
     case "get_tree_node_patch":
       if (!args) throw new Error("Missing arguments");
       return await handleGetTreeNodePatch(args.node_id as string);
+
+    case "get_node_power":
+      return await handleGetNodePower(
+        treeContext,
+        args?.mode as string | undefined,
+        args?.filter as string | undefined,
+        args?.max_depth as number | undefined,
+        args?.limit as number | undefined,
+        args?.recalculate as boolean | undefined,
+      );
 
     case "find_jewel_affected_nodes":
       return await handleFindJewelAffectedNodes({
