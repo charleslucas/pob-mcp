@@ -7,14 +7,14 @@
 #   2. Copies API\TcpServer.lua, API\Handlers.lua, API\BuildOps.lua
 #   3. Patches Modules\Main.lua to start the TCP server when POB_API_TCP=1
 #
-# Safe to re-run after PoB updates — re-applies only what changed.
+# Safe to re-run after PoB updates - re-applies only what changed.
 # LaunchPoBWithAPI.bat calls this automatically on every launch so you
 # never have to think about it after an update.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# ── Locate PoB Community installation ────────────────────────────────────────
+# -- Locate PoB Community installation ----------------------------------------
 $pobDir = "$env:APPDATA\Path of Building Community"
 if (-not (Test-Path $pobDir)) {
     Write-Error "Path of Building Community not found at: $pobDir"
@@ -22,7 +22,7 @@ if (-not (Test-Path $pobDir)) {
 }
 Write-Host "PoB installation: $pobDir" -ForegroundColor Cyan
 
-# ── Locate source files (relative to this script) ────────────────────────────
+# -- Locate source files (relative to this script) ----------------------------
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $forkApiDir = Join-Path $scriptDir "..\PathOfBuilding\src\API"
 if (-not (Test-Path $forkApiDir)) {
@@ -36,7 +36,7 @@ if (-not (Test-Path $forkApiDir)) {
 $forkApiDir = Resolve-Path $forkApiDir
 Write-Host "Source API dir:   $forkApiDir" -ForegroundColor Cyan
 
-# ── Step 1: Create API directory ─────────────────────────────────────────────
+# -- Step 1: Create API directory ---------------------------------------------
 $destApiDir = Join-Path $pobDir "API"
 if (-not (Test-Path $destApiDir)) {
     New-Item -ItemType Directory -Path $destApiDir | Out-Null
@@ -45,7 +45,7 @@ if (-not (Test-Path $destApiDir)) {
     Write-Host "[1/3] API directory already exists" -ForegroundColor Yellow
 }
 
-# ── Step 2: Copy Lua API files ────────────────────────────────────────────────
+# -- Step 2: Copy Lua API files ------------------------------------------------
 $filesToCopy = @("TcpServer.lua", "Handlers.lua", "BuildOps.lua")
 foreach ($file in $filesToCopy) {
     $src = Join-Path $forkApiDir $file
@@ -58,7 +58,7 @@ foreach ($file in $filesToCopy) {
     Write-Host "[2/3] Copied $file" -ForegroundColor Green
 }
 
-# ── Step 3: Patch Modules\Main.lua ───────────────────────────────────────────
+# -- Step 3: Patch Modules\Main.lua -------------------------------------------
 $mainLua = Join-Path $pobDir "Modules\Main.lua"
 if (-not (Test-Path $mainLua)) {
     Write-Error "Main.lua not found at: $mainLua"
@@ -72,7 +72,7 @@ $insertBefore = "function main:DetectUnicodeSupport()"
 if ($content -match [regex]::Escape($patchTag)) {
     Write-Host "[3/3] Main.lua already patched - skipping" -ForegroundColor Yellow
 } elseif ($content -notmatch [regex]::Escape($insertBefore)) {
-    Write-Error "Could not find '$insertBefore' in Main.lua — PoB version may be incompatible."
+    Write-Error "Could not find '$insertBefore' in Main.lua - PoB version may be incompatible."
     exit 1
 } else {
     # Back up the original
@@ -156,7 +156,7 @@ if ($content -match [regex]::Escape($patchTag)) {
     Write-Host "[3/3] Patched Main.lua (TCP block inserted inside Init())" -ForegroundColor Green
 }
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# -- Done ----------------------------------------------------------------------
 Write-Host ""
 Write-Host "Installation complete!" -ForegroundColor Green
 Write-Host ""
