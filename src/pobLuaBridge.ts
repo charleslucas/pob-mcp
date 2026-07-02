@@ -488,7 +488,13 @@ export class PoBLuaApiClient extends PoBApiBase {
   }
 
   async start(): Promise<void> {
-    if (this.proc) return;
+    if (this.proc) {
+      if (!this.killed) return;   // still alive → already started
+      this.proc = null;           // previous process died; clear it so we can restart (PR #14, @gonzodamus)
+    }
+    this.killed = false;
+    this.ready = false;
+    this.buffer = "";
 
     const pobForkPath = this.options.cwd || process.env.POB_FORK_PATH || "";
     const baseDir = pobForkPath.endsWith(path.sep + "src") || pobForkPath.endsWith("/src")
@@ -499,7 +505,7 @@ export class PoBLuaApiClient extends PoBApiBase {
     const luaRocksPath = path.join(os.homedir(), ".luarocks", "lib", "lua", "5.1");
     const isWindows = process.platform === "win32";
     const luaExt = isWindows ? "dll" : "so";
-    const pathSep = isWindows ? ";" : ":";
+    const pathSep = ";";  // Lua package.path/cpath separator is ';' on ALL platforms, not the OS PATH sep (PR #14, @gonzodamus)
 
     const env = {
       ...process.env,
@@ -509,8 +515,11 @@ export class PoBLuaApiClient extends PoBApiBase {
       LUA_CPATH: `${runtimeDir}${path.sep}?.${luaExt}${pathSep}${luaRocksPath}${path.sep}?.${luaExt}${pathSep}${pathSep}`,
     } as NodeJS.ProcessEnv;
 
+    // Spawn into a local `child` and guard every handler with `this.proc !== child`
+    // so stale events from a replaced/dead process can't clobber a fresh one (PR #14, @gonzodamus).
+    let child: ChildProcessWithoutNullStreams;
     try {
-      this.proc = spawn(this.options.cmd, this.options.args, {
+      child = spawn(this.options.cmd, this.options.args, {
         cwd: this.options.cwd,
         env,
         stdio: ["pipe", "pipe", "pipe"],
@@ -518,32 +527,36 @@ export class PoBLuaApiClient extends PoBApiBase {
     } catch (error: any) {
       throw new Error(`Failed to spawn LuaJIT process: ${error.message}`);
     }
+    this.proc = child;
 
-    this.proc.stdout.setEncoding("utf8");
-    this.proc.stderr.setEncoding("utf8");
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
 
     if (process.env.JEST_WORKER_ID && (this.options.timeoutMs ?? 0) <= 150) {
       throw new Error("Failed to find valid ready banner");
     }
 
     let spawnError: Error | null = null;
-    this.proc.on("error", (err: Error) => {
+    child.on("error", (err: Error) => {
+      if (this.proc !== child) return;
       spawnError = err;
       this.killed = true;
       this.dataEmitter.emit("error", err);
     });
 
-    this.proc.stdout.on("data", (chunk: string) => {
+    child.stdout.on("data", (chunk: string) => {
+      if (this.proc !== child) return;
       if (process.env.POB_DEBUG === "true") console.error("[PoB API stdout]", chunk.trim());
       this.buffer += chunk;
       this.dataEmitter.emit("data");
     });
 
-    this.proc.stderr.on("data", (chunk: string) => {
+    child.stderr.on("data", (chunk: string) => {
       console.error("[PoB API stderr]", chunk.trim());
     });
 
-    this.proc.on("exit", (code, signal) => {
+    child.on("exit", (code, signal) => {
+      if (this.proc !== child) return;
       this.killed = true;
       this.dataEmitter.emit("error", new Error(`PoB API exited: code=${code} signal=${signal}`));
     });
