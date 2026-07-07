@@ -29,6 +29,7 @@ const DEFAULT_STATS: Record<string, number> = {
   ColdResist: 77,
   LightningResist: 76,
   ChaosResist: 52,
+  LifeUnreserved: 3977,
   HitChance: 100,
   BlockChance: 54,
   SpellBlockChance: 20,
@@ -75,9 +76,11 @@ mode: analysis
 |------|------|-----------|---------|--------|-------|
 | Fire resistance | Important | ≥75% | | | -max res maps consume overcap |
 | Chaos resistance | Important | ≥30% | | | |
+| Life (unreserved) | Important | ≥3,500 | | | comma threshold |
 | Mana (unreserved) | Important | ≥150 | | | |
 | Hit chance | Critical | 100% | | | at exact floor |
 | Leech source | Critical | present | | | gloves + ring 2 |
+| Reserved Life+Mana | Critical | both active | | | Reservation Mastery requires both |
 | Strength | Important | gem/gear req | | | |
 
 ## 7. Known Weak Points
@@ -115,6 +118,32 @@ describe('handleComputeConstraintMargins', () => {
     expect(text).toContain('Leech source');
     // Strength row: non-numeric threshold but mapped stat → current filled
     expect(text).toMatch(/Strength.*current 142/);
+  });
+
+  it('parses thresholds with thousands separators ("≥3,500")', async () => {
+    const profilePath = path.join(tmpDir, 'build-profile.md');
+    await fs.writeFile(profilePath, PROFILE_MD);
+    const ctx = makeContext(makeLuaClient());
+
+    const result = await handleComputeConstraintMargins(ctx, profilePath, false);
+    const row = result.content[0].text.split('\n').find((l) => l.includes('Life (unreserved)'));
+    expect(row).toContain('current 3977');
+    expect(row).toContain('+477'); // 3977 − 3500, comma stripped
+    expect(row).not.toContain('✍️'); // computed, not manual
+  });
+
+  it('does not map compound status rows ("Reserved Life+Mana") to a numeric stat', async () => {
+    const profilePath = path.join(tmpDir, 'build-profile.md');
+    await fs.writeFile(profilePath, PROFILE_MD);
+    const ctx = makeContext(makeLuaClient());
+
+    const result = await handleComputeConstraintMargins(ctx, profilePath, false);
+    const text = result.content[0].text;
+    const row = text.split('\n').find((l) => l.includes('Reserved Life+Mana'));
+    // The greedy \blife\b pattern used to fill this status row with the Life stat.
+    expect(row).toContain('current —');
+    expect(row).not.toContain('5400');
+    expect(row).toContain('✍️');
   });
 
   it('flags at-floor constraints as near-floor, not violated', async () => {
@@ -166,6 +195,22 @@ describe('handleComputeConstraintMargins', () => {
     const updated = await fs.readFile(profilePath, 'utf-8');
     const captions = updated.split('\n').filter((l) => l.includes('compute_constraint_margins'));
     expect(captions).toHaveLength(1);
+  });
+
+  it('requests derived stat fields explicitly (PoB omits them from a no-arg getStats)', async () => {
+    const profilePath = path.join(tmpDir, 'build-profile.md');
+    await fs.writeFile(profilePath, PROFILE_MD);
+    const client = makeLuaClient();
+    const ctx = makeContext(client);
+
+    await handleComputeConstraintMargins(ctx, profilePath, false);
+
+    const requested = (client.getStats as jest.Mock).mock.calls[0][0] as string[];
+    expect(Array.isArray(requested)).toBe(true);
+    // The derived fields that a bare getStats() silently drops must be named.
+    expect(requested).toEqual(
+      expect.arrayContaining(['FireResist', 'FireResistOverCap', 'ManaUnreserved', 'HitChance', 'Str'])
+    );
   });
 
   it('errors clearly when no constraint table exists', async () => {

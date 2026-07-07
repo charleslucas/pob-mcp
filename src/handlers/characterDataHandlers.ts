@@ -65,6 +65,13 @@ const STAT_RULES: StatRule[] = [
 ];
 
 function mapStatToField(statLabel: string): StatRule | null {
+  // Compound/status rows such as "Reserved Life+Mana" name more than one stat and
+  // are not a single measurable quantity — don't let the generic \blife\b / \bmana\b
+  // patterns force a (misleading) numeric current onto them. Qualified single-concept
+  // rows like "Life (unreserved)" / "Mana (unreserved)" mention only one of the two,
+  // so they still map correctly.
+  if (/\blife\b/i.test(statLabel) && /\bmana\b/i.test(statLabel)) return null;
+
   for (const rule of STAT_RULES) {
     if (rule.pattern.test(statLabel)) return rule;
   }
@@ -84,7 +91,8 @@ interface ParsedThreshold {
 /** Parse "≥75%", ">0", "100%", "≥150". Returns null for non-numeric thresholds
  *  ("present", "build-specific", "gem/gear req", "—", ""). */
 function parseThreshold(raw: string): ParsedThreshold | null {
-  const t = raw.trim();
+  // Strip thousands separators so "≥3,500" parses like "≥3500".
+  const t = raw.trim().replace(/,/g, "");
   const m = t.match(/^(≥|>=|≤|<=|>|<)?\s*(-?\d+(?:\.\d+)?)\s*(%)?$/);
   if (!m) return null;
   const cmpMap: Record<string, ParsedThreshold["cmp"]> = {
@@ -144,10 +152,54 @@ export async function handleComputeConstraintMargins(
       );
     }
 
+    // First pass: identify the table's data rows and which PoB stat each needs.
+    interface RowMeta {
+      lineIdx: number;
+      cells: string[];
+      stat: string;
+      tier: string;
+      threshold: string;
+      notes: string;
+      rule: StatRule | null;
+      parsedThreshold: ParsedThreshold | null;
+    }
+    const rowMetas: RowMeta[] = [];
+    for (let i = headerIdx + 2; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim().startsWith("|")) break;
+
+      const cells = line.split("|").map((c) => c.trim());
+      // split("|") on "| a | b |" yields ["", "a", "b", ""] — cells[1..6]
+      if (cells.length < 8) continue; // malformed row — leave untouched
+      rowMetas.push({
+        lineIdx: i,
+        cells,
+        stat: cells[1],
+        tier: cells[2],
+        threshold: cells[3],
+        notes: cells[6],
+        rule: mapStatToField(cells[1]),
+        parsedThreshold: parseThreshold(cells[3]),
+      });
+    }
+    if (rowMetas.length === 0) throw new Error("Constraint table found but contains no data rows.");
+
+    // Collect exactly the fields the mapped rows need. getStats() with no field
+    // list returns only PoB's base output set — derived stats (unreserved
+    // life/mana, resist overcaps, hit chance, attributes) are omitted unless
+    // requested explicitly, so relying on the no-arg call silently blanks them.
+    const neededFields = new Set<string>();
+    for (const rm of rowMetas) {
+      if (!rm.rule) continue;
+      neededFields.add(rm.rule.field);
+      if (rm.rule.overcapField) neededFields.add(rm.rule.overcapField);
+      if (rm.rule.fallbackField) neededFields.add(rm.rule.fallbackField);
+    }
+
     await context.ensureLuaClient();
     const luaClient = context.getLuaClient();
     if (!luaClient) throw new Error("Lua client not initialized. Use lua_start first.");
-    const stats = await luaClient.getStats();
+    const stats = await luaClient.getStats(neededFields.size ? [...neededFields] : undefined);
 
     const readStat = (rule: StatRule): number | undefined => {
       let v = stats[rule.field];
@@ -157,20 +209,10 @@ export async function handleComputeConstraintMargins(
     };
 
     const rows: MarginRow[] = [];
-    let rowEnd = headerIdx + 1; // separator line
-    for (let i = headerIdx + 2; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim().startsWith("|")) break;
-      rowEnd = i;
-
-      const cells = line.split("|").map((c) => c.trim());
-      // split("|") on "| a | b |" yields ["", "a", "b", ""] — cells[1..6]
-      if (cells.length < 8) continue; // malformed row — leave untouched
-      const [stat, tier, threshold] = [cells[1], cells[2], cells[3]];
-      const notes = cells[6];
-
-      const rule = mapStatToField(stat);
-      const parsedThreshold = parseThreshold(threshold);
+    for (const rm of rowMetas) {
+      const { stat, tier, threshold, notes, rule, parsedThreshold } = rm;
+      const i = rm.lineIdx;
+      const cells = rm.cells;
       const currentVal = rule ? readStat(rule) : undefined;
 
       let current = "—";
