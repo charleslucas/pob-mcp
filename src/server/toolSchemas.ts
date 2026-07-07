@@ -861,6 +861,49 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "compute_constraint_margins",
+      description:
+        "Fill the Current and Margin columns of a build-profile.md Constraint Status table (Section 6) from live PoB stats. Parses the markdown table, maps each Stat row to a PoB output field, computes margin vs the Threshold, and flags violated (🔴) or near-floor (⚠️) constraints. Rows with non-numeric thresholds ('present', 'build-specific') are marked for manual evaluation. Use at analysis pre-flight (playbooks/README.md §2d) instead of computing margins by hand.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          profile_path: {
+            type: "string",
+            description: "Path to the build-profile.md file containing the '| Stat | Tier | Threshold | Current | Margin | Notes |' table",
+          },
+          write_back: {
+            type: "boolean",
+            description: "Write the recomputed Current/Margin columns back into the file (default: false = report only)",
+          },
+        },
+        required: ["profile_path"],
+      },
+    },
+    {
+      name: "sync_character_cache",
+      description:
+        "Refresh a character_data/{Account}/{League}/{Character}/ cache from the loaded PoB build: updates meta.json current_stats (life, resists, DPS, EHP, etc.) and level, and refreshes inventory.json equipped/flask entries for slots whose item changed (curated fields on unchanged slots are preserved; jewels/eldritch implicits are never touched). Narrative files (build.md, journal.md) are never modified. Use dry_run=true to preview.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          character_dir: {
+            type: "string",
+            description: "Path to the character directory containing meta.json / inventory.json",
+          },
+          targets: {
+            type: "array",
+            items: { type: "string", enum: ["meta", "inventory"] },
+            description: "Which files to sync (default: both)",
+          },
+          dry_run: {
+            type: "boolean",
+            description: "Report what would change without writing files (default: false)",
+          },
+        },
+        required: ["character_dir"],
+      },
+    },
+    {
       name: "lua_get_tree",
       description: "Get passive tree allocation from currently loaded build",
       inputSchema: {

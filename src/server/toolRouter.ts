@@ -21,6 +21,7 @@ import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoa
 import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet } from "../handlers/luaHandlers.js";
 import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSharePobb } from "../handlers/importHandlers.js";
 import { handleGetContextUsage } from "../handlers/contextHandlers.js";
+import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
 import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -415,6 +416,23 @@ export async function routeToolCall(
 
     case "get_context_usage":
       return await handleGetContextUsage();
+
+    case "compute_constraint_margins":
+      if (!args?.profile_path) throw new Error("Missing profile_path");
+      return await handleComputeConstraintMargins(
+        luaContext,
+        args.profile_path as string,
+        (args.write_back as boolean | undefined) ?? false
+      );
+
+    case "sync_character_cache":
+      if (!args?.character_dir) throw new Error("Missing character_dir");
+      return await handleSyncCharacterCache(
+        luaContext,
+        args.character_dir as string,
+        (args.targets as string[] | undefined) ?? ["meta", "inventory"],
+        (args.dry_run as boolean | undefined) ?? false
+      );
 
     case "set_character_level": {
       if (!args) throw new Error("Missing arguments");

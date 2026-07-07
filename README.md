@@ -435,6 +435,15 @@ Snapshots are stored in `POB_DIRECTORY/.pob-mcp/snapshots/`.
 
 **Note**: `export_build` copies from the XML file, not from the Lua bridge. Use `lua_save_build` first if you want to export in-memory changes.
 
+### Character Data Cache (poe_mcp_suite integration)
+
+| Tool | Description |
+|---|---|
+| `compute_constraint_margins` | Fill the Current/Margin columns of a `build-profile.md` Constraint Status table from live stats; flags violated/near-floor constraints. `write_back` updates the file in place |
+| `sync_character_cache` | Refresh a character dir's `meta.json` current_stats/level and `inventory.json` equipped/flask entries from the loaded build. Curated fields on unchanged slots, jewels, eldritch implicits, and narrative files are never touched. `dry_run` previews |
+
+These tools mechanize the hand-maintained bridges between live PoB state and the [poe_mcp_suite](https://github.com/charleslucas/poe_mcp_suite) `character_data/` cache (see its `playbooks/README.md` §2d and `character_data/README.md` for the file formats).
+
 ### Currency & Market Data (poe.ninja)
 
 | Tool | Description |
