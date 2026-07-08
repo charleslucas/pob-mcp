@@ -364,6 +364,26 @@ abstract class PoBApiBase {
     };
   }
 
+  async probeStatWeights(params: { slot?: string; mods: string[] }): Promise<{
+    base: { CombinedDPS: number; TotalEHP: number };
+    slot: string;
+    carrier: string;
+    results: Array<{ mod: string; dpsDelta?: number; ehpDelta?: number; recognized?: boolean; error?: string }>;
+    evaluated: number;
+    failed: number;
+  }> {
+    const res = await this.send({ action: "probe_stat_weights", params });
+    if (!res.ok) throw new Error(res.error || "probe_stat_weights failed");
+    return {
+      base: (res.base as { CombinedDPS: number; TotalEHP: number }) || { CombinedDPS: 0, TotalEHP: 0 },
+      slot: String(res.slot ?? ""),
+      carrier: String(res.carrier ?? ""),
+      results: (res.results as any[]) || [],
+      evaluated: Number(res.evaluated) || 0,
+      failed: Number(res.failed) || 0,
+    };
+  }
+
   async getMasteryOptions(): Promise<any> {
     const res = await this.send({ action: "get_mastery_options" });
     if (!res.ok) throw new Error(res.error || "get_mastery_options failed");

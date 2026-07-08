@@ -861,6 +861,25 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "compute_stat_weights",
+      description:
+        "Measure the loaded build's empirical DPS/EHP sensitivity to individual stat mods (life, attributes, attack/cast speed, crit, flat damage, resists) via non-mutating PoB sims — the user's build is never modified. Returns per-unit weights that replace hand-curated intuition: feed them to find_weighted_trade_items and record them in build-profile.md Sections 3-4. Run at gear/crafting pre-flight and after respecs. Requires the probe_stat_weights PoB API action (reinstall TCP API if missing).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          slot: {
+            type: "string",
+            description: "Carrier slot whose equipped item hosts the probe mods (default: first equipped of Ring 1/Ring 2/Amulet/Belt/Helmet/Boots/Gloves). Results are slot-independent for global mods.",
+          },
+          mods: {
+            type: "array",
+            items: { type: "string" },
+            description: "Custom probe mod lines (exact PoB item mod text) to test instead of the standard 15-probe battery",
+          },
+        },
+      },
+    },
+    {
       name: "compute_constraint_margins",
       description:
         "Fill the Current and Margin columns of a build-profile.md Constraint Status table (Section 6) from live PoB stats. Parses the markdown table, maps each Stat row to a PoB output field, computes margin vs the Threshold, and flags violated (🔴) or near-floor (⚠️) constraints. Rows with non-numeric thresholds ('present', 'build-specific') are marked for manual evaluation. Use at analysis pre-flight (playbooks/README.md §2d) instead of computing margins by hand.",

@@ -22,6 +22,7 @@ import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, 
 import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSharePobb } from "../handlers/importHandlers.js";
 import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
+import { handleComputeStatWeights } from "../handlers/statWeightsHandler.js";
 import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -416,6 +417,13 @@ export async function routeToolCall(
 
     case "get_context_usage":
       return await handleGetContextUsage();
+
+    case "compute_stat_weights":
+      return await handleComputeStatWeights(
+        luaContext,
+        args?.slot as string | undefined,
+        args?.mods as string[] | undefined
+      );
 
     case "compute_constraint_margins":
       if (!args?.profile_path) throw new Error("Missing profile_path");

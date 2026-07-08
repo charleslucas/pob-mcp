@@ -439,6 +439,7 @@ Snapshots are stored in `POB_DIRECTORY/.pob-mcp/snapshots/`.
 
 | Tool | Description |
 |---|---|
+| `compute_stat_weights` | Measure the build's empirical DPS/EHP sensitivity per stat mod (life, attributes, speed, crit, flat damage…) via non-mutating PoB sims — per-unit weights for trade searches and the build profile. Never modifies the open build |
 | `compute_constraint_margins` | Fill the Current/Margin columns of a `build-profile.md` Constraint Status table from live stats; flags violated/near-floor constraints. `write_back` updates the file in place |
 | `sync_character_cache` | Refresh a character dir's `meta.json` current_stats/level and `inventory.json` equipped/flask entries from the loaded build. Curated fields on unchanged slots, jewels, eldritch implicits, and narrative files are never touched. `dry_run` previews |
 
