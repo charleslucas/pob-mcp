@@ -107,6 +107,58 @@ describe('handleComputeStatWeights', () => {
     expect(result.content[0].text).toContain('Do NOT record');
   });
 
+  it('auto-detects minion builds, switches battery, and reports minion deltas', async () => {
+    const client = {
+      getStats: jest.fn<() => Promise<any>>().mockResolvedValue({
+        CombinedDPS: 30_000, // player DPS negligible
+        MinionCombinedDPS: 900_000,
+      }),
+      probeStatWeights: jest.fn<(p: any) => Promise<any>>().mockImplementation(async (p: any) => ({
+        base: { CombinedDPS: 30_000, TotalEHP: 25_000, MinionCombinedDPS: 900_000 },
+        slot: 'Amulet',
+        carrier: 'Bone Necklace',
+        results: p.mods.map((mod: string) => {
+          if (mod.includes('Level of all Minion')) return { mod, dpsDelta: 0, minionDpsDelta: 90_000, ehpDelta: 0, recognized: true };
+          if (mod.includes('Minions deal')) return { mod, dpsDelta: 0, minionDpsDelta: 45_000, ehpDelta: 0, recognized: true };
+          return { mod, dpsDelta: 100, minionDpsDelta: 0, ehpDelta: 50, recognized: true };
+        }),
+        evaluated: p.mods.length,
+        failed: 0,
+      })),
+    };
+    const result = await handleComputeStatWeights(makeContext(client));
+    const text = result.content[0].text;
+
+    // Minion battery selected
+    const sentMods = client.probeStatWeights.mock.calls[0][0].mods;
+    expect(sentMods).toEqual(expect.arrayContaining(['+1 to Level of all Minion Skill Gems', 'Minions deal 20% increased Damage']));
+    expect(sentMods).not.toEqual(expect.arrayContaining(['+25% to Global Critical Strike Multiplier']));
+
+    expect(text).toContain('Minion build detected');
+    expect(text).toContain('Minion DPS Δ');
+    expect(text).toContain('minion_dps_breakdown');
+    // +1 gem level: 90,000 minion DPS, per-unit = 90,000, +10% of 900k base
+    expect(text).toContain('90,000 per 1 gem level');
+    expect(text).toContain('+10%');
+    // Gem level sorts first (largest minion delta)
+    const gemIdx = text.indexOf('Level of all Minion');
+    const dealIdx = text.indexOf('Minions deal');
+    expect(gemIdx).toBeGreaterThan(-1);
+    expect(gemIdx).toBeLessThan(dealIdx);
+  });
+
+  it('keeps the player battery when player DPS dominates', async () => {
+    const client = makeLuaClient();
+    (client as any).getStats = jest.fn<() => Promise<any>>().mockResolvedValue({
+      CombinedDPS: 2_000_000,
+      MinionCombinedDPS: 0,
+    });
+    await handleComputeStatWeights(makeContext(client));
+    const sentMods = client.probeStatWeights.mock.calls[0][0].mods;
+    expect(sentMods).toEqual(expect.arrayContaining(['+25% to Global Critical Strike Multiplier']));
+    expect(sentMods).not.toEqual(expect.arrayContaining(['+1 to Level of all Minion Skill Gems']));
+  });
+
   it('mentions trade-weight and build-profile usage in the output', async () => {
     const client = makeLuaClient();
     const result = await handleComputeStatWeights(makeContext(client));

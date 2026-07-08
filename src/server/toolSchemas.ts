@@ -861,6 +861,12 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "minion_dps_breakdown",
+      description:
+        "Per-skill Full DPS table for minion and multi-skill builds — each flagged socket group's DPS per instance × count, share of total, from PoB's cached calc (free, no recompute, build untouched). Requires socket groups to have 'Include in Full DPS' checked and their Count field set to the real minion quantity (PoB does NOT auto-multiply by minion limit); the tool explains how when nothing is flagged. Use whenever a build's damage lives in minions or multiple skills — the main-skill DPS alone under-reports those builds.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
       name: "compute_stat_weights",
       description:
         "Measure the loaded build's empirical DPS/EHP sensitivity to individual stat mods (life, attributes, attack/cast speed, crit, flat damage, resists) via non-mutating PoB sims — the user's build is never modified. Returns per-unit weights that replace hand-curated intuition: feed them to find_weighted_trade_items and record them in build-profile.md Sections 3-4. Run at gear/crafting pre-flight and after respecs. Requires the probe_stat_weights PoB API action (reinstall TCP API if missing).",

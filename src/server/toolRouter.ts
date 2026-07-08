@@ -23,6 +23,7 @@ import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSh
 import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
 import { handleComputeStatWeights } from "../handlers/statWeightsHandler.js";
+import { handleMinionDpsBreakdown } from "../handlers/minionDpsBreakdownHandler.js";
 import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -417,6 +418,9 @@ export async function routeToolCall(
 
     case "get_context_usage":
       return await handleGetContextUsage();
+
+    case "minion_dps_breakdown":
+      return await handleMinionDpsBreakdown(luaContext);
 
     case "compute_stat_weights":
       return await handleComputeStatWeights(

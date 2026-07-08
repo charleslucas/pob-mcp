@@ -439,7 +439,8 @@ Snapshots are stored in `POB_DIRECTORY/.pob-mcp/snapshots/`.
 
 | Tool | Description |
 |---|---|
-| `compute_stat_weights` | Measure the build's empirical DPS/EHP sensitivity per stat mod (life, attributes, speed, crit, flat damage…) via non-mutating PoB sims — per-unit weights for trade searches and the build profile. Never modifies the open build |
+| `compute_stat_weights` | Measure the build's empirical DPS/EHP sensitivity per stat mod (life, attributes, speed, crit, flat damage…) via non-mutating PoB sims — per-unit weights for trade searches and the build profile. Auto-detects minion builds (minion probe battery, Full DPS deltas). Never modifies the open build |
+| `minion_dps_breakdown` | Per-skill Full DPS table for minion/multi-skill builds — DPS per instance × count and share of total, from PoB's cached calc. Explains the Full DPS setup (flags + manual Count) when nothing is configured |
 | `compute_constraint_margins` | Fill the Current/Margin columns of a `build-profile.md` Constraint Status table from live stats; flags violated/near-floor constraints. `write_back` updates the file in place |
 | `sync_character_cache` | Refresh a character dir's `meta.json` current_stats/level and `inventory.json` equipped/flask entries from the loaded build. Curated fields on unchanged slots, jewels, eldritch implicits, and narrative files are never touched. `dry_run` previews |
 
