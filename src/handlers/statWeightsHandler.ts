@@ -109,6 +109,18 @@ export async function handleComputeStatWeights(
         `| ${r.probe.mod} | ${fmt(r.dpsDelta)} | ${fmt(perUnitDps)} per ${r.probe.unit} | ${fmt(r.ehpDelta)} | ${fmt(perUnitEhp)} | ${pct >= 0 ? "+" : ""}${fmt(pct)}% |`
       );
     }
+    // A battery where EVERY recognized probe reads exactly zero means the
+    // replacement path silently didn't apply (e.g. repSlotName mismatch) —
+    // a +25% crit multi probe cannot genuinely be worth nothing.
+    const allZero = ok.length >= 5 && ok.every((r) => r.dpsDelta === 0 && r.ehpDelta === 0);
+    if (allZero) {
+      lines.push("");
+      lines.push(
+        "🔴 SUSPECT RESULT: every probe returned exactly zero delta — the item-replacement " +
+          "override likely did not apply (PoB API files may be stale; relaunch PoB via " +
+          "LaunchPoBWithAPI.bat). Do NOT record these as real weights."
+      );
+    }
     if (bad.length > 0) {
       lines.push("");
       lines.push(

@@ -91,6 +91,22 @@ describe('handleComputeStatWeights', () => {
     expect((result as Error).message).toContain('InstallTcpApi');
   });
 
+  it('flags an all-zero battery as suspect instead of presenting it as real weights', async () => {
+    const client = {
+      probeStatWeights: jest.fn<(p: any) => Promise<any>>().mockResolvedValue({
+        base: { CombinedDPS: 2_000_000, TotalEHP: 37_000 },
+        slot: 'Ring 1',
+        carrier: 'Entropy Grip',
+        results: Array.from({ length: 15 }, (_, i) => ({ mod: `probe ${i}`, dpsDelta: 0, ehpDelta: 0, recognized: true })),
+        evaluated: 15,
+        failed: 0,
+      }),
+    };
+    const result = await handleComputeStatWeights(makeContext(client));
+    expect(result.content[0].text).toContain('SUSPECT RESULT');
+    expect(result.content[0].text).toContain('Do NOT record');
+  });
+
   it('mentions trade-weight and build-profile usage in the output', async () => {
     const client = makeLuaClient();
     const result = await handleComputeStatWeights(makeContext(client));
