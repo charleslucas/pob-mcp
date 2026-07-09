@@ -196,6 +196,12 @@ abstract class PoBApiBase {
     return res.info;
   }
 
+  async getGemDetail(params: { gemName: string; levels?: number[] }): Promise<any> {
+    const res = await this.send({ action: "get_gem_detail", params });
+    if (!res.ok) throw new Error(res.error || "get_gem_detail failed");
+    return res.gem;
+  }
+
   async setLevel(level: number): Promise<void> {
     const res = await this.send({ action: "set_level", params: { level } });
     if (!res.ok) throw new Error(res.error || "set_level failed");

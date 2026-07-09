@@ -18,7 +18,7 @@ import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handle
 import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodePower } from "../handlers/treeHandlers.js";
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
-import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet } from "../handlers/luaHandlers.js";
+import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleGetGemDetail, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet } from "../handlers/luaHandlers.js";
 import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSharePobb } from "../handlers/importHandlers.js";
 import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
@@ -471,6 +471,14 @@ export async function routeToolCall(
 
     case "lua_get_build_info":
       return await handleLuaGetBuildInfo(luaContext);
+
+    case "get_gem_detail":
+      if (!args?.gem_name) throw new Error("Missing gem_name");
+      return await handleGetGemDetail(
+        luaContext,
+        args.gem_name as string,
+        args.levels as number[] | undefined
+      );
 
     case "lua_reload_build":
       return await handleLuaReloadBuild(luaContext, args?.build_name as string | undefined);

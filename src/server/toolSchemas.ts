@@ -992,6 +992,25 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "get_gem_detail",
+      description: "Get authoritative data for any skill or support gem straight from Path of Building's own game data — tags, active-skill type, requirements, cast time, per-level stat scaling, and quality bonus. Sourced from PoB's data (patch-current, matches the in-game gem tooltip), NOT web scraping. Works with no build loaded (reads static game data). Handles base gems (\"Fireball\"), Vaal variants (\"Vaal Summon Skeletons\"), transfigured gems (\"Absolution of Inspiring\"), supports, and minion gems. The result lists the sibling variants that share the base — use an exact variant name from that list to fetch a specific transfigured/Vaal gem. Prefer this over poemcp's get_gem_detail.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          gem_name: {
+            type: "string",
+            description: "Gem name. Exact base name (\"Raise Zombie\"), Vaal variant (\"Vaal Summon Skeletons\"), or transfigured full name (\"Absolution of Inspiring\"). Case-insensitive; must be an exact gem name (not a partial/fuzzy match).",
+          },
+          levels: {
+            type: "array",
+            items: { type: "number" },
+            description: "Optional gem levels to report (1–max). Omit for the default selection of level 1, a mid level, and max.",
+          },
+        },
+        required: ["gem_name"],
+      },
+    },
+    {
       name: "lua_reload_build",
       description: "Reload the current build from disk, picking up any changes made in PoB GUI or via direct XML editing. If build_name is omitted, reloads the build that is currently loaded (determined via lua_get_build_info).",
       inputSchema: {

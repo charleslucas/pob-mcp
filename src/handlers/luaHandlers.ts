@@ -513,6 +513,75 @@ export async function handleLuaGetBuildInfo(context: LuaHandlerContext) {
   });
 }
 
+export async function handleGetGemDetail(context: LuaHandlerContext, gemName: string, levels?: number[]) {
+  return wrapHandler('get gem detail', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const gem = await luaClient.getGemDetail({ gemName, levels });
+    if (!gem) {
+      return {
+        content: [{ type: "text" as const, text: `Gem not found: ${gemName}` }],
+      };
+    }
+
+    const lines: string[] = [];
+    lines.push(`# ${gem.name}`);
+    lines.push('');
+    if (gem.tags) lines.push(`**Tags:** ${gem.tags}`);
+    lines.push(`**Type:** ${gem.support ? 'Support gem' : 'Active skill gem'}`);
+    if (typeof gem.castTime === 'number' && gem.castTime > 0) {
+      lines.push(`**Cast Time:** ${gem.castTime.toFixed(2)} sec`);
+    }
+    if (typeof gem.maxLevel === 'number') lines.push(`**Max Level:** ${gem.maxLevel}`);
+    if (Array.isArray(gem.variants) && gem.variants.length > 1) {
+      lines.push(`**Variants:** ${gem.variants.join(', ')}`);
+    }
+    if (gem.description) {
+      lines.push('');
+      lines.push(gem.description);
+    }
+
+    if (Array.isArray(gem.perLevel) && gem.perLevel.length > 0) {
+      lines.push('');
+      lines.push('**Level scaling (selected levels):**');
+      for (const lv of gem.perLevel) {
+        lines.push('');
+        lines.push(`### Level ${lv.level} (req level ${lv.levelRequirement})`);
+        const reqs: string[] = [];
+        if (lv.reqStr) reqs.push(`Str ${lv.reqStr}`);
+        if (lv.reqDex) reqs.push(`Dex ${lv.reqDex}`);
+        if (lv.reqInt) reqs.push(`Int ${lv.reqInt}`);
+        if (reqs.length) lines.push(`- Requirements: ${reqs.join(', ')}`);
+        if (lv.cost) lines.push(`- Cost: ${lv.cost}`);
+        if (typeof lv.critChance === 'number') {
+          lines.push(`- Critical Strike Chance: ${lv.critChance.toFixed(2)}%`);
+        }
+        if (typeof lv.damageEffectiveness === 'number') {
+          lines.push(`- Effectiveness of Added Damage: ${Math.round(lv.damageEffectiveness)}%`);
+        }
+        if (Array.isArray(lv.statLines)) {
+          for (const s of lv.statLines) lines.push(`- ${String(s).replace(/\s+/g, ' ').trim()}`);
+        }
+      }
+    }
+
+    if (Array.isArray(gem.qualityLines) && gem.qualityLines.length > 0) {
+      lines.push('');
+      lines.push('**Quality bonus (at +20%):**');
+      for (const q of gem.qualityLines) lines.push(`- ${String(q).replace(/\s+/g, ' ').trim()}`);
+    }
+
+    lines.push('');
+    lines.push('_source: Path of Building game data_');
+
+    return {
+      content: [{ type: "text" as const, text: lines.join('\n') }],
+    };
+  });
+}
+
 export async function handleLuaReloadBuild(context: LuaHandlerContext, buildName?: string) {
   return wrapHandler('reload build', async () => {
     await context.ensureLuaClient();
