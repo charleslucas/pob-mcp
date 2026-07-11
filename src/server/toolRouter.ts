@@ -24,7 +24,7 @@ import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
 import { handleComputeStatWeights } from "../handlers/statWeightsHandler.js";
 import { handleMinionDpsBreakdown } from "../handlers/minionDpsBreakdownHandler.js";
-import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
+import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleGetSocketColors, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
 import { handleGetConfig, handleSetConfig, handleSetEnemyStats, handleSaveConfigPreset, handleLoadConfigPreset, handleListConfigPresets } from "../handlers/configHandlers.js";
@@ -607,6 +607,9 @@ export async function routeToolCall(
 
     case "get_equipped_items":
       return await handleGetEquippedItems(itemSkillContext);
+
+    case "get_socket_colors":
+      return await handleGetSocketColors(itemSkillContext);
 
     case "toggle_flask":
       if (!args) throw new Error("Missing arguments");

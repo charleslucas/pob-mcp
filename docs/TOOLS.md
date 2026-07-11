@@ -173,6 +173,7 @@ Concrete-numbers complement to `suggest_crafting` (which produces poedb-derived 
 | `add_item` | Add an item from in-game clipboard text |
 | `add_multiple_items` | Add multiple items at once |
 | `get_equipped_items` | Get all equipped items with mod lines |
+| `get_socket_colors` | Report each equipped item's actual socket colours + link groups (R/G/B/W/A layout) — for colour-dependent items (Triad Grip) and off-colour checks |
 | `toggle_flask` | Enable/disable a flask |
 | `set_character_level` | Set character level |
 

@@ -1088,6 +1088,14 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "get_socket_colors",
+      description: "Report the actual socket colours and link groups of each equipped item on the loaded build, read from PoB's item data. Per slot: the R/G/B/W/A layout (dash = linked), total sockets, the largest link, and colour counts. Use for colour-dependent items (Triad Grip, Tinkerskin, Prismatic gems) or to check off-colours — data that get_equipped_items and the PoE API character summary do NOT expose.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
       name: "toggle_flask",
       description: "Toggle a flask on/off",
       inputSchema: {

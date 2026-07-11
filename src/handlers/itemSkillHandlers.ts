@@ -1,6 +1,7 @@
 import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 import { parseItemRawMods } from "../utils/itemRawParser.js";
+import { parseItemSockets } from "../utils/itemSocketParser.js";
 
 export interface ItemSkillHandlerContext {
   getLuaClient: () => AnyLuaClient | null;
@@ -125,6 +126,60 @@ export async function handleGetEquippedItems(context: ItemSkillHandlerContext) {
           }
           text += "\n";
         }
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text,
+        },
+      ],
+    };
+  });
+}
+
+export async function handleGetSocketColors(context: ItemSkillHandlerContext) {
+  return wrapHandler('get socket colors', async () => {
+    await context.ensureLuaClient();
+
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized. Use lua_start first.');
+    }
+
+    const items = await luaClient.getItems();
+    const equipped = (items || []).filter((it: any) => it.id !== 0 && it.name);
+    const socketed = equipped
+      .map((it: any) => ({ it, sockets: parseItemSockets(it.raw) }))
+      .filter((e: any) => e.sockets);
+
+    let text = "=== Socket Colours ===\n\n";
+
+    if (socketed.length === 0) {
+      text += "No socketed items on the loaded build.\n";
+    } else {
+      const ORDER = ['R', 'G', 'B', 'W', 'A'] as const;
+      for (const { it, sockets } of socketed) {
+        if (!sockets) continue;
+        // Dash = linked, double-space = separate group (mirrors PoB's own layout).
+        const layout = sockets.groups.map((g: string[]) => g.join('-')).join('  ');
+        const counts = ORDER
+          .filter((c) => sockets.colorCounts[c] > 0)
+          .map((c) => `${sockets.colorCounts[c]}${c}`)
+          .join(' ');
+        const groupSizes = sockets.groups.map((g: string[]) => g.length);
+        const linkNote = groupSizes.length === 1
+          ? (sockets.maxLink >= 2 ? `${sockets.maxLink}-link` : `${sockets.total} socket${sockets.total === 1 ? '' : 's'}`)
+          : `groups ${groupSizes.join('/')} (max ${sockets.maxLink}-link)`;
+
+        text += `**${it.slot}** — ${it.name}\n`;
+        text += `  Layout:  ${layout}\n`;
+        text += `  ${sockets.total} socket${sockets.total === 1 ? '' : 's'}, ${linkNote}\n`;
+        text += `  Colours: ${counts}`;
+        if (sockets.abyssal > 0) text += ` (${sockets.abyssal} abyssal)`;
+        text += "\n\n";
       }
     }
 
