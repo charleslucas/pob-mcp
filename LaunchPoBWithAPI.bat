@@ -22,5 +22,22 @@ if errorlevel 1 (
 )
 echo [LaunchPoBWithAPI] API files up to date.
 
+:: Verify the patch actually LANDED in Main.lua. The installer can report success
+:: yet leave Main.lua unpatched (e.g. a stale copy of this batch pointing the
+:: installer at a path that no longer exists, or a PoB update overwriting the
+:: patch). A silent miss here is exactly what made TCP "randomly" stop working
+:: after updates -- so fail loud instead of launching a dead API.
+findstr /C:"pob-mcp TCP API patch" "%POB_DIR%\Modules\Main.lua" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo [LaunchPoBWithAPI] WARNING: TCP patch NOT detected in Main.lua after install.
+    echo   PoB will launch WITHOUT the TCP API -- Claude will not connect.
+    echo   Review the InstallTcpApi.ps1 output above, then relaunch via this batch file.
+    echo.
+    pause
+) else (
+    echo [LaunchPoBWithAPI] Verified: TCP patch present in Main.lua.
+)
+
 :launch
 start "" "%POB_DIR%\Path of Building.exe"
