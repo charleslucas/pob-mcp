@@ -1561,6 +1561,21 @@ export function getConfigToolSchemas(): any[] {
       },
     },
     {
+      name: "set_pob_view",
+      description: "Switch the visible tab in the live Path of Building GUI (TCP mode) so a human can watch what you're changing in real time. Modes: TREE, SKILLS, ITEMS, CALCS, CONFIG, NOTES, IMPORT, PARTY, COMPARE. Mutating tools already auto-switch to the relevant tab before they run (import→TREE, gem edits→SKILLS, item edits→ITEMS); use this for explicit control. No visible effect in headless mode.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mode: {
+            type: "string",
+            enum: ["TREE", "SKILLS", "ITEMS", "CALCS", "CONFIG", "NOTES", "IMPORT", "PARTY", "COMPARE"],
+            description: "The PoB tab to display.",
+          },
+        },
+        required: ["mode"],
+      },
+    },
+    {
       name: "set_enemy_stats",
       description: "Configure enemy parameters for DPS calculations. Test against different enemy types (map boss, Shaper, Maven). Requires Lua bridge.",
       inputSchema: {

@@ -27,7 +27,8 @@ import { handleMinionDpsBreakdown } from "../handlers/minionDpsBreakdownHandler.
 import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleGetSocketColors, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
-import { handleGetConfig, handleSetConfig, handleSetEnemyStats, handleSaveConfigPreset, handleLoadConfigPreset, handleListConfigPresets } from "../handlers/configHandlers.js";
+import { handleGetConfig, handleSetConfig, handleSetPobView, handleSetEnemyStats, handleSaveConfigPreset, handleLoadConfigPreset, handleListConfigPresets } from "../handlers/configHandlers.js";
+import { PoBLuaTcpClient } from "../pobLuaBridge.js";
 import { handleValidateBuild } from "../handlers/validationHandlers.js";
 import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnapshots, handleRestoreSnapshot, handleExportBuildSummary } from "../handlers/exportHandlers.js";
 import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks, handleGemUpgradePath } from "../handlers/skillGemHandlers.js";
@@ -79,6 +80,29 @@ export type ToolResponse = Promise<{
 /**
  * Routes a tool call to its handler with appropriate context
  */
+/**
+ * Tools that mutate the build → the PoB tab to auto-switch to *before* running
+ * them, so a human watching the GUI sees the change happen live (TCP only).
+ * Cosmetic; extend freely.
+ */
+const AUTO_VIEW_BY_TOOL: Record<string, string> = {
+  lua_import_character: "TREE",
+  lua_set_tree: "TREE",
+  update_tree_delta: "TREE",
+  add_gem: "SKILLS",
+  remove_gem: "SKILLS",
+  set_gem_level: "SKILLS",
+  set_gem_quality: "SKILLS",
+  toggle_gem: "SKILLS",
+  create_socket_group: "SKILLS",
+  remove_skill: "SKILLS",
+  setup_skill_with_gems: "SKILLS",
+  set_main_skill: "SKILLS",
+  add_item: "ITEMS",
+  add_multiple_items: "ITEMS",
+  clear_item_slot: "ITEMS",
+};
+
 export async function routeToolCall(
   name: string,
   args: Record<string, unknown> | undefined,
@@ -86,6 +110,21 @@ export async function routeToolCall(
 ): ToolResponse {
   // Check tool gate first
   deps.toolGate.checkGate(name);
+
+  // Auto-switch the visible PoB tab BEFORE a mutating op, so a human watching the
+  // GUI sees the change land in real time. TCP/GUI only; skipped in headless mode
+  // or when no live client is connected. Purely cosmetic — never fatal.
+  const autoView = AUTO_VIEW_BY_TOOL[name];
+  if (autoView) {
+    const liveClient = deps.getLuaClient();
+    if (liveClient instanceof PoBLuaTcpClient) {
+      try {
+        await liveClient.setViewMode(autoView);
+      } catch {
+        /* view switch is cosmetic — ignore failures */
+      }
+    }
+  }
 
   // Create handler contexts using contextBuilder
   const handlerContext = deps.contextBuilder.buildHandlerContext();
@@ -547,6 +586,16 @@ export async function routeToolCall(
         config_name: args.config_name as string,
         value: args.value as boolean | number | string,
       });
+
+    case "set_pob_view":
+      if (!args?.mode) throw new Error("Missing 'mode'");
+      return await handleSetPobView(
+        {
+          getLuaClient: deps.getLuaClient,
+          ensureLuaClient: deps.ensureLuaClient,
+        },
+        { mode: args.mode as string },
+      );
 
     case "set_enemy_stats":
       const setEnemyContext = {

@@ -163,6 +163,26 @@ export async function handleSetConfig(
 }
 
 /**
+ * Handle set_pob_view tool call — switch the visible PoB GUI tab.
+ */
+export async function handleSetPobView(
+  context: ConfigHandlerContext,
+  args: { mode: string }
+) {
+  return wrapHandler('set view', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error("Lua bridge not active (TCP mode + PoB running required).");
+    }
+    const mode = await luaClient.setViewMode(args.mode);
+    return {
+      content: [{ type: "text" as const, text: `PoB view switched to the ${mode} tab.` }],
+    };
+  });
+}
+
+/**
  * Handle set_enemy_stats tool call
  */
 export async function handleSetEnemyStats(

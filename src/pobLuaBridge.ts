@@ -219,6 +219,13 @@ abstract class PoBApiBase {
     return res.config;
   }
 
+  /** Switch the visible PoB GUI tab (TREE/SKILLS/ITEMS/CALCS/CONFIG/NOTES/IMPORT/PARTY/COMPARE). TCP/GUI only. */
+  async setViewMode(mode: string): Promise<string> {
+    const res = await this.send({ action: "set_view_mode", params: { mode } });
+    if (!res.ok) throw new Error(res.error || "set_view_mode failed");
+    return res.mode as string;
+  }
+
   async closeBuild(): Promise<void> {
     const res = await this.send({ action: "close_build" });
     if (!res.ok) throw new Error(res.error || "close_build failed");
