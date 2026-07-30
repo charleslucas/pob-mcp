@@ -5,10 +5,19 @@ import {
 } from '../../src/handlers/configHandlers';
 import type { ConfigHandlerContext } from '../../src/handlers/configHandlers';
 
-function makeLuaClient(config: Record<string, any> = {}, stats: Record<string, any> = {}) {
+// `applyWrites: false` simulates PoB accepting a write but not storing it — the silent
+// failure mode that made unsupported config options look like they applied.
+function makeLuaClient(
+  config: Record<string, any> = {},
+  stats: Record<string, any> = {},
+  applyWrites = true,
+) {
+  const state = { ...config };
   return {
-    getConfig: jest.fn<() => Promise<any>>().mockResolvedValue(config),
-    setConfig: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    getConfig: jest.fn<() => Promise<any>>().mockImplementation(async () => ({ ...state })),
+    setConfig: jest.fn<(p: Record<string, any>) => Promise<void>>().mockImplementation(async (p) => {
+      if (applyWrites) Object.assign(state, p);
+    }),
     getStats: jest.fn<() => Promise<any>>().mockResolvedValue(stats),
   };
 }
@@ -59,14 +68,27 @@ describe('handleSetConfig', () => {
     expect(client.setConfig).toHaveBeenCalledWith({ bandit: 'Alira' });
   });
 
-  it('shows old and new values in output', async () => {
+  it('shows old, requested and stored values in output', async () => {
     const client = makeLuaClient({ usePowerCharges: false }, {});
     const ctx = makeContext(client);
     const result = await handleSetConfig(ctx, { config_name: 'usePowerCharges', value: true });
     const text = result.content[0].text;
     expect(text).toContain('usePowerCharges');
     expect(text).toContain('Old Value');
-    expect(text).toContain('New Value');
+    expect(text).toContain('Requested');
+    expect(text).toContain('Stored');
+    expect(text).toContain('Configuration Updated');
+  });
+
+  it('verifies the write and WARNS when PoB did not store the value', async () => {
+    // Regression guard: the handler used to echo the requested value as if it applied,
+    // so silently-ignored options produced sims based on stale config.
+    const client = makeLuaClient({ minionbuffUnholyMight: false }, {}, /* applyWrites */ false);
+    const ctx = makeContext(client);
+    const result = await handleSetConfig(ctx, { config_name: 'minionbuffUnholyMight', value: true });
+    const text = result.content[0].text;
+    expect(text).toContain('NOT applied');
+    expect(text).toMatch(/do NOT trust/i);
   });
 
   it('includes post-change DPS when stats contain TotalDPS', async () => {

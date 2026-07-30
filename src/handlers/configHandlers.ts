@@ -136,13 +136,29 @@ export async function handleSetConfig(
   params[args.config_name] = args.value;
   await luaClient.setConfig(params);
 
+  // Read back and VERIFY the value actually landed. Reporting the requested value without
+  // checking made unsupported options look like they applied while PoB silently ignored
+  // them — sims then ran on stale config and nobody could tell.
+  const afterConfig = await luaClient.getConfig();
+  const storedValue = afterConfig?.[args.config_name];
+  const matches =
+    storedValue === args.value ||
+    String(storedValue) === String(args.value) ||
+    (typeof storedValue === "boolean" && storedValue === (args.value === true || args.value === "true"));
+
   // Get updated stats
   const newStats = await luaClient.getStats(['TotalDPS', 'CombinedDPS', 'Life', 'EnergyShield']);
 
-  let output = `=== Configuration Updated ===\n\n`;
+  let output = matches ? `=== Configuration Updated ===\n\n` : `=== ⚠ Configuration NOT applied ===\n\n`;
   output += `${args.config_name}:\n`;
   output += `  Old Value: ${formatValue(oldValue)}\n`;
-  output += `  New Value: ${formatValue(args.value)}\n\n`;
+  output += `  Requested: ${formatValue(args.value)}\n`;
+  output += `  Stored:    ${formatValue(storedValue)}\n`;
+  if (!matches) {
+    output += `\n⚠ PoB did not store the requested value — do NOT trust any simulation that assumes it applied.\n`;
+    output += `  Check the option name against PoB's Config tab (it must match the internal var name).\n`;
+  }
+  output += `\n`;
 
   if (newStats.TotalDPS) {
     output += `=== Current Stats ===\n`;

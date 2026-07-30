@@ -1545,7 +1545,7 @@ export function getConfigToolSchemas(): any[] {
     },
     {
       name: "set_config",
-      description: "Modify configuration inputs. Common keys — Charges: usePowerCharges, useFrenzyCharges, useEnduranceCharges | Conditions: conditionFortify, conditionLeeching, conditionOnFullLife, conditionOnFullEnergyShield | Buffs: buffOnslaught | Enemy: enemyIsBoss ('Shaper'/'Pinnacle'/false), enemyLevel | Build: bandit ('None'/'Oak'/'Alira'/'Kraityn'), pantheonMajorGod, pantheonMinorGod. Call get_config to see all current values.",
+      description: "Modify any Path of Building Config-tab option. `config_name` must be PoB's internal var name; an unrecognised name is rejected with an error (never silently ignored), and the response reports the value PoB actually STORED — if it says NOT applied, do not trust a sim that assumes it. Common keys — Charges: usePowerCharges, useFrenzyCharges, useEnduranceCharges | Conditions: conditionFortify, conditionLeeching, conditionOnFullLife | Buffs: buffOnslaught, minionbuffUnholyMight | Ailments/debuffs: multiplierWitheredStackCount | Enemy: enemyIsBoss ('Shaper'/'Pinnacle'/false), enemyLevel | Build: bandit ('None'/'Oak'/'Alira'/'Kraityn'), pantheonMajorGod, pantheonMinorGod. Call get_config to see all currently-set values.",
       inputSchema: {
         type: "object",
         properties: {
