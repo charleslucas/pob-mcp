@@ -172,8 +172,25 @@ function resolvePobDir(): string {
   return join(resolveSuiteRoot(), "PathOfBuilding");
 }
 
+/**
+ * PoB split the monolithic `Data/ModItem.lua` into per-category files in commit 0b6e7a9b2
+ * ("Export trade hashes for mod stats"); explicit item mods now live in `ModExplicit.lua`.
+ * The table format is unchanged apart from an added `tradeHashes` field, so we just need to
+ * find whichever file this PoB version ships. Prefer the new name, fall back to the old one
+ * so older PoB checkouts keep working.
+ */
+const MOD_FILE_CANDIDATES = ["ModExplicit.lua", "ModItem.lua"] as const;
+
 function modItemPath(): string {
-  return join(resolvePobDir(), "src", "Data", "ModItem.lua");
+  const dataDir = join(resolvePobDir(), "src", "Data");
+  for (const name of MOD_FILE_CANDIDATES) {
+    const candidate = join(dataDir, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `PoB item-mod data not found in ${dataDir} — looked for ${MOD_FILE_CANDIDATES.join(", ")}. ` +
+      `Check the PathOfBuilding submodule is checked out (or set POE_MCP_SUITE_POB_DIR).`,
+  );
 }
 
 // ---------------------------------------------------------------------------
