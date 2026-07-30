@@ -5,7 +5,7 @@ import { resolve } from 'path';
 import { handleSearchCraftingMods } from '../../src/handlers/craftingModSearchHandler';
 
 const pobDir = process.env.POB_DIRECTORY ?? resolve(process.cwd(), '..', 'PathOfBuilding');
-const hasModData = existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua'));
+const hasModData = (existsSync(resolve(pobDir, 'src', 'Data', 'ModExplicit.lua')) || existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua')));
 
 const describeIfPob = hasModData ? describe : describe.skip;
 
@@ -30,7 +30,7 @@ describeIfPob('handleSearchCraftingMods', () => {
     expect(r.isError).toBeUndefined();
     const text = getText(r);
     expect(text).toMatch(/Crafting mod search/);
-    expect(text).toMatch(/Source: PathOfBuilding\/src\/Data\/ModItem\.lua/);
+    expect(text).toMatch(/Source: PathOfBuilding\/src\/Data\/Mod(Explicit|Item)\.lua/);
     expect(text).toMatch(/maximum Life/i);
   });
 
@@ -43,7 +43,7 @@ describeIfPob('handleSearchCraftingMods', () => {
       raw_json: true,
     });
     const parsed = JSON.parse(getText(r));
-    expect(parsed.source).toBe('PathOfBuilding/src/Data/ModItem.lua');
+    expect(parsed.source).toMatch(/^PathOfBuilding\/src\/Data\/Mod(Explicit|Item)\.lua$/);
     expect(Array.isArray(parsed.results)).toBe(true);
     expect(parsed.results.length).toBeGreaterThan(0);
     expect(parsed.results[0]).toHaveProperty('id');

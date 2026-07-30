@@ -23,6 +23,16 @@ import {
   type PobMod,
 } from "../services/pobModDataLoader.js";
 
+/**
+ * Report the mod file we ACTUALLY read. PoB split ModItem.lua into per-category files, so
+ * hardcoding the old name told users their data came from a file that no longer exists.
+ */
+function modSourceLabel(): string {
+  const p = getModItemPath().replace(/\\/g, "/");
+  const idx = p.lastIndexOf("/src/Data/");
+  return idx >= 0 ? `PathOfBuilding${p.slice(idx)}` : p;
+}
+
 function formatWeights(weights: PobMod["weights"]): string {
   const explicit = weights.filter((w) => w.tag !== "default" && w.weight > 0);
   const def = weights.find((w) => w.tag === "default");
@@ -127,7 +137,7 @@ export async function handleSearchCraftingMods(args: CraftingModSearchArgs) {
           type: "text",
           text: JSON.stringify(
             {
-              source: "PathOfBuilding/src/Data/ModItem.lua",
+              source: modSourceLabel(),
               total_mods_in_table: getModCount(),
               filters,
               result_count: results.length,
@@ -147,7 +157,7 @@ export async function handleSearchCraftingMods(args: CraftingModSearchArgs) {
         {
           type: "text",
           text:
-            `No mods matched. (Searched ${getModCount()} entries from PoB's ModItem.lua.)\n\n` +
+            `No mods matched. (Searched ${getModCount()} entries from PoB's ${modSourceLabel()}.)\n\n` +
             `Tip: stat_contains is a substring match. Try fewer words — e.g. "Life" instead of "to maximum Life", "Fire" instead of "to Fire Resistance".`,
         },
       ],
@@ -168,7 +178,7 @@ export async function handleSearchCraftingMods(args: CraftingModSearchArgs) {
   if (filters.affixContains) filterParts.push(`affix~"${filters.affixContains}"`);
 
   lines.push(`=== Crafting mod search: ${filterParts.join(" ")} ===`);
-  lines.push(`Source: PathOfBuilding/src/Data/ModItem.lua (${getModCount()} mods total)`);
+  lines.push(`Source: ${modSourceLabel()} (${getModCount()} mods total)`);
   lines.push(
     `Result: ${results.length}${
       filters.limit && filters.limit > 0 && results.length === filters.limit

@@ -73,7 +73,7 @@ describe('probAllTargetsDrawn (pure)', () => {
 // --- Pool builder: needs PoB submodule ---
 const pobDir = process.env.POB_DIRECTORY ?? resolve(process.cwd(), '..', 'PathOfBuilding');
 const hasData =
-  existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua')) &&
+  (existsSync(resolve(pobDir, 'src', 'Data', 'ModExplicit.lua')) || existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua'))) &&
   existsSync(resolve(pobDir, 'src', 'Data', 'Bases', 'body.lua'));
 const describeIfPob = hasData ? describe : describe.skip;
 

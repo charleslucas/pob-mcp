@@ -6,7 +6,7 @@ import { handleAnalyzeItemMods } from '../../src/handlers/analyzeItemModsHandler
 
 const pobDir = process.env.POB_DIRECTORY ?? resolve(process.cwd(), '..', 'PathOfBuilding');
 const hasAll =
-  existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua')) &&
+  (existsSync(resolve(pobDir, 'src', 'Data', 'ModExplicit.lua')) || existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua'))) &&
   existsSync(resolve(pobDir, 'src', 'Data', 'Bases', 'body.lua'));
 
 const describeIfPob = hasAll ? describe : describe.skip;

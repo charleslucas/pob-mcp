@@ -18,14 +18,17 @@ import {
 } from '../../src/services/pobModDataLoader';
 
 const pobDir = process.env.POB_DIRECTORY ?? resolve(process.cwd(), '..', 'PathOfBuilding');
-const hasModData = existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua'));
+const hasModData = (existsSync(resolve(pobDir, 'src', 'Data', 'ModExplicit.lua')) || existsSync(resolve(pobDir, 'src', 'Data', 'ModItem.lua')));
 
 const describeIfPob = hasModData ? describe : describe.skip;
 
 describeIfPob('pobModDataLoader', () => {
-  it('parses ModItem.lua and exposes thousands of mod entries', () => {
+  it('parses the PoB explicit-mod table and exposes thousands of entries', () => {
     ensureLoaded();
-    expect(getModCount()).toBeGreaterThan(5000);
+    // PoB split ModItem.lua (explicits + implicits, >5k entries) into per-category
+    // files; we read ModExplicit.lua, so the count is now the ~4.3k EXPLICIT mods —
+    // which is what crafting queries need. Guards against a truncated/failed parse.
+    expect(getModCount()).toBeGreaterThan(4000);
   });
 
   it('returns null for an unknown mod ID', () => {
