@@ -274,10 +274,27 @@ abstract class PoBApiBase {
     if (!res.ok) throw new Error(res.error || "remove_gem failed");
   }
 
-  async setSocketGroupEnabled(params: { groupIndex: number; enabled: boolean }): Promise<{ groupIndex: number; label: string; enabled: boolean }> {
+  async setSocketGroupEnabled(params: {
+    groupIndex: number;
+    enabled: boolean;
+    includeInFullDPS?: boolean;
+    count?: number;
+  }): Promise<{
+    groupIndex: number;
+    label: string;
+    enabled: boolean;
+    includeInFullDPS?: boolean;
+    count?: number;
+  }> {
     const res = await this.send({ action: "set_socket_group_enabled", params });
     if (!res.ok) throw new Error(res.error || "set_socket_group_enabled failed");
-    return res.result as { groupIndex: number; label: string; enabled: boolean };
+    return res.result as {
+      groupIndex: number;
+      label: string;
+      enabled: boolean;
+      includeInFullDPS?: boolean;
+      count?: number;
+    };
   }
 
   async setGemEnabled(params: { groupIndex: number; gemIndex: number; enabled: boolean }): Promise<void> {

@@ -596,7 +596,9 @@ export async function handleRemoveGem(
 export async function handleSetSocketGroupEnabled(
   context: ItemSkillHandlerContext,
   groupIndex: number,
-  enabled: boolean
+  enabled: boolean,
+  includeInFullDPS?: boolean,
+  count?: number
 ) {
   return wrapHandler('set socket group enabled', async () => {
     await context.ensureLuaClient();
@@ -610,11 +612,22 @@ export async function handleSetSocketGroupEnabled(
       throw new Error('group_index must be >= 1');
     }
 
-    const result = await luaClient.setSocketGroupEnabled({ groupIndex, enabled });
+    const result = await luaClient.setSocketGroupEnabled({ groupIndex, enabled, includeInFullDPS, count });
 
     const label = result?.label ? ` (${result.label})` : '';
     const state = enabled ? 'enabled' : 'disabled';
-    const text = `✅ Group ${groupIndex}${label} ${state}.`;
+    // Report what PoB stored, not what was asked for — minion swarm DPS silently reads as 0
+    // when the Full-DPS flag or Count didn't actually land.
+    const extras: string[] = [];
+    if (includeInFullDPS !== undefined) {
+      extras.push(`Include in Full DPS: ${result?.includeInFullDPS ? 'on' : 'off'}`);
+    }
+    if (count !== undefined) {
+      extras.push(`Count: ${result?.count ?? '(unset)'}`);
+    }
+    const text =
+      `✅ Group ${groupIndex}${label} ${state}.` +
+      (extras.length > 0 ? ` ${extras.join(' · ')}` : '');
 
     return {
       content: [{ type: "text" as const, text }],

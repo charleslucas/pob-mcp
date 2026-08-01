@@ -696,7 +696,13 @@ export async function routeToolCall(
 
     case "toggle_socket_group":
       if (!args) throw new Error("Missing arguments");
-      return await handleSetSocketGroupEnabled(itemSkillContext, args.group_index as number, args.enabled as boolean);
+      return await handleSetSocketGroupEnabled(
+        itemSkillContext,
+        args.group_index as number,
+        args.enabled as boolean,
+        args.include_in_full_dps as boolean | undefined,
+        args.count as number | undefined,
+      );
 
     case "toggle_gem":
       if (!args) throw new Error("Missing arguments");

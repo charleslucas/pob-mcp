@@ -1279,7 +1279,7 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "toggle_socket_group",
-      description: "Enable or disable an entire socket group (e.g. turn off a mana reservation aura to test its effect on stats)",
+      description: "Enable or disable an entire socket group (e.g. turn off a mana reservation aura to test its effect on stats), and set its Full-DPS flags. For MINION or multi-skill builds, pass `include_in_full_dps: true` plus `count` (the real minion quantity, e.g. 20 raging spirits) so `minion_dps_breakdown` can report swarm DPS — PoB does NOT auto-multiply by the minion limit, and a group without the flag is absent from Full DPS entirely. The response reports what PoB actually stored.",
       inputSchema: {
         type: "object",
         properties: {
@@ -1290,6 +1290,14 @@ export function getLuaToolSchemas(): any[] {
           enabled: {
             type: "boolean",
             description: "true to enable the group, false to disable it",
+          },
+          include_in_full_dps: {
+            type: "boolean",
+            description: "Set the group's 'Include in Full DPS' flag. Required for a group to appear in minion_dps_breakdown. Omit to leave unchanged.",
+          },
+          count: {
+            type: "number",
+            description: "Number of active instances of this skill (e.g. 20 raging spirits, 10 zombies). PoB multiplies the group's DPS by this. Omit to leave unchanged.",
           },
         },
         required: ["group_index", "enabled"],
