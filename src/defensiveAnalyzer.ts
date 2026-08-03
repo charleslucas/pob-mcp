@@ -13,6 +13,22 @@
  * An exceptional build has all 3, with strong values in each.
  */
 
+/**
+ * Percentage of a SUPPRESSED spell hit that is prevented.
+ * Authoritative source: PoB `src/Modules/Data.lua` -> `SuppressionEffect = 40`
+ * (alongside `SuppressionChanceCap = 100`).
+ *
+ * This module previously hardcoded the assumption that suppression "halves"
+ * spell damage and that 50% was the cap. Both are wrong, and the advice text
+ * built on them told users 50% suppression halves spell damage taken — it is
+ * 50% chance to prevent 40%, i.e. ~20% average mitigation. Keep this constant
+ * in sync when GGG rebalances suppression.
+ */
+const SUPPRESSION_EFFECT = 40;
+
+/** Suppression chance at which the avoidance layer counts as "significant". */
+const SUPPRESSION_SIGNIFICANT = 70;
+
 export interface DefensiveAnalysis {
   resistances: ResistanceAnalysis;
   lifePool: LifePoolAnalysis;
@@ -120,7 +136,7 @@ export function analyzeDefenses(stats: Record<string, any>): DefensiveAnalysis {
       category: 'layers',
       issue: `Only ${defensiveLayerCount} of 3 defensive layers active (avoidance / mitigation / recovery)`,
       solutions: [
-        'Avoidance: add evasion, spell suppression (50%), dodge, or block',
+        'Avoidance: add evasion, spell suppression (chance caps at 100%), dodge, or block',
         'Mitigation: add armour (Determination aura), endurance charges, or physical reduction',
         'Recovery: add life regeneration, life leech, or gain-on-hit',
       ],
@@ -227,7 +243,9 @@ function analyzeLifePool(stats: Record<string, any>): LifePoolAnalysis {
 
 /**
  * Analyze avoidance layer:
- *   - Spell suppression (50%+ = full cap)
+ *   - Spell suppression (chance caps at 100%; each suppressed hit is reduced by
+ *     SuppressionEffect, currently 40% — NOT 50%. See PoB Modules/Data.lua:
+ *     `SuppressionChanceCap = 100`, `SuppressionEffect = 40`.)
  *   - Evasion (gives % chance to evade attacks)
  *   - Dodge (attack/spell dodge)
  *   - Block
@@ -253,20 +271,28 @@ function analyzeAvoidance(stats: Record<string, any>): AvoidanceAnalysis {
     : 0;
 
   const parts: string[] = [];
-  if (spellSuppression >= 50) parts.push(`spell suppression ${spellSuppression}%`);
-  else if (spellSuppression > 0) parts.push(`partial suppression ${spellSuppression}%`);
+  // Chance caps at 100, not 50. Report the average mitigation too (chance x 40%
+  // prevented), because a bare "22% suppression" reads far stronger than the ~9%
+  // average damage reduction it actually represents.
+  const avgSuppressionMitigation = Math.round(spellSuppression * SUPPRESSION_EFFECT) / 100;
+  if (spellSuppression >= SUPPRESSION_SIGNIFICANT) {
+    parts.push(`spell suppression ${spellSuppression}% (~${avgSuppressionMitigation}% avg spell mitigation)`);
+  } else if (spellSuppression > 0) {
+    parts.push(`partial suppression ${spellSuppression}% (~${avgSuppressionMitigation}% avg spell mitigation)`);
+  }
   if (estimatedEvadeChance >= 20) parts.push(`~${estimatedEvadeChance}% evade`);
   if (dodge >= 20) parts.push(`${dodge}% dodge`);
   if (spellDodge >= 20) parts.push(`${spellDodge}% spell dodge`);
   if (block >= 30) parts.push(`${block}% block`);
 
   // A meaningful avoidance layer means at least one solid avoidance mechanic:
-  //   - 50% spell suppression (full cap)
+  //   - ≥70% spell suppression (chance caps at 100; at 40% prevented each, 70%
+  //     chance is ~28% average mitigation — comparable to the other thresholds)
   //   - OR evasion giving ≥30% evade chance
   //   - OR dodge/spell dodge ≥30%
   //   - OR block ≥30%
   const hasSignificantAvoidance =
-    spellSuppression >= 50 ||
+    spellSuppression >= SUPPRESSION_SIGNIFICANT ||
     estimatedEvadeChance >= 30 ||
     dodge >= 30 ||
     spellDodge >= 30 ||
@@ -504,7 +530,10 @@ function generateAvoidanceRecommendations(analysis: AvoidanceAnalysis): Recommen
       issue: 'No significant avoidance layer (no evasion, spell suppression, dodge, or block)',
       solutions: [
         'Evasion: equip evasion-based armour and run Grace aura',
-        'Spell Suppression: 50% suppression halves spell damage taken — available on tree (Shadow/Ranger side)',
+        `Spell Suppression: each suppressed hit is reduced by ${SUPPRESSION_EFFECT}% and chance caps at 100%, ` +
+          `so X% suppression ≈ X*0.${SUPPRESSION_EFFECT} average spell mitigation (100% ⇒ ${SUPPRESSION_EFFECT}%). ` +
+          'Clustered on the Shadow/Ranger side — expensive for left-side (e.g. minion/Necromancer) trees, ' +
+          'where stacking spell BLOCK is usually the cheaper route to the same goal',
         'Block: use a shield or staff and invest in block nodes',
         'Dodge: Acrobatics keystone gives 30% attack/spell dodge (but disables block)',
       ],
