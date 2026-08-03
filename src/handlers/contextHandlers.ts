@@ -26,17 +26,36 @@ function cwdToSlug(cwd: string): string {
 }
 
 /** Read only the last `tailBytes` of a file — avoids loading the whole JSONL. */
-function readFileTail(filePath: string, tailBytes = 8192): string {
+function readFileTail(filePath: string, tailBytes = 8192): { text: string; size: number; readBytes: number } {
   const fd = fs.openSync(filePath, "r");
   try {
     const { size } = fs.fstatSync(fd);
     const start = Math.max(0, size - tailBytes);
     const buf = Buffer.alloc(Math.min(tailBytes, size));
     const bytesRead = fs.readSync(fd, buf, 0, buf.length, start);
-    return buf.slice(0, bytesRead).toString("utf-8");
+    return { text: buf.slice(0, bytesRead).toString("utf-8"), size, readBytes: bytesRead };
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/**
+ * Escalating tail read: a single JSONL entry can be far larger than any fixed
+ * window (a big tool result — trade search, item dump, web fetch — easily exceeds
+ * 8KB). When the tail lands mid-entry, no complete line parses and the scan finds
+ * nothing. Grow the window until a usage record appears or the whole file is read.
+ */
+const TAIL_STEPS = [8_192, 65_536, 524_288, 4_194_304];
+
+function findSessionInfo(filePath: string): { info: SessionInfo | null; readBytes: number; size: number } {
+  let last = { text: "", size: 0, readBytes: 0 };
+  for (const step of TAIL_STEPS) {
+    last = readFileTail(filePath, step);
+    const info = extractSessionInfo(last.text);
+    if (info) return { info, readBytes: last.readBytes, size: last.size };
+    if (last.readBytes >= last.size) break;  // whole file already read
+  }
+  return { info: null, readBytes: last.readBytes, size: last.size };
 }
 
 interface UsageEntry {
@@ -51,11 +70,17 @@ interface SessionInfo {
   model: string | null;
 }
 
-/** Known model context windows and characteristics. */
+/** Known model context windows and characteristics.
+ *  Keep in sync as models ship — an unknown ID silently drops the window/notes
+ *  from the report (the Claude 5 family was missing here until 2026-08-03). */
 const MODEL_INFO: Record<string, { window: string; notes: string }> = {
-  "claude-opus-4-7":            { window: "200K", notes: "Most capable; best for complex multi-step reasoning" },
-  "claude-sonnet-4-6":          { window: "200K", notes: "Balanced capability and speed; good default" },
+  "claude-opus-5":              { window: "200K", notes: "Most capable; best for complex multi-step reasoning" },
+  "claude-sonnet-5":            { window: "200K", notes: "Balanced capability and speed; good default" },
+  "claude-fable-5":             { window: "200K", notes: "Claude 5 family" },
   "claude-haiku-4-5-20251001":  { window: "200K", notes: "Fastest; best for simple lookups and lightweight tasks" },
+  // legacy / previous generation
+  "claude-opus-4-7":            { window: "200K", notes: "Previous generation" },
+  "claude-sonnet-4-6":          { window: "200K", notes: "Previous generation" },
 };
 
 /** Parse the last usage entry and model from the tail string (scans lines in reverse). */
@@ -144,14 +169,22 @@ export async function handleGetContextUsage() {
       };
     }
 
-    const tail = readFileTail(jsonlPath);        // ~8KB read, not the full file
-    const info = extractSessionInfo(tail);
+    const { info, readBytes, size } = findSessionInfo(jsonlPath);
 
     if (!info) {
       return {
         content: [{
           type: "text" as const,
-          text: `Found session log at ${jsonlPath} but no usage data in last 8KB.`,
+          text: [
+            "⚠️ TOOL FAILURE — could not read usage data. This result says NOTHING about",
+            "your context usage: do not infer that the session is large, small, full, or",
+            "near a limit. Treat context usage as UNKNOWN and use the client's own",
+            "percentage indicator instead.",
+            "",
+            `Session log: ${jsonlPath}`,
+            `Scanned ${readBytes.toLocaleString()} of ${size.toLocaleString()} bytes without finding a`,
+            "parseable `message.usage` record.",
+          ].join("\n"),
         }],
       };
     }
@@ -173,15 +206,19 @@ export async function handleGetContextUsage() {
     const barFill = Math.min(20, Math.round((contextTokens / HEAVY) * 20));
     const bar = "█".repeat(barFill) + "░".repeat(20 - barFill);
 
+    // These describe CUMULATIVE SESSION VOLUME, not how full the context window is.
+    // Earlier wording ("Medium — compaction may activate soon") was read as
+    // proximity-to-limit and used to defer work while the client's own indicator
+    // still showed roughly half the window free. Label the axis being measured.
     const sessionLabel =
-      contextTokens < MEDIUM ? "Light" :
-      contextTokens < HEAVY  ? "Medium (compaction may activate soon)" :
-                                "Heavy (auto-compaction likely already running)";
+      contextTokens < MEDIUM ? "Light session" :
+      contextTokens < HEAVY  ? "Medium session" :
+                                "Long session";
 
     const lines = [
       "=== Claude Code Context Usage ===",
       "",
-      `Model:          ${modelId}${modelMeta ? ` (${modelMeta.window} window — ${modelMeta.notes})` : ""}`,
+      `Model:          ${modelId}${modelMeta ? ` (${modelMeta.window} window — ${modelMeta.notes})` : "  ⚠️ UNRECOGNISED"}`,
       `Cached context: ${contextTokens.toLocaleString()} tokens  [${sessionLabel}]`,
       `Session bar:    ${bar}  (scaled to 400K; can exceed this via compaction)`,
       "",
@@ -191,14 +228,39 @@ export async function handleGetContextUsage() {
       `  Cache written:     ${info.usage.cache_creation_input_tokens.toLocaleString()} tokens`,
       `  Output:            ${info.usage.output_tokens.toLocaleString()} tokens`,
       "",
-      "Note: cache_read_input_tokens reflects accumulated session state across",
-      "compaction layers — it is not directly comparable to a fixed context window.",
+      "⚠️  THIS IS NOT A 'HOW FULL IS THE CONTEXT WINDOW' READING.",
+      "cache_read_input_tokens is the accumulated state re-read each turn across",
+      "compaction layers, so it grows with session LENGTH and can far exceed the",
+      "window. A large number here does NOT mean you are near a limit — the client's",
+      "own percentage indicator is the authority on remaining headroom. Use this tool",
+      "to gauge how much data a session has churned through, not whether to stop.",
     ];
 
     if (contextTokens >= HEAVY) {
-      lines.push("", "⚠️  Heavy session — save key findings to character_data/ before large data loads.");
+      lines.push("", "ℹ️  Long session — lots of data churned. Prefer compact tool outputs and bank",
+                     "   findings to character_data/. Check the client's % indicator before deciding",
+                     "   whether there is room for a large analysis.");
     } else if (contextTokens >= MEDIUM) {
-      lines.push("", "ℹ️  Medium session — prefer compact tool outputs; compaction may activate soon.");
+      lines.push("", "ℹ️  Medium session — prefer compact tool outputs where convenient.");
+    }
+
+    // A model ID we don't know is a live signal that this table (and the suite's
+    // per-model calibration) has gone stale — say so loudly rather than silently
+    // omitting the window/notes, which is exactly how it rotted last time.
+    if (!modelMeta) {
+      lines.push(
+        "",
+        `⚠️  UNRECOGNISED MODEL: "${modelId}" is not in MODEL_INFO`,
+        "    (pob-mcp/src/handlers/contextHandlers.ts) — window size and notes above are",
+        "    therefore missing. This usually means a NEW MODEL SHIPPED since the table was",
+        "    last updated. Two follow-ups:",
+        "      1. Add it to MODEL_INFO so future sessions report the window.",
+        "      2. Check reference_data/freshness_index.md — its per-model PoE training-cutoff",
+        "         table is the suite's single source for what this model can be trusted on.",
+        "         An unlisted model gets CONSERVATIVE treatment: verify patch-specific game",
+        "         facts against tools/data rather than answering from memory, until a",
+        "         calibrated row exists (see CLAUDE.md → model routing).",
+      );
     }
 
     return {
