@@ -275,7 +275,12 @@ export class BuildExportService {
   /**
    * Restore a build from a snapshot
    */
-  async restoreSnapshot(options: RestoreOptions): Promise<{ message: string; backupId?: string }> {
+  async restoreSnapshot(options: RestoreOptions): Promise<{
+    message: string;
+    backupId?: string;
+    /** XML written to the build file — callers push this into a live PoB session. */
+    restoredXml: string;
+  }> {
     // Find snapshot by ID or tag
     const buildSnapshotDir = sanitizeBuildName(options.buildName, this.snapshotDirectory);
 
@@ -314,6 +319,7 @@ export class BuildExportService {
     return {
       message: `Build restored from snapshot: ${snapshot.metadata.tag} (${snapshot.id})`,
       backupId,
+      restoredXml: snapshotContent,
     };
   }
 

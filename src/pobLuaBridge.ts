@@ -360,10 +360,28 @@ abstract class PoBApiBase {
     return res.breakdown;
   }
 
-  async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{ tree: any; autoPathedNodes?: number[]; skippedAscendancyNodes?: number[] }> {
+  async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{
+    tree: any;
+    /** Requested adds that actually landed. */
+    added?: number[];
+    /** Nodes actually deallocated. */
+    removed?: number[];
+    /** Intermediates PoB pulled in for connectivity. */
+    autoPathedNodes?: number[];
+    /** Requested adds that could NOT be allocated (unreachable / invalid ID). */
+    droppedNodes?: number[];
+    skippedAscendancyNodes?: number[];
+  }> {
     const res = await this.send({ action: "update_tree_delta", params });
     if (!res.ok) throw new Error(res.error || "update_tree_delta failed");
-    return { tree: res.tree, autoPathedNodes: res.autoPathedNodes as number[] | undefined, skippedAscendancyNodes: res.skippedAscendancyNodes as number[] | undefined };
+    return {
+      tree: res.tree,
+      added: res.added as number[] | undefined,
+      removed: res.removed as number[] | undefined,
+      autoPathedNodes: res.autoPathedNodes as number[] | undefined,
+      droppedNodes: res.droppedNodes as number[] | undefined,
+      skippedAscendancyNodes: res.skippedAscendancyNodes as number[] | undefined,
+    };
   }
 
   async calcWith(params: { addNodes?: number[]; removeNodes?: number[]; masteryEffects?: Record<string | number, number>; useFullDPS?: boolean }): Promise<any> {

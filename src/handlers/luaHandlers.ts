@@ -627,28 +627,59 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
 
     const result = await luaClient.updateTreeDelta(params);
     const tree = result?.tree;
-    const autoPathedNodes = result?.autoPathedNodes;
-    const skippedAsc = result?.skippedAscendancyNodes;
+    const autoPathedNodes = result?.autoPathedNodes ?? [];
+    const skippedAsc = result?.skippedAscendancyNodes ?? [];
+    const dropped = result?.droppedNodes ?? [];
 
-    const actualCount = Array.isArray(tree?.nodes) ? tree.nodes.length : '?';
-    const addedCount  = addNodes?.length ?? 0;
-    const removedCount = removeNodes?.length ?? 0;
+    // Report what the backend says ACTUALLY landed. Reporting the requested counts here
+    // meant a delta that allocated nothing still printed "Added: 1 node(s)" — a silent
+    // no-op that read as success. Never infer success from the request.
+    const actualAdded = result?.added ?? [];
+    const actualRemoved = result?.removed ?? [];
+    const requestedAdd = addNodes?.length ?? 0;
+    const requestedRemove = removeNodes?.length ?? 0;
+    const totalCount = Array.isArray(tree?.nodes) ? tree.nodes.length : '?';
 
-    let text = `✅ Tree delta applied.\n`;
-    if (addedCount)    text += `  Added: ${addedCount} node(s)\n`;
-    if (removedCount)  text += `  Removed: ${removedCount} node(s)\n`;
-    text += `  Total allocated: ${actualCount} nodes\n`;
+    const nothingLanded =
+      actualAdded.length === 0 && actualRemoved.length === 0 && autoPathedNodes.length === 0;
 
-    if (autoPathedNodes && autoPathedNodes.length > 0) {
-      text += `\n🔗 Auto-pathed ${autoPathedNodes.length} intermediate node(s) to maintain connectivity.`;
+    let text = nothingLanded
+      ? `❌ Tree delta applied NO changes.\n`
+      : `✅ Tree delta applied.\n`;
+
+    if (requestedAdd) {
+      text += `  Added: ${actualAdded.length} of ${requestedAdd} requested\n`;
+    }
+    if (requestedRemove) {
+      text += `  Removed: ${actualRemoved.length} of ${requestedRemove} requested\n`;
+      if (actualRemoved.length > requestedRemove) {
+        // Deallocating a node strands anything that reached the tree through it.
+        text +=
+          `    ↳ ${actualRemoved.length - requestedRemove} extra node(s) were deallocated as ` +
+          `orphans (they reached the tree only through what you removed).\n`;
+      }
+    }
+    text += `  Total allocated: ${totalCount} nodes\n`;
+
+    if (autoPathedNodes.length > 0) {
+      text += `\n🔗 Auto-pathed ${autoPathedNodes.length} intermediate node(s) to maintain connectivity (IDs: ${autoPathedNodes.join(', ')}).`;
     }
 
-    if (skippedAsc && skippedAsc.length > 0) {
+    if (dropped.length > 0) {
+      text +=
+        `\n🔴 DROPPED ${dropped.length} requested node(s): ${dropped.join(', ')}\n` +
+        `   These could not be allocated — unreachable from the current tree, or invalid IDs. ` +
+        `Use find_path_to_node to get the travel nodes, then pass the full path.`;
+    }
+
+    if (skippedAsc.length > 0) {
       text += `\n🔴 BLOCKED: ${skippedAsc.length} ascendancy node(s) skipped — would exceed 8-point ascendancy cap (IDs: ${skippedAsc.join(', ')}).`;
     }
 
-    if (addedCount > 0 && !autoPathedNodes?.length && !skippedAsc?.length) {
-      text += `\n⚠️  If total count is lower than expected, some nodes may have been dropped (not connected or invalid IDs).`;
+    if (nothingLanded) {
+      text +=
+        `\n\n⚠️  The tree is UNCHANGED. Do not treat this as an applied edit — any stats you ` +
+        `read now reflect the pre-existing tree.`;
     }
 
     const ascUsed = tree?.ascendancyPointsUsed ?? 0;

@@ -24,7 +24,7 @@ function makeLuaClient(overrides: Partial<Record<string, jest.Mock>> = {}) {
   return {
     getBuildInfo: jest.fn<() => Promise<any>>().mockResolvedValue({ name: 'TestBuild', level: 90, className: 'Witch', ascendClassName: 'Occultist', treeVersion: '3_26' }),
     newBuild: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({ tree: { nodes: ['1', '2', '3'], ascendancyPointsUsed: 0 }, autoPathedNodes: [], skippedAscendancyNodes: [] }),
+    updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({ tree: { nodes: ['1', '2', '3'], ascendancyPointsUsed: 0 }, added: ['100', '200'], removed: [], autoPathedNodes: [], droppedNodes: [], skippedAscendancyNodes: [] }),
     searchNodes: jest.fn<() => Promise<any>>().mockResolvedValue({ nodes: [], count: 0 }),
     ...overrides,
   };
@@ -119,7 +119,7 @@ describe('handleUpdateTreeDelta', () => {
     const ctx = makeContext(client);
     const result = await handleUpdateTreeDelta(ctx, ['100', '200'], undefined);
     const text = result.content[0].text;
-    expect(text).toContain('Added: 2');
+    expect(text).toContain('Added: 2 of 2 requested');
     expect(text).toContain('Total allocated: 3');
   });
 
@@ -127,21 +127,21 @@ describe('handleUpdateTreeDelta', () => {
     const client = makeLuaClient({
       updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({
         tree: { nodes: ['1'], ascendancyPointsUsed: 0 },
-        autoPathedNodes: [],
-        skippedAscendancyNodes: [],
+        added: [], removed: ['50'],
+        autoPathedNodes: [], droppedNodes: [], skippedAscendancyNodes: [],
       }),
     });
     const ctx = makeContext(client);
     const result = await handleUpdateTreeDelta(ctx, undefined, ['50']);
-    expect(result.content[0].text).toContain('Removed: 1');
+    expect(result.content[0].text).toContain('Removed: 1 of 1 requested');
   });
 
   it('reports auto-pathed nodes when present', async () => {
     const client = makeLuaClient({
       updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({
         tree: { nodes: ['1', '2', '3', '4'], ascendancyPointsUsed: 0 },
-        autoPathedNodes: ['X', 'Y'],
-        skippedAscendancyNodes: [],
+        added: ['100'], removed: [],
+        autoPathedNodes: ['X', 'Y'], droppedNodes: [], skippedAscendancyNodes: [],
       }),
     });
     const ctx = makeContext(client);
@@ -153,13 +153,49 @@ describe('handleUpdateTreeDelta', () => {
     const client = makeLuaClient({
       updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({
         tree: { nodes: ['1'], ascendancyPointsUsed: 10 },
-        autoPathedNodes: [],
-        skippedAscendancyNodes: [],
+        added: ['999'], removed: [],
+        autoPathedNodes: [], droppedNodes: [], skippedAscendancyNodes: [],
       }),
     });
     const ctx = makeContext(client);
     const result = await handleUpdateTreeDelta(ctx, ['999'], undefined);
     expect(result.content[0].text).toContain('ascendancy');
+  });
+
+  // Regression: asking for one unreachable notable used to print "✅ ... Added: 1 node(s)"
+  // while allocating nothing, because the handler echoed the REQUESTED count.
+  it('flags a silent no-op instead of reporting success', async () => {
+    const client = makeLuaClient({
+      updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({
+        tree: { nodes: ['1', '2', '3'], ascendancyPointsUsed: 0 },
+        added: [], removed: [],
+        autoPathedNodes: [], droppedNodes: ['19897'], skippedAscendancyNodes: [],
+      }),
+    });
+    const ctx = makeContext(client);
+    const result = await handleUpdateTreeDelta(ctx, ['19897'], undefined);
+    const text = result.content[0].text;
+    expect(text).toContain('NO changes');
+    expect(text).toContain('UNCHANGED');
+    expect(text).not.toContain('✅');
+    // The dropped node must be named so the caller can path to it.
+    expect(text).toContain('19897');
+    expect(text).toContain('find_path_to_node');
+  });
+
+  it('never reports the requested count as applied on a partial success', async () => {
+    const client = makeLuaClient({
+      updateTreeDelta: jest.fn<() => Promise<any>>().mockResolvedValue({
+        tree: { nodes: ['1', '2'], ascendancyPointsUsed: 0 },
+        added: ['100'], removed: [],
+        autoPathedNodes: [], droppedNodes: ['200', '300'], skippedAscendancyNodes: [],
+      }),
+    });
+    const ctx = makeContext(client);
+    const result = await handleUpdateTreeDelta(ctx, ['100', '200', '300'], undefined);
+    const text = result.content[0].text;
+    expect(text).toContain('Added: 1 of 3 requested');
+    expect(text).toContain('DROPPED 2');
   });
 
   it('throws when neither add_nodes nor remove_nodes provided', async () => {

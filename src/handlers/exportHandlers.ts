@@ -182,6 +182,27 @@ export async function handleRestoreSnapshot(
   // Invalidate cache for this build
   buildService.invalidateBuild(args.build_name);
 
+  // Restoring only rewrote the file on disk. If a Lua/TCP session is live it is still
+  // holding the PRE-restore build in memory, and every subsequent stat read would be
+  // computed against state the user believes was rolled back. Push the restored XML into
+  // the session so "restored" means restored everywhere.
+  const { luaClient } = context;
+  if (luaClient) {
+    const name = args.build_name.replace(/\.xml$/i, '');
+    try {
+      await luaClient.loadBuildXml(result.restoredXml, name);
+      message += `\n\n🔄 Live PoB session reloaded — in-memory build now matches the snapshot.`;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      message +=
+        `\n\n⚠️ WARNING: the build FILE was restored, but pushing it into the live PoB ` +
+        `session FAILED (${detail}).\n` +
+        `PoB is still holding the pre-restore build in memory, so stats you read now will ` +
+        `NOT reflect this restore. Run lua_reload_build, or re-import the character, before ` +
+        `trusting any further numbers.`;
+    }
+  }
+
   return {
     content: [
       {
