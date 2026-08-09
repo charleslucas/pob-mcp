@@ -91,7 +91,11 @@ export async function handleLuaNewBuild(context: LuaHandlerContext, className?: 
   });
 }
 
-export async function handleLuaSaveBuild(context: LuaHandlerContext, buildName: string) {
+export async function handleLuaSaveBuild(
+  context: LuaHandlerContext,
+  buildName: string,
+  overwrite?: boolean,
+) {
   return wrapHandler('save build', async () => {
     await context.ensureLuaClient();
 
@@ -106,6 +110,41 @@ export async function handleLuaSaveBuild(context: LuaHandlerContext, buildName: 
 
     const fileName = buildName.endsWith('.xml') ? buildName : `${buildName}.xml`;
     const filePath = sanitizeBuildName(fileName, context.pobDirectory);
+
+    // Guard against clobbering someone else's build. Saving is a silent, unrecoverable
+    // overwrite -- PoB keeps no backup -- and a build folder is often years of characters.
+    // Re-saving the build you currently have open is the normal case and stays frictionless;
+    // writing over any OTHER existing file requires overwrite: true.
+    if (!overwrite) {
+      let exists = true;
+      try {
+        await fs.access(filePath);
+      } catch {
+        exists = false;
+      }
+      if (exists) {
+        let currentName: string | undefined;
+        try {
+          const info = await luaClient.getBuildInfo();
+          currentName = typeof info?.name === 'string' ? info.name : undefined;
+        } catch {
+          // If we cannot identify the open build, fail closed and make the caller confirm.
+        }
+        const currentFile = currentName
+          ? (currentName.endsWith('.xml') ? currentName : `${currentName}.xml`)
+          : undefined;
+        if (!currentFile || currentFile.toLowerCase() !== fileName.toLowerCase()) {
+          throw new Error(
+            `Refusing to overwrite existing build "${fileName}"` +
+            (currentFile ? ` (the open build is "${currentFile}")` : ' (could not identify the open build)') +
+            `. This would permanently replace that file — PoB keeps no backup. ` +
+            `Pass overwrite: true if you really mean to replace it, or choose a new name ` +
+            `(check list_builds first).`,
+          );
+        }
+      }
+    }
+
     const result = await luaClient.saveBuild(filePath);
 
     return {

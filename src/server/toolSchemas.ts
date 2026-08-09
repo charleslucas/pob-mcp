@@ -645,13 +645,17 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_save_build",
-      description: "Save the currently loaded in-memory Lua bridge build to a file. Required before using file-based tools (validate_build, analyze_build, etc.) on an in-memory build.",
+      description: "Save the currently loaded in-memory Lua bridge build to a file. Required before using file-based tools (validate_build, analyze_build, etc.) on an in-memory build. Also works as SAVE-AS: pass a new build_name to write a named version/checkpoint that appears in PoB's own build-load screen (the active build is NOT retargeted, so later saves still go to the original). Saving over a build OTHER than the one currently open is refused unless overwrite: true — it is a silent, permanent replacement and PoB keeps no backup. Call list_builds first when inventing a name.",
       inputSchema: {
         type: "object",
         properties: {
           build_name: {
             type: "string",
             description: "Output filename (e.g., 'MyBuild.xml'). .xml extension added automatically if missing.",
+          },
+          overwrite: {
+            type: "boolean",
+            description: "Allow replacing an EXISTING build file other than the one currently open. Default false. Only set this when the user has asked for that specific file to be replaced — it destroys the previous contents.",
           },
         },
         required: ["build_name"],
