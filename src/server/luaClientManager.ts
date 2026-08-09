@@ -19,10 +19,22 @@ import { PoBLuaApiClient, PoBLuaTcpClient, type AnyLuaClient } from '../pobLuaBr
 async function diagnoseTcpFailure(port: number): Promise<string> {
   if (process.platform !== 'win32') return '';
 
+  // windowsHide keeps this child off the server's console. The harness hands MCP
+  // servers a console whose conhost.exe never finishes initializing, and any child
+  // that attaches to it blocks at startup forever, at 0s CPU (root-caused 2026-08-09
+  // in poe-data-mcp's yt-dlp calls; this server gets the same broken console).
+  // The timeout is the belt to that suspenders: this Promise has no reject path, so
+  // a stalled tasklist would hang the *diagnosis* of a failed connection — turning a
+  // clear "PoB isn't running" message into an indefinite stall, exactly when the user
+  // is already in a broken state. Treat missing stdout as "not running".
   const pobRunning = await new Promise<boolean>(resolve => {
-    exec('tasklist /FI "IMAGENAME eq PathOfBuilding.exe" /NH', (_err, stdout) => {
-      resolve(stdout.toLowerCase().includes('pathofbuilding.exe'));
-    });
+    exec(
+      'tasklist /FI "IMAGENAME eq PathOfBuilding.exe" /NH',
+      { windowsHide: true, timeout: 5000 },
+      (_err, stdout) => {
+        resolve((stdout ?? '').toLowerCase().includes('pathofbuilding.exe'));
+      },
+    );
   });
 
   const appdata = process.env.APPDATA ?? '';

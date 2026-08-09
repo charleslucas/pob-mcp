@@ -627,6 +627,10 @@ export class PoBLuaApiClient extends PoBApiBase {
         cwd: this.options.cwd,
         env,
         stdio: ["pipe", "pipe", "pipe"],
+        // Never attach LuaJIT to this server's console — the harness-supplied console
+        // can be a half-initialized one that blocks children at startup forever
+        // (see luaClientManager's diagnoseTcpFailure for the full root cause).
+        windowsHide: true,
       });
     } catch (error: any) {
       throw new Error(`Failed to spawn LuaJIT process: ${error.message}`);
