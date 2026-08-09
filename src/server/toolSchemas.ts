@@ -1304,6 +1304,39 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "list_spectres",
+      description: "List the spectres set on the build (the 'raised' set PoB simulates for Raise Spectre), and optionally search PoB's full spectre library by name. IMPORTANT: character imports NEVER set spectres — the PoE API doesn't report them — so a build with none set simulates generic spectres and misses any player/ally buffs (e.g. Perfect Guardian Turtle's Determination aura). Spectre benefits are also greppable in reference_data/text_lake/spectres.txt (grants: column).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          search: {
+            type: "string",
+            description: "Optional case-insensitive substring to search the spectre library (e.g. 'turtle', 'perfect')",
+          },
+        },
+      },
+    },
+    {
+      name: "set_spectres",
+      description: "Set which spectres are 'raised' on the build — the GUI-only spectre picker, now scriptable. Accepts display names (fuzzy: exact id → exact name → unique substring, e.g. 'perfect guardian turtle') or monster metadata ids. Replaces the whole list by default; mode 'add' appends. Triggers a recalc, so player-affecting spectre auras (Determination, Onslaught, etc.) show up in stats immediately. Spectres persist across imports — set once, re-set only when the in-game zoo changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          spectres: {
+            type: "array",
+            items: { type: "string" },
+            description: "Spectre names or metadata ids, e.g. ['Perfect Guardian Turtle', 'Perfect Forest Warrior']",
+          },
+          mode: {
+            type: "string",
+            enum: ["replace", "add"],
+            description: "'replace' (default) sets exactly this list; 'add' appends to the existing list",
+          },
+        },
+        required: ["spectres"],
+      },
+    },
+    {
       name: "toggle_gem",
       description: "Enable or disable a specific gem within a socket group",
       inputSchema: {

@@ -24,7 +24,7 @@ import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
 import { handleComputeStatWeights } from "../handlers/statWeightsHandler.js";
 import { handleMinionDpsBreakdown } from "../handlers/minionDpsBreakdownHandler.js";
-import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleGetSocketColors, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled } from "../handlers/itemSkillHandlers.js";
+import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleGetSocketColors, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled, handleListSpectres, handleSetSpectres } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
 import { handleGetConfig, handleSetConfig, handleSetPobView, handleSetEnemyStats, handleSaveConfigPreset, handleLoadConfigPreset, handleListConfigPresets } from "../handlers/configHandlers.js";
@@ -707,6 +707,17 @@ export async function routeToolCall(
     case "toggle_gem":
       if (!args) throw new Error("Missing arguments");
       return await handleSetGemEnabled(itemSkillContext, args.group_index as number, args.gem_index as number, args.enabled as boolean);
+
+    case "list_spectres":
+      return await handleListSpectres(itemSkillContext, args?.search as string | undefined);
+
+    case "set_spectres":
+      if (!args) throw new Error("Missing arguments");
+      return await handleSetSpectres(
+        itemSkillContext,
+        args.spectres as string[],
+        args.mode as "replace" | "add" | undefined,
+      );
 
     case "setup_skill_with_gems": {
       if (!args) throw new Error("Missing arguments");

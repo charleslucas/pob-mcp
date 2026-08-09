@@ -663,6 +663,71 @@ export async function handleSetGemEnabled(
   });
 }
 
+export async function handleListSpectres(
+  context: ItemSkillHandlerContext,
+  search?: string
+) {
+  return wrapHandler('list spectres', async () => {
+    await context.ensureLuaClient();
+
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized. Use lua_start first.');
+    }
+
+    const result = await luaClient.listSpectres({ search });
+
+    const parts: string[] = [];
+    if (result.active.length === 0) {
+      parts.push('No spectres set on this build (Raise Spectre simulates generic spectres until some are).');
+    } else {
+      parts.push(`Active spectres (${result.active.length}):`);
+      for (const s of result.active) parts.push(`  - ${s.name} (${s.id})`);
+    }
+    if (result.search_results) {
+      parts.push('');
+      parts.push(`Library matches for "${search}" (${result.search_results.length}):`);
+      for (const s of result.search_results.slice(0, 30)) parts.push(`  - ${s.name} (${s.id})`);
+      if (result.search_results.length > 30) parts.push(`  ... ${result.search_results.length - 30} more`);
+    }
+
+    return {
+      content: [{ type: "text" as const, text: parts.join('\n') }],
+    };
+  });
+}
+
+export async function handleSetSpectres(
+  context: ItemSkillHandlerContext,
+  spectres: string[],
+  mode?: "replace" | "add"
+) {
+  return wrapHandler('set spectres', async () => {
+    await context.ensureLuaClient();
+
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized. Use lua_start first.');
+    }
+
+    if (!Array.isArray(spectres) || spectres.length === 0) {
+      throw new Error('spectres must be a non-empty array of names or metadata ids');
+    }
+
+    const result = await luaClient.setSpectres({ spectres, mode });
+
+    const names = result.active.map((s) => s.name).join(', ');
+    const text =
+      `✅ Spectre list ${mode === 'add' ? 'extended' : 'replaced'}. Active: ${names || '(none)'}.\n` +
+      `Note: spectres persist across character imports (the PoE API never reports them) — ` +
+      `re-run this only when the in-game zoo changes.`;
+
+    return {
+      content: [{ type: "text" as const, text }],
+    };
+  });
+}
+
 export async function handleSetupSkillWithGems(
   context: ItemSkillHandlerContext,
   gems: Array<{

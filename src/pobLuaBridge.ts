@@ -302,6 +302,26 @@ abstract class PoBApiBase {
     if (!res.ok) throw new Error(res.error || "set_gem_enabled failed");
   }
 
+  async listSpectres(params: { search?: string }): Promise<{
+    active: Array<{ id: string; name: string }>;
+    search_results?: Array<{ id: string; name: string }>;
+  }> {
+    const res = await this.send({ action: "list_spectres", params });
+    if (!res.ok) throw new Error(res.error || "list_spectres failed");
+    return res.result as {
+      active: Array<{ id: string; name: string }>;
+      search_results?: Array<{ id: string; name: string }>;
+    };
+  }
+
+  async setSpectres(params: { spectres: string[]; mode?: "replace" | "add" }): Promise<{
+    active: Array<{ id: string; name: string }>;
+  }> {
+    const res = await this.send({ action: "set_spectres", params });
+    if (!res.ok) throw new Error(res.error || "set_spectres failed");
+    return res.result as { active: Array<{ id: string; name: string }> };
+  }
+
   async searchNodes(params: { keyword: string; nodeType?: string; maxResults?: number; includeAllocated?: boolean }): Promise<any> {
     const res = await this.send({ action: "search_nodes", params });
     if (!res.ok) throw new Error(res.error || "search_nodes failed");
