@@ -5,6 +5,7 @@
  */
 
 import type { OptimizationConstraints } from "../types/optimization.js";
+import { getToolSchemas, getLuaToolSchemas, getOptimizationToolSchemas } from "./toolSchemas.js";
 import type { ToolGate } from "./toolGate.js";
 import type { ContextBuilder } from "../utils/contextBuilder.js";
 import type { TradeApiClient } from "../services/tradeClient.js";
@@ -103,6 +104,31 @@ const AUTO_VIEW_BY_TOOL: Record<string, string> = {
   clear_item_slot: "ITEMS",
 };
 
+/**
+ * name -> { required, declared } from every schema source, built once on first use.
+ * Used only for pre-dispatch argument validation below.
+ */
+let argSpecByTool: Map<string, { required: string[]; declared: Set<string> }> | null = null;
+function getArgSpecByTool() {
+  if (!argSpecByTool) {
+    argSpecByTool = new Map();
+    const all: any[] = [
+      ...getToolSchemas(),
+      ...getLuaToolSchemas(),
+      ...getOptimizationToolSchemas(),
+    ];
+    for (const tool of all) {
+      const schema = tool?.inputSchema;
+      if (!schema) continue;
+      argSpecByTool.set(tool.name, {
+        required: Array.isArray(schema.required) ? schema.required : [],
+        declared: new Set(Object.keys(schema.properties ?? {})),
+      });
+    }
+  }
+  return argSpecByTool;
+}
+
 export async function routeToolCall(
   name: string,
   args: Record<string, unknown> | undefined,
@@ -110,6 +136,36 @@ export async function routeToolCall(
 ): ToolResponse {
   // Check tool gate first
   deps.toolGate.checkGate(name);
+
+  // Validate declared-required arguments BEFORE dispatch.
+  //
+  // Without this, a missing required argument arrives as `undefined`, the handler
+  // runs regardless, and the tool reports SUCCESS while having done nothing — the
+  // worst failure mode a tool can have, because the caller believes the result.
+  // Observed twice: add_item (called with `slot`, which is not the parameter name —
+  // the real one is `slot_name` — so nothing was equipped yet it answered
+  // "✅ Item added → Gloves"), and lua_save_build (reported a config update with
+  // every field `undefined`).
+  //
+  // A misspelled or renamed parameter is the usual cause, so surface any argument
+  // the schema doesn't declare: that is the clue which turns a baffling no-op into
+  // an obvious typo. Unknown args are only *reported*, never rejected — some
+  // handlers legitimately read args the schema omits (e.g. add_item's
+  // `no_auto_equip`), and rejecting those would break working calls.
+  const spec = getArgSpecByTool().get(name);
+  if (spec && spec.required.length > 0) {
+    const missing = spec.required.filter((key) => args?.[key] === undefined);
+    if (missing.length > 0) {
+      const extras = Object.keys(args ?? {}).filter((key) => !spec.declared.has(key));
+      throw new Error(
+        `${name}: missing required argument${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.` +
+          (extras.length > 0
+            ? ` Also received undeclared argument${extras.length > 1 ? "s" : ""}: ${extras.join(", ")}` +
+              ` — likely a name mismatch. Declared: ${[...spec.declared].join(", ")}.`
+            : ""),
+      );
+    }
+  }
 
   // Auto-switch the visible PoB tab BEFORE a mutating op, so a human watching the
   // GUI sees the change land in real time. TCP/GUI only; skipped in headless mode
