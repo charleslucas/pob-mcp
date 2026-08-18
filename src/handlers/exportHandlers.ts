@@ -168,8 +168,17 @@ export async function handleRestoreSnapshot(
   return wrapHandler('restore snapshot', async () => {
   const { exportService, buildService } = context;
 
+  // Normalise exactly as snapshot_build and list_snapshots do. Snapshots live in
+  // <snapshots>/<buildName>.xml/, and those two handlers append the extension before
+  // resolving that directory — this one did not, so it looked in a directory that
+  // never exists and reported "Snapshot not found. Available snapshots:" with an
+  // EMPTY list, while list_snapshots showed the very ID being asked for.
+  // Net effect: restore could only ever work if the caller happened to pass the name
+  // WITH .xml — i.e. the rollback path for every sim was silently broken.
+  const fileName = args.build_name.endsWith('.xml') ? args.build_name : `${args.build_name}.xml`;
+
   const result = await exportService.restoreSnapshot({
-    buildName: args.build_name,
+    buildName: fileName,
     snapshotId: args.snapshot_id,
     backupCurrent: args.backup_current,
   });
