@@ -378,9 +378,40 @@ export async function handleAnalyzeItemMods(
     lines.push("");
   }
   if (other.length > 0) {
-    lines.push(`--- UNCLASSIFIED (${other.length}) ---`);
+    lines.push(`--- UNCLASSIFIED (${other.length}) — ⚠ these still occupy affix slots ---`);
     for (const a of other) lines.push(...formatOne(a));
     lines.push("");
+  }
+
+  // Affix-budget summary. "Unclassified" means we couldn't match the line to a
+  // natural/bench template (special mods, influence-only mods, incursion/synth text,
+  // lab enchants read from pasted text) — it does NOT mean the line is free: except
+  // for implicits and lab enchants, every explicit line occupies a prefix or suffix.
+  // Field-hit 2026-08-19: a special glove mod ("Minions convert 100% of Fire Damage
+  // to Chaos Damage") landed in UNCLASSIFIED, the caller counted only the classified
+  // lines, concluded "two open prefixes", and recommended an Exalt slam on an item
+  // the game correctly reports as FULL. State the budget explicitly so open-affix
+  // counts are read from here, not inferred.
+  {
+    const enchantedOther = other.filter((a) => a.source === "enchanted").length;
+    const occupyingOther = other.length - enchantedOther;
+    const explicitCount = prefixes.length + suffixes.length + occupyingOther;
+    lines.push("Affix budget (rare: max 3 prefixes + 3 suffixes):");
+    lines.push(`  Classified: ${prefixes.length} prefix(es), ${suffixes.length} suffix(es).`);
+    if (occupyingOther > 0) {
+      lines.push(
+        `  ⚠ Plus ${occupyingOther} unclassified explicit line(s) of UNKNOWN affix type — each occupies a` +
+        ` prefix OR suffix slot. Open-slot count is therefore AMBIGUOUS: between` +
+        ` ${Math.max(0, 3 - prefixes.length - occupyingOther)} and ${Math.max(0, 3 - prefixes.length)} prefixes` +
+        ` and between ${Math.max(0, 3 - suffixes.length - occupyingOther)} and ${Math.max(0, 3 - suffixes.length)} suffixes` +
+        ` may be open. Verify in game (hold Alt) before spending currency on an "open" slot.`
+      );
+    } else {
+      lines.push(`  Open on a rare: ${Math.max(0, 3 - prefixes.length)} prefix(es), ${Math.max(0, 3 - suffixes.length)} suffix(es).`);
+    }
+    if (explicitCount >= 6) {
+      lines.push(`  Item has ${explicitCount} explicit mods — FULL. No currency can add a mod.`);
+    }
   }
 
   const craftedCount = analyses.filter((a) => a.source === "crafted").length;
