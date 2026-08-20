@@ -528,7 +528,7 @@ export function getToolSchemas(): ToolSchema[] {
     },
     {
       name: "get_node_power",
-      description: "Return passive nodes ranked by PoB's built-in node power score (the same heat-map data shown by 'Show Node Power' on the tree). Each node gets an offence score (DPS contribution) and a defence score (life/armour/ES/evasion contribution). Requires the power to have been calculated — either enable 'Show Node Power' in PoB first, or pass recalculate=true (triggers PoB's PowerBuilder coroutine synchronously; takes a few seconds on large trees). Results are sorted by the chosen mode and filtered/depth-limited as requested.",
+      description: "Return passive nodes ranked by PoB's built-in node power score (the same heat-map data shown by 'Show Node Power' on the tree). Each node gets an offence score (DPS contribution) and a defence score (life/armour/ES/evasion contribution). Requires the power to have been calculated — either enable 'Show Node Power' in PoB first, or pass recalculate=true (starts PoB's PowerBuilder; the API drives it in the background and partial data is available immediately). ⚠ Cost scales with the build's calc weight: on a build using the spectre MODELING GROUP (multiple Raise Spectre instances), a full recalculation is ~1300 nodes × several minion environments and can take MINUTES, degrading PoB's responsiveness meanwhile — consider temporarily disabling the modeling group (toggle_socket_group enabled=false) before tree-power work, then re-enabling. The API no longer pre-warms this on connect and never auto-restarts it on build changes (that starved the TCP bridge).",
       inputSchema: {
         type: "object",
         properties: {
