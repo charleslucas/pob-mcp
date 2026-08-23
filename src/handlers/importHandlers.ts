@@ -476,6 +476,37 @@ export async function handleImportCharacter(
       );
     }
 
+    // 3b. Refuse to apply an empty payload. The PoE API can return HTTP 200 with
+    // empty/false bodies (expired POESESSID, profile privacy, or a GGG incident)
+    // while the character LIST still works. Applying that "success" wipes every
+    // item, gem, and passive from the loaded build — observed 2026-08-23: a
+    // level-97 character imported as 0 nodes / 0 items / 0 gems, twice, and only
+    // the on-disk save prevented data loss. A real character above level 2 always
+    // has passives and items; an empty pair is an auth/API failure, never a build.
+    const levelForSanity = typeof charMeta.level === "number" ? charMeta.level : 99;
+    if (levelForSanity > 2) {
+      let passiveCount = -1;
+      let itemCount = -1;
+      try {
+        const p = JSON.parse(passiveJson);
+        passiveCount = Array.isArray(p?.hashes) ? p.hashes.length : 0;
+      } catch { /* unparseable = not a real payload; counts stay -1 */ }
+      try {
+        const it = JSON.parse(itemsJson);
+        itemCount = Array.isArray(it?.items) ? it.items.length : 0;
+      } catch { /* as above */ }
+      if (passiveCount <= 0 && itemCount <= 0) {
+        throw new Error(
+          `PoE API returned an EMPTY character payload for level-${levelForSanity} "${charTrimmed}" ` +
+            `(passives: ${Math.max(passiveCount, 0)}, items: ${Math.max(itemCount, 0)}) — refusing to import, ` +
+            `as applying it would wipe the loaded build. The character list still resolving while content ` +
+            `endpoints return nothing usually means the POE_SESSION_ID has expired (get a fresh POESESSID ` +
+            `cookie from pathofexile.com and update the MCP config), the profile's Characters tab was made ` +
+            `private, or the PoE API is having an incident. The loaded build is untouched.`
+        );
+      }
+    }
+
     const charDataForLua = {
       name: charMeta.name,
       level: typeof charMeta.level === "number" ? charMeta.level : 1,
