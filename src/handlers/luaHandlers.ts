@@ -5,6 +5,17 @@ import path from "path";
 import { wrapHandler } from "../utils/errorHandling.js";
 import { sanitizeBuildName } from "../utils/pathSanitizer.js";
 
+/**
+ * Normalise CRLF/CR to LF before handing build XML to PoB, matching what PoB's own
+ * loader gets from a text-mode io.open(path, "r") on Windows. PoB saves in text mode,
+ * so every "\n" inside a text field (Notes, custom modifier blocks) is written as
+ * "\r\n"; if the raw CRLF file is loaded back verbatim, the "\r" survives into the
+ * field and the next save writes "\r\r\n" — one more CR per load/save cycle.
+ */
+export function normalizeEol(xml: string): string {
+  return xml.replace(/\r+\n/g, "\n").replace(/\r/g, "\n");
+}
+
 export interface LuaHandlerContext {
   pobDirectory: string;
   luaEnabled: boolean;
@@ -187,7 +198,7 @@ export async function handleLuaLoadBuild(
     }
 
     // Pass resolvedPath so TCP mode can update PoB's recent-files list.
-    await luaClient.loadBuildXml(xml, name, resolvedPath);
+    await luaClient.loadBuildXml(normalizeEol(xml), name, resolvedPath);
 
     // Check for multiple specs / item sets and inform the user (sequential — bridge is single-request)
     const extraLines: string[] = [];
@@ -642,7 +653,7 @@ export async function handleLuaReloadBuild(context: LuaHandlerContext, buildName
     const buildPath = sanitizeBuildName(fileName, context.pobDirectory);
     const xml = await fs.readFile(buildPath, 'utf-8');
     const name = fileName.replace(/\.xml$/i, '');
-    await luaClient.loadBuildXml(xml, name);
+    await luaClient.loadBuildXml(normalizeEol(xml), name);
 
     return {
       content: [{ type: "text" as const, text: `✅ Build "${fileName}" reloaded from disk.` }],
