@@ -771,8 +771,9 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
     const luaClient = context.getLuaClient();
     if (!luaClient) throw new Error('Lua client not initialized');
 
-    if (!addNodes?.length && !removeNodes?.length) {
-      throw new Error('At least one of add_nodes or remove_nodes must be provided.');
+    const hasMastery = !!masteryEffects && Object.keys(masteryEffects).length > 0;
+    if (!addNodes?.length && !removeNodes?.length && !hasMastery) {
+      throw new Error('At least one of add_nodes, remove_nodes or mastery_effects must be provided.');
     }
 
     const params: { addNodes?: number[]; removeNodes?: number[]; masteryEffects?: Record<string, number> } = {};
