@@ -426,6 +426,59 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "classify_item_affixes",
+      description: "Resolve an item's explicit mod lines back to the affixes that produced them, using Path of Building's ModExplicit (legacy ModItem) and ModMaster tables. Reports matched prefix and suffix counts, remaining slots when the classification is complete and unambiguous, affix ranges and minimum item levels, and which lines belong to one hybrid affix. USE THIS BEFORE recommending any craft or reroll: one affix can print several lines, and counting those lines separately inverts the answer (a hybrid energy shield prefix also prints stun recovery, which reads like a suffix). LIMITS: explicit mods only. Unmatched lines may be unrecognized explicit affixes that still occupy slots. Remaining slots are reported as unknown when any lines are unmatched or ambiguous. An item whose lines admit more than one reading is flagged as ambiguous rather than guessed. Slot counts assume a rare, which holds three prefixes and three suffixes; a magic item holds one of each.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mod_lines: {
+            type: "array",
+            items: { type: "string" },
+            description: "The item's mod lines, one per entry, exactly as printed (e.g. '+42 to maximum Life'). PoB tags such as {crafted} are stripped automatically.",
+          },
+        },
+        required: ["mod_lines"],
+      },
+    },
+    {
+      name: "find_affix_tiers",
+      description: "Look up every tier of a rollable affix in Path of Building's ModExplicit table (ModItem on older installs): prefix or suffix, minimum item level, the value range per entry, and the base tags it can roll on. Displays affix names and item levels without inventing T1/T2 labels from filtered result order. Use it to price an affix before pricing an item, since a top-tier rare suffix often replaces a costly unique built around the same stat. LIMITS: slot filtering uses PoB's base tags, not slot names. Body armour bases carry str_armour / dex_armour / int_armour and their hybrids; influenced variants add a suffix like _elder or _shaper; a plain 'armour' tag exists too and does not cover the attribute-specific ones. Pass several tags when unsure. Mods whose spawn weights are all zero are excluded unless include_unobtainable is set.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          search: {
+            type: "string",
+            description: "Stat wording, affix name, group or mod tag (e.g. 'Chaos Resistance', 'of Bameth', 'ChaosResistance').",
+          },
+          affix_type: {
+            type: "string",
+            enum: ["Prefix", "Suffix"],
+            description: "Restrict to prefixes or suffixes.",
+          },
+          slot_tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "PoB base tags the mod must be able to roll on, matched exactly, any one of them. Examples: 'ring', 'amulet', 'belt', 'int_armour', 'body_armour', 'bow'.",
+          },
+          max_item_level: {
+            type: "number",
+            description: "Drop tiers the item level cannot reach.",
+          },
+          include_unobtainable: {
+            type: "boolean",
+            description: "Include mods with no non-zero spawn weight. They exist in the data but nothing can roll them. Default false.",
+            default: false,
+          },
+          max_results: {
+            type: "number",
+            description: "Maximum affix groups to return (default 10).",
+            default: 10,
+          },
+        },
+        required: ["search"],
+      },
+    },
+    {
       name: "analyze_item_mods",
       description: "Identify each mod line on an item against PoB's data and report tier info + next-tier upgrade target. Two input modes:\n1. `mod_lines` — array of explicit prefix/suffix lines, exactly as PoE shows them (e.g. '+150 to maximum Life'). Append ` {crafted}` / ` {fractured}` to tag those.\n2. `item_slot` — read a live equipped item straight from the open PoB build over TCP (e.g. 'Body Armour', 'Helmet', 'Ring 1', 'Weapon 1'). The tool fetches the item, extracts its explicit/crafted/fractured mods, and auto-derives base_name + ilvl from the item. Requires PoB launched via LaunchPoBWithAPI.bat. (item_slot takes precedence over mod_lines.)\n\nOptional `base_name` (e.g. 'Astral Plate') gates matching by tag chain — sharpens disambiguation and makes tier ladders reflect only mods rollable on the base. Optional `ilvl` filters the tier ladder. Both are auto-filled when item_slot is used.\n\nFor each line: matched mod ID, affix name, mod group, tier rank (e.g. T3 of 13), and the next-tier mod with required ilvl + new value range. `{crafted}` lines match the bench-craft pool (ModMaster.lua). Hybrid-mod continuation lines are collapsed. Provide one of mod_lines or item_slot.",
       inputSchema: {

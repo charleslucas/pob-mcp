@@ -59,6 +59,7 @@ import { handleSearchMasterCrafts, handleGetEssenceDetail } from "../handlers/cr
 import { handleGetStatBreakdown } from "../handlers/statBreakdownHandler.js";
 import { handleGetCalcBreakdown } from "../handlers/calcBreakdownHandler.js";
 import { handleCalculateModOdds } from "../handlers/calculateModOddsHandler.js";
+import { handleClassifyItemAffixes, handleFindAffixTiers } from "../handlers/affixHandlers.js";
 
 export interface ToolRouterDependencies {
   toolGate: ToolGate;
@@ -401,6 +402,19 @@ export async function routeToolCall(
           ensureLuaClient: deps.ensureLuaClient,
         }
       );
+
+    case "classify_item_affixes":
+      return await handleClassifyItemAffixes({ mod_lines: (args?.mod_lines as string[]) ?? [] });
+
+    case "find_affix_tiers":
+      return await handleFindAffixTiers({
+        search: String(args?.search ?? ""),
+        affix_type: args?.affix_type === undefined ? undefined : String(args.affix_type),
+        slot_tags: (args?.slot_tags as string[]) ?? undefined,
+        max_item_level: args?.max_item_level === undefined ? undefined : Number(args.max_item_level),
+        include_unobtainable: Boolean(args?.include_unobtainable),
+        max_results: args?.max_results === undefined ? undefined : Number(args.max_results),
+      });
 
     case "search_master_crafts":
       return await handleSearchMasterCrafts({
