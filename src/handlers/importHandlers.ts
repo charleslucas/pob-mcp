@@ -726,6 +726,35 @@ interface PobImportTarget {
  *     https://poedb.tw/us/PathOfBuilding?id=E22R8MtObaQv
  *     https://poedb.tw/pt/PathOfBuilding?id=E22R8MtObaQv
  */
+/**
+ * Decode a raw PoB export code (what PoB's Import/Export tab "Generate" produces:
+ * URL-safe base64 of zlib-deflated build XML) into XML. Returns null when the input
+ * does not look like a code, so URLs and short pobb.in IDs fall through untouched.
+ * Decoding happens in Node: headless PoB's Inflate is a stub, and the TCP path just
+ * needs the XML. (Ported in spirit from pob-mcp upstream 3564c69, lua_import_code.)
+ */
+export function decodePobExportCode(input: string): string | null {
+  const code = input.trim();
+  // pobb.in IDs are ~12 chars; even a bare tree-only export is hundreds.
+  if (code.length < 200 || !/^[A-Za-z0-9+/_=-]+$/.test(code)) return null;
+  const compressed = Buffer.from(code.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+  let xml: string;
+  try {
+    xml = zlib.inflateSync(compressed).toString("utf8");
+  } catch (zlibErr) {
+    try {
+      xml = zlib.inflateRawSync(compressed).toString("utf8");
+    } catch {
+      const msg = zlibErr instanceof Error ? zlibErr.message : String(zlibErr);
+      throw new Error(`Input looks like a PoB export code but could not be decoded: ${msg}`);
+    }
+  }
+  if (!xml.includes("<PathOfBuilding")) {
+    throw new Error("Decoded the export code, but the result is not Path of Building XML.");
+  }
+  return xml;
+}
+
 function parsePobImportInput(urlOrId: string): PobImportTarget {
   const trimmed = urlOrId.trim();
 
@@ -856,14 +885,20 @@ export async function handleImportPobb(
       throw new Error("url_or_id is required");
     }
 
-    const target = parsePobImportInput(urlOrId);
+    // A pasted export code needs no fetch; anything else is a URL or pobb.in ID.
+    const decodedXml = decodePobExportCode(urlOrId);
+    const target: PobImportTarget = decodedXml
+      ? { displayId: `code-${urlOrId.trim().slice(-8).replace(/[^A-Za-z0-9]/g, "")}`, source: "export code", xmlUrl: "", metaUrl: null }
+      : parsePobImportInput(urlOrId);
     const { displayId: id, source, xmlUrl, metaUrl } = target;
 
     // Fetch XML (required) and metadata (optional) — in parallel when both present.
-    const [xml, metaText] = await Promise.all([
-      fetchBuildUrl(xmlUrl, `XML for ${id} (${source})`),
-      metaUrl ? fetchBuildUrl(metaUrl, `metadata for ${id}`).catch(() => null) : Promise.resolve(null),
-    ]);
+    const [xml, metaText] = decodedXml
+      ? [decodedXml, null]
+      : await Promise.all([
+          fetchBuildUrl(xmlUrl, `XML for ${id} (${source})`),
+          metaUrl ? fetchBuildUrl(metaUrl, `metadata for ${id}`).catch(() => null) : Promise.resolve(null),
+        ]);
 
     // Parse the metadata JSON (best-effort — don't fail if malformed).
     let title: string = id;
@@ -941,7 +976,7 @@ export async function handleImportPobb(
       // Auto-context summary: key stats + top issues.
       const summaryLines: string[] = [];
       const metaHeaderParts: string[] = [
-        `Imported from ${source}: ${xmlUrl.replace(/\/xml$/, "")}`,
+        xmlUrl ? `Imported from ${source}: ${xmlUrl.replace(/\/xml$/, "")}` : `Imported from a pasted ${source}`,
       ];
       if (metaClass) metaHeaderParts.push(`Class: ${metaClass}`);
       if (metaSkill) metaHeaderParts.push(`Main skill: ${metaSkill}`);

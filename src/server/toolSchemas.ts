@@ -779,13 +779,13 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "lua_import_pobb",
-      description: "Load a Path of Building build from a pobb.in or poedb.tw URL (or bare pobb.in ID) into PoB. Accepts: pobb.in URLs (https://pobb.in/abc123), user-namespaced pobb.in URLs (https://pobb.in/u/user/abc123), bare pobb.in IDs (abc123), or poedb.tw URLs (https://poedb.tw/us/PathOfBuilding?id=abc123). Fetches the build XML, opens it in PoB, and returns a stat summary. In TCP mode this opens the build in the running PoB GUI.",
+      description: "Load a Path of Building build from a pobb.in or poedb.tw URL (or bare pobb.in ID) into PoB. Accepts: pobb.in URLs (https://pobb.in/abc123), user-namespaced pobb.in URLs (https://pobb.in/u/user/abc123), bare pobb.in IDs (abc123), or poedb.tw URLs (https://poedb.tw/us/PathOfBuilding?id=abc123). Fetches the build XML, opens it in PoB, and returns a stat summary. In TCP mode this opens the build in the running PoB GUI. Also accepts a raw PoB export code (the string from PoB's Import/Export tab 'Generate' button, URL-safe base64 + zlib), decoded locally with no fetch.",
       inputSchema: {
         type: "object",
         properties: {
           url_or_id: {
             type: "string",
-            description: "pobb.in URL (https://pobb.in/abc123), user-namespaced URL (https://pobb.in/u/username/abc123), or raw build ID (abc123).",
+            description: "pobb.in URL (https://pobb.in/abc123), user-namespaced URL (https://pobb.in/u/username/abc123), or raw build ID (abc123). — or a raw PoB export code",
           },
         },
         required: ["url_or_id"],
