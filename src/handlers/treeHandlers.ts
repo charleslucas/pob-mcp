@@ -20,11 +20,14 @@ const simEHP = (o: any): number => Number(o?.TotalEHP) || Number(o?.Life) || 0;
  * calcWith scores the main skill only, so DPS cannot rank at all; callers must say so
  * rather than print "Base DPS: 1" (the divisor floor) as if it were a value.
  */
-async function simBaseline(luaClient: any, fallback: Record<string, any>): Promise<{ dps: number; ehp: number; mainSkillDps: number }> {
+async function simBaseline(luaClient: any, fallback: Record<string, any>): Promise<{ dps: number; ehp: number; mainSkillDps: number; isMinionMain: boolean }> {
   const out = await luaClient.calcWith({ masteryEffects: {} }).catch(() => null);
   const dps = simDPS(out) || Number(fallback.CombinedDPS) || Number(fallback.TotalDPS) || Number(fallback.MinionTotalDPS) || 0;
   const ehp = simEHP(out) || Number(fallback.TotalEHP) || Number(fallback.Life) || 0;
-  return { dps: dps || 1, ehp: ehp || 1, mainSkillDps: dps };
+  // The main skill's damage comes from minions when the player deals none of it.
+  const playerDps = Number(out?.CombinedDPS) || Number(out?.TotalDPS) || 0;
+  const minionDps = Number(out?.Minion?.CombinedDPS) || Number(out?.Minion?.TotalDPS) || 0;
+  return { dps: dps || 1, ehp: ehp || 1, mainSkillDps: dps, isMinionMain: playerDps === 0 && minionDps > 0 };
 }
 
 /** Shown when the main skill deals no damage, so only EHP can rank. */
@@ -579,7 +582,7 @@ export async function handleGetPassiveUpgrades(
   // Step 1: get current base stats and issues to determine search keywords
   const { issues, stats: baseStats } = await handleGetBuildIssues(context);
 
-  const { dps: baseDPS, ehp: baseEHP, mainSkillDps } = await simBaseline(luaClient, baseStats);
+  const { dps: baseDPS, ehp: baseEHP, mainSkillDps, isMinionMain } = await simBaseline(luaClient, baseStats);
 
   // Step 2: map focus + issues to search keywords
   // Use broad keywords that cover attack, spell, and generic damage scaling.
@@ -587,7 +590,10 @@ export async function handleGetPassiveUpgrades(
   const keywords: string[] = [];
 
   if (focus === 'dps' || focus === 'both') {
-    keywords.push('damage', 'attack speed', 'accuracy', 'physical');
+    // A minion main skill scales off minion stats; attack/accuracy notables can never
+    // move it, and searching them left every minion notable unevaluated.
+    if (isMinionMain) keywords.push('minion', 'offering');
+    else keywords.push('damage', 'attack speed', 'accuracy', 'physical');
   }
 
   if (focus === 'defence' || focus === 'both') {
@@ -607,7 +613,8 @@ export async function handleGetPassiveUpgrades(
       const results = await luaClient.searchNodes({
         keyword,
         nodeType: 'notable',
-        maxResults: 12,
+        // 'minion' is the one keyword a minion build relies on; give it room.
+        maxResults: keyword === 'minion' ? 30 : 12,
         includeAllocated: false,
       });
       if (results && results.nodes) {
