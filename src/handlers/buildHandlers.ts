@@ -6,6 +6,7 @@ import type { HandlerContext } from "../utils/contextBuilder.js";
 import { PoBLuaTcpClient } from "../pobLuaBridge.js";
 import path from "path";
 import fs from "fs/promises";
+import { atomicWriteFile } from "../utils/atomicWrite.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 import { sanitizeBuildName } from "../utils/pathSanitizer.js";
 export type { HandlerContext } from "../utils/contextBuilder.js";
@@ -454,7 +455,7 @@ export async function handleSetBuildNotes(context: HandlerContext, buildName: st
     } else {
       xml = xml.replace('</PathOfBuilding>', `  <Notes>${escaped}</Notes>\n</PathOfBuilding>`);
     }
-    await fs.writeFile(buildPath, xml, 'utf-8');
+    await atomicWriteFile(buildPath, xml);
     context.buildService.invalidateBuild(fileName);
 
     return {

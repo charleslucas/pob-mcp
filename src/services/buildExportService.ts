@@ -1,5 +1,6 @@
 import { XMLBuilder } from "fast-xml-parser";
 import fs from "fs/promises";
+import { atomicWriteFile } from "../utils/atomicWrite.js";
 import path from "path";
 import type { PoBBuild, SnapshotMetadata } from "../types.js";
 import { sanitizeBuildName } from "../utils/pathSanitizer.js";
@@ -134,7 +135,7 @@ export class BuildExportService {
     const xmlContent = this.buildToXML(build);
 
     // Write to file
-    await fs.writeFile(buildPath, xmlContent, 'utf-8');
+    await atomicWriteFile(buildPath, xmlContent);
 
     const nodesAdded = options.nodes.filter((n: string) => !oldNodes.includes(n)).length;
     const nodesRemoved = oldNodes.filter((n: string) => !options.nodes.includes(n)).length;
@@ -314,7 +315,7 @@ export class BuildExportService {
     // Restore from snapshot
     const buildPath = sanitizeBuildName(options.buildName, this.pobDirectory);
     const snapshotContent = await fs.readFile(snapshot.filePath, 'utf-8');
-    await fs.writeFile(buildPath, snapshotContent, 'utf-8');
+    await atomicWriteFile(buildPath, snapshotContent);
 
     return {
       message: `Build restored from snapshot: ${snapshot.metadata.tag} (${snapshot.id})`,
@@ -381,7 +382,7 @@ export class BuildExportService {
       }
     }
 
-    await fs.writeFile(filePath, content, 'utf-8');
+    await atomicWriteFile(filePath, content);
   }
 
   /**

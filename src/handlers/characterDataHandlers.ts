@@ -14,6 +14,7 @@
  */
 
 import fs from "fs/promises";
+import { atomicWriteFile } from "../utils/atomicWrite.js";
 import path from "path";
 import { wrapHandler } from "../utils/errorHandling.js";
 import { parseItemRawMods } from "../utils/itemRawParser.js";
@@ -264,7 +265,7 @@ export async function handleComputeConstraintMargins(
         : -1;
       if (captionIdx >= 0) lines[captionIdx] = caption;
       else lines.splice(headerIdx, 0, caption);
-      await fs.writeFile(resolved, lines.join("\n"), "utf-8");
+      await atomicWriteFile(resolved, lines.join("\n"));
     }
 
     // Human-readable report
@@ -424,7 +425,7 @@ export async function handleSyncCharacterCache(
           report.push(`meta.json — ${changes.length} field(s) updated:`);
           for (const c of changes) report.push(`  • ${c}`);
         }
-        if (!dryRun) await fs.writeFile(metaPath, JSON.stringify(meta, null, 2) + "\n", "utf-8");
+        if (!dryRun) await atomicWriteFile(metaPath, JSON.stringify(meta, null, 2) + "\n");
       }
       report.push("");
     }
@@ -486,7 +487,7 @@ export async function handleSyncCharacterCache(
           if (preserved.length > 0) report.push(`  (${preserved.length} unchanged slot(s) preserved: ${preserved.join(", ")})`);
         }
         report.push("Jewels and eldritch implicits are curated by hand — not touched by this tool.");
-        if (!dryRun) await fs.writeFile(invPath, JSON.stringify(inv, null, 2) + "\n", "utf-8");
+        if (!dryRun) await atomicWriteFile(invPath, JSON.stringify(inv, null, 2) + "\n");
       }
       report.push("");
     }
