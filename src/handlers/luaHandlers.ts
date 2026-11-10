@@ -832,9 +832,7 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
 
     if (masteryNoEffect.length > 0) {
       text +=
-        `
-🔴 REFUSED ${masteryNoEffect.length} Mastery node(s) with no effect chosen: ${masteryNoEffect.join(', ')}
-` +
+        `\n🔴 REFUSED ${masteryNoEffect.length} Mastery node(s) with no effect chosen: ${masteryNoEffect.join(', ')}\n` +
         `   A Mastery grants nothing until an effect is selected. Pass mastery_effects ` +
         `({"<nodeId>": <effectId>}); get effect IDs from suggest_masteries or search_tree_nodes.`;
     }
