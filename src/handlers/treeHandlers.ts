@@ -4,6 +4,35 @@ import type { TreeAnalysisResult, TreeComparison, PassiveTreeNode, AllocationCha
 import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
 
+/**
+ * DPS/EHP exactly as a calcWith candidate reports them: player hit DPS, else the main
+ * skill's minion DPS (calcWith nests minion output under `Minion` and never computes
+ * Full DPS -- that costs minutes per call on big minion builds).
+ */
+const simDPS = (o: any): number =>
+  Number(o?.CombinedDPS) || Number(o?.TotalDPS) || Number(o?.Minion?.CombinedDPS) || Number(o?.Minion?.TotalDPS) || 0;
+const simEHP = (o: any): number => Number(o?.TotalEHP) || Number(o?.Life) || 0;
+
+/**
+ * Baseline measured through the SAME calcWith path as the candidates (an empty
+ * masteryEffects map runs the simulation with nothing changed), so base and candidate
+ * are one measurement. `mainSkillDps` is 0 when the build's MAIN skill deals no damage --
+ * calcWith scores the main skill only, so DPS cannot rank at all; callers must say so
+ * rather than print "Base DPS: 1" (the divisor floor) as if it were a value.
+ */
+async function simBaseline(luaClient: any, fallback: Record<string, any>): Promise<{ dps: number; ehp: number; mainSkillDps: number }> {
+  const out = await luaClient.calcWith({ masteryEffects: {} }).catch(() => null);
+  const dps = simDPS(out) || Number(fallback.CombinedDPS) || Number(fallback.TotalDPS) || Number(fallback.MinionTotalDPS) || 0;
+  const ehp = simEHP(out) || Number(fallback.TotalEHP) || Number(fallback.Life) || 0;
+  return { dps: dps || 1, ehp: ehp || 1, mainSkillDps: dps };
+}
+
+/** Shown when the main skill deals no damage, so only EHP can rank. */
+const NO_MAIN_SKILL_DPS_NOTE =
+  '⚠️  DPS NOT RANKED: the main skill deals no damage in PoB (often an aura/movement group, which ' +
+  'imports tend to select). Candidates are scored on EHP only. Set the main skill to your damage ' +
+  'skill (set_main_skill) and re-run. Full DPS is never simulated per candidate (minutes per call).';
+
 export interface TreeHandlerContext {
   buildService: BuildService;
   treeService: TreeService;
@@ -550,8 +579,7 @@ export async function handleGetPassiveUpgrades(
   // Step 1: get current base stats and issues to determine search keywords
   const { issues, stats: baseStats } = await handleGetBuildIssues(context);
 
-  const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || (baseStats.MinionTotalDPS as number) || 1;
-  const baseEHP = (baseStats.TotalEHP as number) || (baseStats.Life as number) || 1;
+  const { dps: baseDPS, ehp: baseEHP, mainSkillDps } = await simBaseline(luaClient, baseStats);
 
   // Step 2: map focus + issues to search keywords
   // Use broad keywords that cover attack, spell, and generic damage scaling.
@@ -635,9 +663,8 @@ export async function handleGetPassiveUpgrades(
 
       // calcWith returns raw Lua output; minion stats are nested under out.Minion
       // (unlike getStats() which remaps them to MinionTotalDPS etc.)
-      const outDPS = (out.CombinedDPS as number) || (out.TotalDPS as number) ||
-                     (out.Minion?.CombinedDPS as number) || (out.Minion?.TotalDPS as number) || baseDPS;
-      const outEHP = (out.TotalEHP as number) || (out.Life as number) || baseEHP;
+      const outDPS = simDPS(out) || baseDPS;
+      const outEHP = simEHP(out) || baseEHP;
 
       const dpsDelta = outDPS - baseDPS;
       const ehpDelta = outEHP - baseEHP;
@@ -663,7 +690,8 @@ export async function handleGetPassiveUpgrades(
   const textLines: string[] = [
     `=== Passive Upgrades (focus: ${focus}) ===`,
     '',
-    `Base DPS: ${Math.round(baseDPS).toLocaleString()}  |  Base EHP: ${Math.round(baseEHP).toLocaleString()}`,
+    `Base DPS: ${mainSkillDps > 0 ? `${Math.round(baseDPS).toLocaleString()} (main skill)` : 'n/a'}  |  Base EHP: ${Math.round(baseEHP).toLocaleString()}`,
+    ...(mainSkillDps > 0 ? [] : [NO_MAIN_SKILL_DPS_NOTE]),
     `Evaluated ${candidates.length} candidate notables, showing top ${top.length}:`,
     ...(skippedForeign > 0
       ? [`(skipped ${skippedForeign} node(s) this build cannot allocate: other ascendancies, masteries, or anoint-only Blight notables)`]
@@ -725,8 +753,7 @@ export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
 
   // Get base stats for scoring
   const baseStats = await luaClient.getStats(['TotalDPS', 'CombinedDPS', 'MinionTotalDPS', 'TotalEHP', 'Life']);
-  const baseDPS = (baseStats.CombinedDPS as number) || (baseStats.TotalDPS as number) || (baseStats.MinionTotalDPS as number) || 1;
-  const baseEHP = (baseStats.TotalEHP as number) || (baseStats.Life as number) || 1;
+  const { dps: baseDPS, ehp: baseEHP, mainSkillDps } = await simBaseline(luaClient, baseStats);
 
   // Current mastery effect map: { nodeId: effectId } from selected options
   const currentMasteryEffects: Record<number, number> = {};
@@ -735,7 +762,7 @@ export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
     if (selected) currentMasteryEffects[m.nodeId] = selected.effectId;
   }
 
-  const outputLines: string[] = ['=== Mastery Node Suggestions ===', ''];
+  const outputLines: string[] = ['=== Mastery Node Suggestions ===', '', ...(mainSkillDps > 0 ? [] : [NO_MAIN_SKILL_DPS_NOTE, ''])];
 
   for (const mastery of masteries) {
     const options: any[] = mastery.options ?? [];
@@ -752,9 +779,8 @@ export async function handleSuggestMasteries(context: PassiveUpgradesContext) {
         const newMasteryEffects = { ...currentMasteryEffects, [mastery.nodeId]: effect.effectId };
         const out = await luaClient.calcWith({ masteryEffects: newMasteryEffects });
         if (!out) continue;
-        const outDPS = (out.CombinedDPS as number) || (out.TotalDPS as number) ||
-                       (out.Minion?.CombinedDPS as number) || (out.Minion?.TotalDPS as number) || baseDPS;
-        const outEHP = (out.TotalEHP as number) || (out.Life as number) || baseEHP;
+        const outDPS = simDPS(out) || baseDPS;
+        const outEHP = simEHP(out) || baseEHP;
         const statStr = effect.stats?.join(' / ') ?? String(effect.effectId);
         scored.push({ stat: statStr, dpsDelta: outDPS - baseDPS, ehpDelta: outEHP - baseEHP });
       } catch { /* skip effects that fail simulation */ }
