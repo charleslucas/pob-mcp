@@ -594,6 +594,21 @@ export async function handleGetPassiveUpgrades(
     } catch { /* skip failed searches */ }
   }
 
+  // search_nodes matches the whole tree, including other classes' ascendancies and
+  // Blight notables (anoint-only, never reachable with a passive point). Ranking one of
+  // those first sends the caller hunting for a path that does not exist. (Upstream b36a9b4.)
+  const ownAscendancy = (await luaClient.getBuildInfo().catch(() => null))?.ascendClassName ?? '';
+  const isSimulatable = (node: any): boolean => {
+    const ascendancy = node.ascendancy ?? node.ascendancyName ?? '';
+    const isForeignAscendancy = ascendancy !== '' && ascendancy !== ownAscendancy;
+    const isMastery = node.isMastery === true || node.type === 'Mastery';
+    const isAnointOnly = node.isBlighted === true;
+    return !isForeignAscendancy && !isMastery && !isAnointOnly;
+  };
+  const before = candidates.length;
+  candidates.splice(0, candidates.length, ...candidates.filter(isSimulatable));
+  const skippedForeign = before - candidates.length;
+
   if (candidates.length === 0) {
     return {
       content: [{
@@ -650,6 +665,9 @@ export async function handleGetPassiveUpgrades(
     '',
     `Base DPS: ${Math.round(baseDPS).toLocaleString()}  |  Base EHP: ${Math.round(baseEHP).toLocaleString()}`,
     `Evaluated ${candidates.length} candidate notables, showing top ${top.length}:`,
+    ...(skippedForeign > 0
+      ? [`(skipped ${skippedForeign} node(s) this build cannot allocate: other ascendancies, masteries, or anoint-only Blight notables)`]
+      : []),
     '',
   ];
 
