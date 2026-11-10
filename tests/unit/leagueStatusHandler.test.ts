@@ -43,6 +43,20 @@ describe('handleGetActiveLeagues', () => {
     expect(text).toMatch(/Permanent leagues/);
   });
 
+  it('lists each league once even though the API returns one entry per realm', async () => {
+    process.env.POE_LEAGUE = 'Standard';
+    const perRealm = ['Standard', 'Allflame'];
+    const client = {
+      getLeagues: async () => ({
+        result: ['pc', 'xbox', 'sony'].flatMap((realm) => perRealm.map((id) => ({ id, realm, text: id }))),
+      }),
+    } as unknown as import('../../src/services/tradeClient').TradeApiClient;
+    const text = getText(await handleGetActiveLeagues({ tradeClient: client }));
+    expect(text).toMatch(/Temp \(challenge\) leagues — currently 1:/);
+    expect(text.match(/- Allflame {2}→/g)).toHaveLength(1);
+    expect(text.match(/^ {2}- Standard$/gm)).toHaveLength(1);
+  });
+
   it('warns when POE_LEAGUE is stale (no longer in active list)', async () => {
     process.env.POE_LEAGUE = 'Mirage';
     // Mirage league has ended — no longer in the active list

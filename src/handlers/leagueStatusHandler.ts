@@ -61,9 +61,15 @@ export async function handleGetActiveLeagues(context: LeagueStatusContext) {
     };
   }
 
-  const apiLeagues: string[] = (leagueData.result ?? [])
-    .map((l) => l.id)
-    .filter((id): id is string => typeof id === "string");
+  // The trade API returns one entry per realm (pc / xbox / sony) with the same id,
+  // so every league printed three times. De-duplicate, keeping API order.
+  const apiLeagues: string[] = [
+    ...new Set(
+      (leagueData.result ?? [])
+        .map((l) => l.id)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  ];
 
   const defaultLeague = getDefaultLeague();
   const apiSet = new Set(apiLeagues);
