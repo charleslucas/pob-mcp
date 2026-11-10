@@ -380,7 +380,7 @@ abstract class PoBApiBase {
     return res.breakdown;
   }
 
-  async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{
+  async updateTreeDelta(params: { addNodes?: number[]; removeNodes?: number[]; masteryEffects?: Record<string, number>; classId?: number; ascendClassId?: number; secondaryAscendClassId?: number; treeVersion?: string }): Promise<{
     tree: any;
     /** Requested adds that actually landed. */
     added?: number[];
@@ -391,6 +391,8 @@ abstract class PoBApiBase {
     /** Requested adds that could NOT be allocated (unreachable / invalid ID). */
     droppedNodes?: number[];
     skippedAscendancyNodes?: number[];
+    /** Requested Mastery nodes refused because no effect was chosen. */
+    masteryNoEffect?: number[];
   }> {
     const res = await this.send({ action: "update_tree_delta", params });
     if (!res.ok) throw new Error(res.error || "update_tree_delta failed");
@@ -401,6 +403,7 @@ abstract class PoBApiBase {
       autoPathedNodes: res.autoPathedNodes as number[] | undefined,
       droppedNodes: res.droppedNodes as number[] | undefined,
       skippedAscendancyNodes: res.skippedAscendancyNodes as number[] | undefined,
+      masteryNoEffect: res.masteryNoEffect as number[] | undefined,
     };
   }
 

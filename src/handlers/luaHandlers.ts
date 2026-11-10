@@ -765,7 +765,7 @@ export async function handleLuaReloadBuild(context: LuaHandlerContext, buildName
   });
 }
 
-export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes?: string[], removeNodes?: string[]) {
+export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes?: string[], removeNodes?: string[], masteryEffects?: Record<string, number>) {
   return wrapHandler('update tree delta', async () => {
     await context.ensureLuaClient();
     const luaClient = context.getLuaClient();
@@ -775,15 +775,17 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
       throw new Error('At least one of add_nodes or remove_nodes must be provided.');
     }
 
-    const params: { addNodes?: number[]; removeNodes?: number[] } = {};
+    const params: { addNodes?: number[]; removeNodes?: number[]; masteryEffects?: Record<string, number> } = {};
     if (addNodes?.length)    params.addNodes    = addNodes.map(Number);
     if (removeNodes?.length) params.removeNodes = removeNodes.map(Number);
+    if (masteryEffects && Object.keys(masteryEffects).length) params.masteryEffects = masteryEffects;
 
     const result = await luaClient.updateTreeDelta(params);
     const tree = result?.tree;
     const autoPathedNodes = result?.autoPathedNodes ?? [];
     const skippedAsc = result?.skippedAscendancyNodes ?? [];
     const dropped = result?.droppedNodes ?? [];
+    const masteryNoEffect = result?.masteryNoEffect ?? [];
 
     // Report what the backend says ACTUALLY landed. Reporting the requested counts here
     // meant a delta that allocated nothing still printed "Added: 1 node(s)" — a silent
@@ -794,8 +796,10 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
     const requestedRemove = removeNodes?.length ?? 0;
     const totalCount = Array.isArray(tree?.nodes) ? tree.nodes.length : '?';
 
+    // An effect change on an already-allocated mastery is a real edit with no node delta.
+    const masteryChanged = Object.keys(params.masteryEffects ?? {}).length > 0;
     const nothingLanded =
-      actualAdded.length === 0 && actualRemoved.length === 0 && autoPathedNodes.length === 0;
+      actualAdded.length === 0 && actualRemoved.length === 0 && autoPathedNodes.length === 0 && !masteryChanged;
 
     let text = nothingLanded
       ? `❌ Tree delta applied NO changes.\n`
@@ -824,6 +828,15 @@ export async function handleUpdateTreeDelta(context: LuaHandlerContext, addNodes
         `\n🔴 DROPPED ${dropped.length} requested node(s): ${dropped.join(', ')}\n` +
         `   These could not be allocated — unreachable from the current tree, or invalid IDs. ` +
         `Use find_path_to_node to get the travel nodes, then pass the full path.`;
+    }
+
+    if (masteryNoEffect.length > 0) {
+      text +=
+        `
+🔴 REFUSED ${masteryNoEffect.length} Mastery node(s) with no effect chosen: ${masteryNoEffect.join(', ')}
+` +
+        `   A Mastery grants nothing until an effect is selected. Pass mastery_effects ` +
+        `({"<nodeId>": <effectId>}); get effect IDs from suggest_masteries or search_tree_nodes.`;
     }
 
     if (skippedAsc.length > 0) {

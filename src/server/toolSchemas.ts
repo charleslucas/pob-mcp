@@ -1022,6 +1022,11 @@ export function getLuaToolSchemas(): any[] {
             type: "number",
             description: "Ascendancy class ID (0=None, 1-3 class-specific). Scion: 1=Ascendant | Marauder: 1=Juggernaut, 2=Berserker, 3=Chieftain | Ranger: 1=Raider, 2=Deadeye, 3=Pathfinder | Witch: 1=Occultist, 2=Elementalist, 3=Necromancer | Duelist: 1=Slayer, 2=Gladiator, 3=Champion | Templar: 1=Inquisitor, 2=Hierophant, 3=Guardian | Shadow: 1=Assassin, 2=Trickster, 3=Saboteur",
           },
+          masteryEffects: {
+            type: "object",
+            additionalProperties: { type: "number" },
+            description: "Map of mastery node ID -> effect ID. Merged OVER the build's existing selections (unlisted masteries keep their effects). A Mastery node in `nodes` with no effect, here or already on the build, is dropped by PoB.",
+          },
         },
         required: ["nodes"],
       },
@@ -1041,6 +1046,11 @@ export function getLuaToolSchemas(): any[] {
             type: "array",
             items: { type: "string" },
             description: "Node IDs to remove from the current allocation",
+          },
+          mastery_effects: {
+            type: "object",
+            additionalProperties: { type: "number" },
+            description: "Effect to select per Mastery node, as {\"<nodeId>\": <effectId>}. Required to allocate a Mastery (one with no effect is refused, not allocated). Also changes the effect of an already-allocated Mastery. Existing selections are preserved. Get effect IDs from suggest_masteries or search_tree_nodes.",
           },
         },
       },
