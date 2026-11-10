@@ -15,6 +15,9 @@ function makeLuaClient(
   const state = { ...config };
   return {
     getConfig: jest.fn<() => Promise<any>>().mockImplementation(async () => ({ ...state })),
+    getConfigLabels: jest.fn<() => Promise<Record<string, string>>>().mockImplementation(async () =>
+      (state.bandit === 'None' ? { bandit: 'Kill all' } : {}) as Record<string, string>,
+    ),
     setConfig: jest.fn<(p: Record<string, any>) => Promise<void>>().mockImplementation(async (p) => {
       if (applyWrites) Object.assign(state, p);
     }),
@@ -50,6 +53,19 @@ describe('handleGetConfig', () => {
     const result = await handleGetConfig(ctx);
     expect(result.content[0].text).toBeTruthy();
     expect(typeof result.content[0].text).toBe('string');
+  });
+
+  it('shows the GUI label for dropdown values (bandit None reads Kill all)', async () => {
+    const client = makeLuaClient({ bandit: 'None' });
+    const result = await handleGetConfig(makeContext(client));
+    expect(result.content[0].text).toContain('Bandit: Kill all (None)');
+  });
+
+  it('still renders when labels are unavailable', async () => {
+    const client = makeLuaClient({ bandit: 'Alira' });
+    client.getConfigLabels.mockRejectedValue(new Error('old fork'));
+    const result = await handleGetConfig(makeContext(client));
+    expect(result.content[0].text).toContain('Bandit: Alira');
   });
 });
 

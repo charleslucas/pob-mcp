@@ -100,7 +100,8 @@ export async function handleGetConfig(context: ConfigHandlerContext) {
   }
 
   const config = await luaClient.getConfig();
-  const formatted = formatConfigOutput(config);
+  const labels = await luaClient.getConfigLabels().catch(() => ({} as Record<string, string>));
+  const formatted = formatConfigOutput(config, labels);
 
   return {
     content: [
@@ -309,7 +310,7 @@ export async function handleSetEnemyStats(
 /**
  * Format configuration output
  */
-function formatConfigOutput(config: any): string {
+function formatConfigOutput(config: any, labels: Record<string, string> = {}): string {
   if (!config || typeof config !== 'object') {
     return "=== Configuration State ===\n\nNo configuration data available.\n";
   }
@@ -318,9 +319,13 @@ function formatConfigOutput(config: any): string {
 
   // Build settings
   output += "=== Build Settings ===\n";
-  output += `Bandit: ${config.bandit || 'None'}\n`;
-  output += `Pantheon Major God: ${config.pantheonMajorGod || 'None'}\n`;
-  output += `Pantheon Minor God: ${config.pantheonMinorGod || 'None'}\n`;
+  // Dropdowns store a val that differs from the GUI label: bandit "None" reads "Kill all",
+  // which made a correct setting look unset.
+  const shown = (key: string) =>
+    labels[key] ? `${labels[key]} (${config[key]})` : (config[key] || 'None');
+  output += `Bandit: ${shown('bandit')}\n`;
+  output += `Pantheon Major God: ${shown('pantheonMajorGod')}\n`;
+  output += `Pantheon Minor God: ${shown('pantheonMinorGod')}\n`;
 
   // Enemy settings
   output += "\n=== Enemy Settings ===\n";

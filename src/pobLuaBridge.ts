@@ -213,6 +213,13 @@ abstract class PoBApiBase {
     return res.config;
   }
 
+  /** GUI labels for dropdown config values (bandit "None" -> "Kill all"). */
+  async getConfigLabels(): Promise<Record<string, string>> {
+    const res = await this.send({ action: "get_config" });
+    if (!res.ok) throw new Error(res.error || "get_config failed");
+    return (res.labels as Record<string, string>) ?? {};
+  }
+
   async setConfig(params: Record<string, any>): Promise<any> {
     const res = await this.send({ action: "set_config", params });
     if (!res.ok) throw new Error(res.error || "set_config failed");
