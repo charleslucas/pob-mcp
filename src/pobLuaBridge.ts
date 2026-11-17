@@ -432,6 +432,13 @@ abstract class PoBApiBase {
     };
   }
 
+  /** Every finite numeric stat PoB calculated for the loaded build. */
+  async exportFullStats(): Promise<FullStatsExport> {
+    const res = await this.send({ action: "export_full_stats" });
+    if (!res.ok) throw new Error(res.error || "export_full_stats failed");
+    return res.stats as FullStatsExport;
+  }
+
   /** Run item text through PoB's parser without adding it to the build. */
   async parseItem(text: string): Promise<ParsedItem> {
     const res = await this.send({ action: "parse_item", params: { text } });
@@ -614,6 +621,13 @@ export interface CalcWithParams {
   /** Extra scalar output keys to return beyond the defaults (e.g. MissingFireResist). */
   fields?: string[];
 }
+
+/** The unfiltered stat dump: every numeric key plus underscore-prefixed groups. */
+export type FullStatsExport = Record<string, number> & {
+  _skillDPS?: Array<{ name: string; dps: number; count?: number }>;
+  _minion?: Record<string, number>;
+  _meta?: { treeVersion?: string; level?: number; buildName?: string };
+};
 
 export interface ParsedItem {
   name?: string;

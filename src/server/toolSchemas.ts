@@ -905,6 +905,17 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "export_full_stats",
+      truncatable: true,
+      description: "Dump every numeric stat PoB calculated for the loaded build's main skill (several hundred keys), plus per-skill DPS and minion stats. Use it when lua_get_stats does not carry the stat you need (for example a specific damage-type conversion, a hit-pool or cost figure, or a *MaximumHitTaken key), or to check the exact key name before passing it to another tool. Pass `filter` to keep only keys containing a substring; an unfiltered call is large. Limits: raw engine keys with no labels or units, values for the main skill only (full-DPS rows are listed under _skillDPS), and non-numeric stats are omitted. Read-only.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filter: { type: "string", description: "Case-insensitive substring; only stat keys containing it are returned (e.g. 'Resist', 'Leech', 'Minion')." },
+        },
+      },
+    },
+    {
       name: "parse_item",
       description: "Check an item text with Path of Building's own parser WITHOUT adding or equipping it: returns the recognised base, rarity, item level, quality, requirements and the implicit / explicit / crafted / fractured / enchant mod lines, and lists any mod line PoB could not turn into a modifier (those calculate as nothing). Use it to validate pasted or hand-written item text before add_item or calc_with-based tools, since a mistyped affix or base otherwise fails silently or is priced as having no effect. Limits: it checks that PoB understands the text, not that the item can exist in game (affix legality, tiers, item level and influence are not validated). Read-only; needs the Lua bridge but no loaded build.",
       inputSchema: {
