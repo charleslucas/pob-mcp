@@ -1,4 +1,5 @@
-import https from "https";
+import fs from "fs";
+import path from "path";
 import type {
   PassiveTreeNode,
   PassiveTreeData,
@@ -10,6 +11,7 @@ import type {
   OptimizationSuggestion,
 } from "../types.js";
 import { BuildService } from "./buildService.js";
+import { resolvePoBLayout } from "../utils/pobLayout.js";
 
 export class TreeService {
   private treeDataCache: Map<string, TreeDataCache> = new Map();
@@ -19,20 +21,20 @@ export class TreeService {
     this.buildService = buildService;
   }
 
-  async getTreeData(version: string = "3_26"): Promise<PassiveTreeData> {
-    // Check cache first
-    const cached = this.treeDataCache.get(version);
+  /** A build without a tree version reads as the newest tree the configured PoB has. */
+  async getTreeData(version?: string): Promise<PassiveTreeData> {
+    const resolvedVersion = version && version !== "Unknown" ? version : this.latestTreeVersion();
+
+    const cached = this.treeDataCache.get(resolvedVersion);
     if (cached) {
-      console.error(`[Tree Cache] Hit for version ${version}`);
+      console.error(`[Tree Cache] Hit for version ${resolvedVersion}`);
       return cached.data;
     }
 
-    // Cache miss - fetch from source
-    console.error(`[Tree Cache] Miss for version ${version}`);
-    const treeData = await this.fetchTreeDataFromRepo(version);
+    console.error(`[Tree Cache] Miss for version ${resolvedVersion}`);
+    const treeData = this.readTreeData(resolvedVersion);
 
-    // Store in cache
-    this.treeDataCache.set(version, {
+    this.treeDataCache.set(resolvedVersion, {
       data: treeData,
       timestamp: Date.now(),
     });
@@ -50,53 +52,54 @@ export class TreeService {
     }
   }
 
-  async fetchTreeDataFromRepo(version: string = "3_26"): Promise<PassiveTreeData> {
-    console.error(`[Tree Data] Fetching tree data for version ${version}...`);
+  /**
+   * Tree data comes from the same PoB the Lua bridge runs. A new league's tree
+   * reaches PoB's dev branch weeks before master, so a version this PoB lacks
+   * is an error: another league's nodes would answer with the wrong tree.
+   */
+  private readTreeData(version: string): PassiveTreeData {
+    // The version can come from a build file, so it must name a directory, not a path.
+    if (!/^\w+$/.test(version)) {
+      throw new Error(`Invalid passive tree version ${JSON.stringify(version)}.`);
+    }
+    const treeDataDir = path.join(resolvePoBLayout(process.env.POB_PATH || process.env.POB_FORK_PATH).src, "TreeData");
+    const treeFile = path.join(treeDataDir, version, "tree.lua");
+    if (!fs.existsSync(treeFile)) {
+      throw new Error(
+        `Path of Building has no passive tree ${version} at ${treeFile}. ` +
+        `It has: ${this.availableTreeVersions(treeDataDir).join(", ")}. ` +
+        `Point POB_PATH at a PoB checkout that has ${version}.`
+      );
+    }
 
-    const url = `https://raw.githubusercontent.com/PathOfBuildingCommunity/PathOfBuilding/master/src/TreeData/${version}/tree.lua`;
+    const treeData = this.parseTreeLua(fs.readFileSync(treeFile, "utf8"), version);
+    if (treeData.nodes.size === 0) {
+      throw new Error(`Parsed no passive nodes from ${treeFile}; its format may have changed.`);
+    }
+    console.error(`[Tree Data] Parsed ${treeData.nodes.size} nodes from ${treeFile}`);
+    return treeData;
+  }
 
-    return new Promise((resolve, reject) => {
-      https.get(url, (response) => {
-        if (response.statusCode === 404) {
-          // Version not found, try fallback to 3_26
-          console.error(`[Tree Data] Version ${version} not found, falling back to 3_26`);
-          if (version !== "3_26") {
-            this.fetchTreeDataFromRepo("3_26").then(resolve).catch(reject);
-            return;
-          }
-          reject(new Error(`Failed to fetch tree data: HTTP ${response.statusCode}`));
-          return;
-        }
-        if (response.statusCode !== 200) {
-          reject(new Error(`Failed to fetch tree data: HTTP ${response.statusCode}`));
-          return;
-        }
+  private availableTreeVersions(treeDataDir: string): string[] {
+    return fs.existsSync(treeDataDir)
+      ? fs.readdirSync(treeDataDir).filter((name) => fs.existsSync(path.join(treeDataDir, name, "tree.lua")))
+      : [];
+  }
 
-        let data = '';
-        response.on('data', (chunk) => {
-          data += chunk;
-        });
-
-        response.on('end', () => {
-          try {
-            const treeData = this.parseTreeLua(data, version);
-            console.error(`[Tree Data] Successfully parsed ${treeData.nodes.size} nodes`);
-            resolve(treeData);
-          } catch (error) {
-            reject(new Error(`Failed to parse tree data: ${error}`));
-          }
-        });
-      }).on('error', (error) => {
-        reject(new Error(`Network error fetching tree data: ${error.message}`));
-      });
-    });
+  /** PoB's own latestTreeVersion: the last entry of treeVersionList. */
+  private latestTreeVersion(): string {
+    const gameVersionsFile = path.join(resolvePoBLayout(process.env.POB_PATH || process.env.POB_FORK_PATH).src, "GameVersions.lua");
+    const treeVersionList = fs.readFileSync(gameVersionsFile, "utf8").match(/treeVersionList\s*=\s*\{([^}]*)\}/);
+    const latest = treeVersionList?.[1].match(/"[^"]+"/g)?.at(-1)?.slice(1, -1);
+    if (!latest) throw new Error(`Could not read treeVersionList from ${gameVersionsFile}`);
+    return latest;
   }
 
   private parseTreeLua(luaContent: string, version: string): PassiveTreeData {
     const nodes = new Map<string, PassiveTreeNode>();
 
     // Extract nodes with brace counting for proper nesting
-    const nodeStartPattern = /\[(\d+)\]=\s*\{/g;
+    const nodeStartPattern = /\[(\d+)\]\s*=\s*\{/g;
 
     let match;
     while ((match = nodeStartPattern.exec(luaContent)) !== null) {
@@ -143,16 +146,16 @@ export class TreeService {
     };
 
     // Extract name
-    const nameMatch = content.match(/\["name"\]=\s*"([^"]+)"/);
+    const nameMatch = content.match(/\["name"\]\s*=\s*"([^"]+)"/);
     if (nameMatch) node.name = nameMatch[1];
 
     // Extract icon
-    const iconMatch = content.match(/\["icon"\]=\s*"([^"]+)"/);
+    const iconMatch = content.match(/\["icon"\]\s*=\s*"([^"]+)"/);
     if (iconMatch) node.icon = iconMatch[1];
 
     // Extract stats (can be multiple)
     const stats: string[] = [];
-    const statsMatch = content.match(/\["stats"\]=\s*\{([^}]+)\}/);
+    const statsMatch = content.match(/\["stats"\]\s*=\s*\{([^}]+)\}/);
     if (statsMatch) {
       const statsContent = statsMatch[1];
       const statPattern = /"([^"]+)"/g;
@@ -164,20 +167,21 @@ export class TreeService {
     if (stats.length > 0) node.stats = stats;
 
     // Extract boolean flags
-    if (content.includes('["isKeystone"]= true')) node.isKeystone = true;
-    if (content.includes('["isNotable"]= true')) node.isNotable = true;
-    if (content.includes('["isMastery"]= true')) node.isMastery = true;
-    if (content.includes('["isJewelSocket"]= true')) node.isJewelSocket = true;
-    if (content.includes('["isAscendancyStart"]= true')) node.isAscendancyStart = true;
+    const isTrue = (key: string) => new RegExp(`\\["${key}"\\]\\s*=\\s*true`).test(content);
+    if (isTrue("isKeystone")) node.isKeystone = true;
+    if (isTrue("isNotable")) node.isNotable = true;
+    if (isTrue("isMastery")) node.isMastery = true;
+    if (isTrue("isJewelSocket")) node.isJewelSocket = true;
+    if (isTrue("isAscendancyStart")) node.isAscendancyStart = true;
 
     // Extract ascendancy name if present
-    const ascendancyNameMatch = content.match(/\["ascendancyName"\]=\s*"([^"]+)"/);
+    const ascendancyNameMatch = content.match(/\["ascendancyName"\]\s*=\s*"([^"]+)"/);
     if (ascendancyNameMatch) {
       node.ascendancyName = ascendancyNameMatch[1];
     }
 
     // Extract connections (allowing for multiline and nested content)
-    const outMatch = content.match(/\["out"\]=\s*\{([^}]*)\}/);
+    const outMatch = content.match(/\["out"\]\s*=\s*\{([^}]*)\}/);
     if (outMatch) {
       const outContent = outMatch[1];
       // Match quoted numbers: "12345"
@@ -187,7 +191,7 @@ export class TreeService {
       }
     }
 
-    const inMatch = content.match(/\["in"\]=\s*\{([^}]*)\}/);
+    const inMatch = content.match(/\["in"\]\s*=\s*\{([^}]*)\}/);
     if (inMatch) {
       const inContent = inMatch[1];
       // Match quoted numbers: "12345"
@@ -418,7 +422,7 @@ export class TreeService {
     allocatedNodes: Set<string>,
     targetNodeId: string,
     treeData: PassiveTreeData,
-    maxPaths: number = 1
+    _maxPaths: number = 1
   ): Array<{ nodes: string[]; cost: number }> {
     // Multi-source BFS from all allocated nodes toward the target.
     // O(V+E) — correct and optimal for unit-weight graphs.
@@ -478,6 +482,7 @@ export class TreeService {
     const pathingNodes = totalNodes - destinationNodes;
 
     if (totalNodes === 0) return "No nodes allocated";
+    if (destinationNodes === 0) return "No keystones, notables, or jewel sockets allocated";
 
     const ratio = pathingNodes / destinationNodes;
 
@@ -493,7 +498,7 @@ export class TreeService {
   }
 
   // Helper methods for optimization
-  private buildNodeGraph(allocatedNodes: PassiveTreeNode[], allTreeNodes: Map<string, PassiveTreeNode>): Map<string, string[]> {
+  private buildNodeGraph(allocatedNodes: PassiveTreeNode[]): Map<string, string[]> {
     const graph = new Map<string, string[]>();
     const allocatedIds = new Set(allocatedNodes.map(n => String(n.skill)));
 
@@ -532,7 +537,8 @@ export class TreeService {
     const visited = new Set<string>([start]);
 
     while (queue.length > 0) {
-      const current = queue.shift()!;
+      const current = queue[0];
+      queue.shift();
 
       const neighbors = graph.get(current.node) || [];
       for (const neighbor of neighbors) {
@@ -556,11 +562,29 @@ export class TreeService {
     keystones: PassiveTreeNode[],
     notables: PassiveTreeNode[],
     jewels: PassiveTreeNode[],
-    allTreeNodes: Map<string, PassiveTreeNode>
+    treeData: PassiveTreeData
   ): PathOptimization[] {
     const optimizations: PathOptimization[] = [];
-    const graph = this.buildNodeGraph(allocatedNodes, allTreeNodes);
-    const allocatedIds = new Set(allocatedNodes.map(n => String(n.skill)));
+
+    // Graph over the WHOLE tree, not just allocated nodes: the optimal route
+    // between two allocated nodes may run through unallocated ones, and that
+    // difference is exactly the saving worth reporting. The previous version
+    // pathfound within the allocation only, so current == optimal always,
+    // pointsSaved was always 0, and the suggestion text said so.
+    const fullGraph = new Map<string, string[]>();
+    const isNode = (id: string) => treeData.nodes.has(id);
+    for (const [id, node] of treeData.nodes) {
+      const neighbors: string[] = [];
+      for (const outId of node.out || []) {
+        if (isNode(outId) && !neighbors.includes(outId)) neighbors.push(outId);
+      }
+      for (const inId of node.in || []) {
+        if (isNode(inId) && !neighbors.includes(inId)) neighbors.push(inId);
+      }
+      fullGraph.set(id, neighbors);
+    }
+
+    const graph = this.buildNodeGraph(allocatedNodes);
 
     // Find starting node (usually ascendancy start or class start)
     const startNode = allocatedNodes.find(n => n.isAscendancyStart) || allocatedNodes[0];
@@ -569,36 +593,44 @@ export class TreeService {
     const startId = String(startNode.skill);
     const destinations = [...keystones, ...notables, ...jewels];
 
-    // For each destination, compare actual path length vs optimal
+    // For each destination, compare the allocated route against the cheapest
+    // route the tree offers. Only real savings are reported.
     for (const dest of destinations) {
       const destId = String(dest.skill);
       const shortestPath = this.findShortestPath(graph, startId, destId);
+      if (!shortestPath || shortestPath.length <= 1) continue;
+      const currentLength = shortestPath.length - 1; // edges, i.e. spent points
 
-      if (shortestPath && shortestPath.length > 1) {
-        // Calculate optimal length (this is already the shortest in allocated nodes)
-        const optimalLength = shortestPath.length - 1; // Subtract 1 for node count
+      const trueShortest = this.findShortestPath(fullGraph, startId, destId);
+      if (!trueShortest || trueShortest.length <= 1) continue;
+      const optimalLength = trueShortest.length - 1;
 
-        // For now, we can't calculate "true optimal" without pathfinding through unallocated nodes
-        // So we flag paths that seem long relative to destination value
-        if (optimalLength > 6) {
-          optimizations.push({
-            destination: dest.name || `Node ${destId}`,
-            currentLength: optimalLength,
-            optimalLength: optimalLength, // Same for now
-            pointsSaved: 0, // Would need advanced analysis
-            suggestion: `Path to ${dest.name || `Node ${destId}`} is ${optimalLength} points long. Consider checking if there's a more efficient route.`
-          });
-        }
+      const pointsSaved = currentLength - optimalLength;
+      if (pointsSaved > 0) {
+        optimizations.push({
+          destination: dest.name || `Node ${destId}`,
+          currentLength,
+          optimalLength,
+          pointsSaved,
+          suggestion: `The allocated route to ${dest.name || `Node ${destId}`} costs ${currentLength} points; the tree offers a ${optimalLength}-point route. Re-pathing could save ${pointsSaved} passive point(s).`
+        });
+      } else if (currentLength > 6) {
+        optimizations.push({
+          destination: dest.name || `Node ${destId}`,
+          currentLength,
+          optimalLength,
+          pointsSaved: 0,
+          suggestion: `Path to ${dest.name || `Node ${destId}`} is ${currentLength} points long and already matches the shortest route the tree offers — the cost is inherent to that node's position.`
+        });
       }
     }
 
+    // Cheapest routes first: those are the actionable ones.
+    optimizations.sort((a, b) => b.pointsSaved - a.pointsSaved);
     return optimizations;
   }
 
   private calculateEfficiencyScores(
-    allocatedNodes: PassiveTreeNode[],
-    keystones: PassiveTreeNode[],
-    notables: PassiveTreeNode[],
     normalNodes: PassiveTreeNode[]
   ): EfficiencyScore[] {
     const scores: EfficiencyScore[] = [];
@@ -735,38 +767,17 @@ export class TreeService {
         return null; // No tree data in build
       }
 
-      // Determine tree version from build
-      let treeVersion = this.buildService.extractBuildVersion(build);
-      if (treeVersion === "Unknown") {
-        treeVersion = "3_26";
-      }
-
-      // Get tree data (with caching)
-      const treeData = await this.getTreeData(treeVersion);
+      const treeData = await this.getTreeData(this.buildService.extractBuildVersion(build));
 
       // Map node IDs to details
       const { nodes: allocatedNodes, invalidIds } = await this.mapNodesToDetails(nodeIds, treeData);
 
       // If there are invalid nodes, fail with error
       if (invalidIds.length > 0) {
-        const requestedVersion = treeVersion;
-        const actualVersion = treeData.version;
-        let errorMsg = `Invalid passive tree data detected.\n\nThe following node IDs could not be found in the passive tree data:\n${invalidIds.map(id => `- Node ID: ${id}`).join('\n')}\n\n`;
-
-        if (requestedVersion !== actualVersion) {
-          errorMsg += `Build tree version: ${requestedVersion}\n`;
-          errorMsg += `Available tree data: ${actualVersion} (fell back because ${requestedVersion} data not available yet)\n\n`;
-          errorMsg += `This means your build uses passive tree nodes from PoE ${requestedVersion} that don't exist in ${actualVersion}.\n`;
-          errorMsg += `Path of Building Community hasn't released tree data for ${requestedVersion} yet.\n\n`;
-          errorMsg += `Options:\n`;
-          errorMsg += `1. Wait for PoB to release ${requestedVersion} tree data\n`;
-          errorMsg += `2. Use a build from an earlier patch (${actualVersion} or earlier)\n`;
-          errorMsg += `3. The analysis may work partially - some stats will be shown but tree analysis will fail\n`;
-        } else {
-          errorMsg += `This usually means:\n1. The build is from an outdated league/patch\n2. The build file is corrupted\n3. The passive tree data needs to be refreshed\n\nPlease verify the build is from the current league or use a build from the active league.`;
-        }
-
-        throw new Error(errorMsg);
+        throw new Error(
+          `Invalid passive tree data detected.\n\nThe following node IDs could not be found in the ${treeData.version} passive tree data:\n${invalidIds.map(id => `- Node ID: ${id}`).join('\n')}\n\n` +
+          `This usually means:\n1. The build is from an outdated league/patch\n2. The build file is corrupted\n3. The passive tree data needs to be refreshed\n\nPlease verify the build is from the current league or use a build from the active league.`
+        );
       }
 
       // Categorize nodes
@@ -795,13 +806,10 @@ export class TreeService {
           keystones,
           notables,
           jewels,
-          treeData.nodes
+          treeData
         );
 
         const efficiencyScores = this.calculateEfficiencyScores(
-          allocatedNodes,
-          keystones,
-          notables,
           normal
         );
 
