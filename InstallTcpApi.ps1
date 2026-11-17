@@ -67,9 +67,20 @@ if (-not (Test-Path $mainLua)) {
 
 $content = Get-Content -Path $mainLua -Raw -Encoding UTF8
 $patchTag    = "-- [pob-mcp TCP API patch]"
+$patchVersionTag = "-- [pob-mcp TCP API patch] v2"   # bump when the Lua block changes
 $insertBefore = "function main:DetectUnicodeSupport()"
 
-if ($content -match [regex]::Escape($patchTag)) {
+# An older patch version is present: strip its block (it sits just before the
+# `end` that closes main:Init()) so the current block is re-inserted below.
+if (($content -match [regex]::Escape($patchTag)) -and ($content -notmatch [regex]::Escape($patchVersionTag))) {
+    $stripped = [regex]::Replace($content, '(?ms)^\t-- \[pob-mcp TCP API patch\].*?(?=^end\r?\n[\r\n]*function main:DetectUnicodeSupport\(\))', '')
+    if ($stripped -ne $content) {
+        $content = $stripped
+        Write-Host "[3/3] Found an older TCP patch in Main.lua - upgrading it" -ForegroundColor Cyan
+    }
+}
+
+if ($content -match [regex]::Escape($patchVersionTag)) {
     Write-Host "[3/3] Main.lua already patched - skipping" -ForegroundColor Yellow
 } elseif ($content -notmatch [regex]::Escape($insertBefore)) {
     Write-Error "Could not find '$insertBefore' in Main.lua - PoB version may be incompatible."
@@ -90,7 +101,7 @@ if ($content -match [regex]::Escape($patchTag)) {
     # Single-quoted here-string: PowerShell will NOT interpolate $-variables inside,
     # so Lua code is preserved verbatim.
     $tcpBlock = @'
-	-- [pob-mcp TCP API patch]
+	-- [pob-mcp TCP API patch] v2
 	-- Start the TCP API server when POB_API_TCP=1 (set by LaunchPoBWithAPI.bat).
 	-- Pumped via onFrameFuncs each GUI frame so it never blocks the UI.
 	if os.getenv('POB_API_TCP') == '1' then
@@ -112,6 +123,13 @@ if ($content -match [regex]::Escape($patchTag)) {
 					-- Users who want to update should close PoB and relaunch without the batch file.
 					if self.controls and self.controls.applyUpdate then
 						self.controls.applyUpdate.shown = function() return false end
+					end
+					-- The "Check for Update" button (same spot, shown when no update is pending)
+					-- would call the stubbed CheckForUpdate below and silently do nothing.
+					-- Grey it out and say why instead.
+					if self.controls and self.controls.checkUpdate then
+						self.controls.checkUpdate.label = function() return "Updates off (API)" end
+						self.controls.checkUpdate.enabled = function() return false end
 					end
 					-- Suppress the "Update Available" toast that PoB pushes from Main:Tick()
 					-- when launch.updateAvailable is set. Three layers of defense so the
