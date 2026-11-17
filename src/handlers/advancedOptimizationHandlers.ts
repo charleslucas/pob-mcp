@@ -54,7 +54,7 @@ export async function handleAnalyzeItems(
         if (needsLoad) {
           const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
           const xml = await fs.readFile(buildPath, 'utf-8');
-          await luaClient.loadBuildXml(xml, buildName);
+          await luaClient.loadBuildXml(xml, buildName, buildPath);
         }
       }
 
@@ -175,7 +175,7 @@ export async function handleOptimizeSkillLinks(
         const path2 = await import('path');
         const buildPath = path2.join(context.pobDirectory, buildName);
         const xml = await fs2.readFile(buildPath, 'utf-8');
-        await luaClient.loadBuildXml(xml, buildName);
+        await luaClient.loadBuildXml(xml, buildName, buildPath);
       }
 
       try {

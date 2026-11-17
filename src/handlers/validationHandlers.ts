@@ -54,7 +54,7 @@ export async function handleValidateBuild(
             try {
               const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
               const buildXml = await fs.readFile(buildPath, 'utf-8');
-              await luaClient.loadBuildXml(buildXml, buildName);
+              await luaClient.loadBuildXml(buildXml, buildName, buildPath);
             } catch {
               // File doesn't exist — use already-loaded in-memory build
             }

@@ -69,7 +69,7 @@ export async function handleAnalyzeBuild(context: HandlerContext, buildName: str
       if (shouldLoad) {
         const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
         const buildXml = await fs.readFile(buildPath, 'utf-8');
-        await luaClient.loadBuildXml(buildXml);
+        await luaClient.loadBuildXml(buildXml, buildName, buildPath);
       }
       try { luaStats = await luaClient.getStats(); } catch { /* best effort */ }
 
@@ -241,7 +241,7 @@ export async function handleCompareBuilds(context: HandlerContext, build1Name: s
     const buildPath = path.join(context.pobDirectory, buildName);
     const buildXml = await fs.readFile(buildPath, 'utf-8');
     const displayName = buildName.replace(/\.xml$/i, '').split(/[/\\]/).pop() ?? buildName;
-    await luaClient.loadBuildXml(buildXml, displayName);
+    await luaClient.loadBuildXml(buildXml, displayName, buildPath);
 
     let selectedSpec: any = null;
     let selectedItemSet: any = null;

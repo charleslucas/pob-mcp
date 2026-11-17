@@ -48,7 +48,7 @@ export async function handleAnalyzeDefenses(
     if (needsLoad) {
       const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
       const buildXml = await fs.readFile(buildPath, 'utf-8');
-      await luaClient.loadBuildXml(buildXml, buildName);
+      await luaClient.loadBuildXml(buildXml, buildName, buildPath);
     }
 
     // Get stats from PoB
@@ -115,7 +115,7 @@ export async function handleSuggestOptimalNodes(
       const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
       try {
         const buildXml = await fs.readFile(buildPath, 'utf-8');
-        await luaClient.loadBuildXml(buildXml, buildName);
+        await luaClient.loadBuildXml(buildXml, buildName, buildPath);
       } catch {
         // Build file not found — use whichever build is currently loaded in Lua bridge
       }
@@ -280,7 +280,7 @@ export async function handleOptimizeTree(
       const buildPath = sanitizeBuildName(buildName, context.pobDirectory);
       try {
         const buildXml = await fs.readFile(buildPath, 'utf-8');
-        await luaClient.loadBuildXml(buildXml, buildName);
+        await luaClient.loadBuildXml(buildXml, buildName, buildPath);
       } catch {
         // Build file not found — use whichever build is currently loaded in Lua bridge
       }

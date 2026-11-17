@@ -281,6 +281,8 @@ export class BuildExportService {
     backupId?: string;
     /** XML written to the build file — callers push this into a live PoB session. */
     restoredXml: string;
+    /** Path of the build file that was rewritten. */
+    buildPath: string;
   }> {
     // Find snapshot by ID or tag
     const buildSnapshotDir = sanitizeBuildName(options.buildName, this.snapshotDirectory);
@@ -321,6 +323,7 @@ export class BuildExportService {
       message: `Build restored from snapshot: ${snapshot.metadata.tag} (${snapshot.id})`,
       backupId,
       restoredXml: snapshotContent,
+      buildPath,
     };
   }
 

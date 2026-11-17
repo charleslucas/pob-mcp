@@ -199,7 +199,7 @@ export async function handleRestoreSnapshot(
   if (luaClient) {
     const name = args.build_name.replace(/\.xml$/i, '');
     try {
-      await luaClient.loadBuildXml(result.restoredXml, name);
+      await luaClient.loadBuildXml(result.restoredXml, name, result.buildPath);
       message += `\n\n🔄 Live PoB session reloaded — in-memory build now matches the snapshot.`;
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);

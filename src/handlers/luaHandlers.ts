@@ -758,7 +758,10 @@ export async function handleLuaReloadBuild(context: LuaHandlerContext, buildName
     const buildPath = sanitizeBuildName(fileName, context.pobDirectory);
     const xml = await fs.readFile(buildPath, 'utf-8');
     const name = fileName.replace(/\.xml$/i, '');
-    await luaClient.loadBuildXml(normalizeEol(xml), name);
+    // Pass the file path: without it PoB opens the XML as an UNSAVED build, records
+    // that on exit (Settings.xml Mode args = false, name), and on next launch
+    // recreates an empty build with the same name (a blank Level 1 Scion).
+    await luaClient.loadBuildXml(normalizeEol(xml), name, buildPath);
 
     return {
       content: [{ type: "text" as const, text: `✅ Build "${fileName}" reloaded from disk.` }],
