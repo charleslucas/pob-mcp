@@ -16,7 +16,7 @@ import type { PoeNinjaClient } from "../services/poeNinjaClient.js";
 // Import handlers
 import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBuildStats, handleGetBuildNotes, handleSetBuildNotes } from "../handlers/buildHandlers.js";
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
-import { handleCompareTrees, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodePower } from "../handlers/treeHandlers.js";
+import { handleCompareTrees, handleConnectNodes, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodePower } from "../handlers/treeHandlers.js";
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
 import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetAilments, handleParseItem, handleLuaStatWeights, handleExportFullStats, handleLuaGetTimelessJewels, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleGetGemDetail, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet } from "../handlers/luaHandlers.js";
@@ -251,6 +251,15 @@ export async function routeToolCall(
         treeContext,
         args.build_name as string | undefined,
         args.target_node_ids as string[],
+      );
+
+    case "connect_nodes":
+      if (!args) throw new Error("Missing arguments");
+      return await handleConnectNodes(
+        { ...treeContext, ensureLuaClient: luaContext.ensureLuaClient },
+        args.build_name as string | undefined,
+        args.target_node_ids as string[],
+        args.validate as boolean | undefined
       );
 
     case "find_path_to_node":

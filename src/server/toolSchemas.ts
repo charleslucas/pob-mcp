@@ -212,6 +212,29 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "connect_nodes",
+      description: "Find the cheapest connected set of passive nodes that links several target nodes (keystones, notables, jewel sockets) to your current tree, sharing travel nodes between targets instead of pathing to each separately. Minimum-point Steiner tree: proven optimal for up to 8 targets, near-optimal above that. Reports points spent, points saved versus separate paths, allocation order, and the stat change via PoB when the Lua bridge is running. Does not modify the build. For a single target use find_path_to_node.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          build_name: {
+            type: "string",
+            description: "Build file to path from (optional). Omit to use the build open in PoB, which also enables the stat preview.",
+          },
+          target_node_ids: {
+            type: "array",
+            items: { type: "string" },
+            description: "IDs of the passive nodes to connect (max 40)",
+          },
+          validate: {
+            type: "boolean",
+            description: "Preview the stat change with PoB calcWith when the Lua bridge is running (default: true)",
+          },
+        },
+        required: ["target_node_ids"],
+      },
+    },
+    {
       name: "find_path_to_node",
       description: "Find the shortest path of passive nodes between two points on the tree. By default routes from the build's current allocation frontier to the target. Supply from_node_id to route between any two arbitrary nodes regardless of the current build — useful for measuring distance between keystones, planning routes across the tree, etc. Each node in the result includes its name, type (Keystone/Notable/travel), and full stat descriptions.",
       inputSchema: {
