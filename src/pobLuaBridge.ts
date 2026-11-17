@@ -3,6 +3,7 @@ import { createConnection, Socket } from "net";
 import { EventEmitter } from "events";
 import path from "path";
 import os from "os";
+import fs from "fs";
 
 /** Lua bridge request envelope */
 type LuaRequest = { action: string; params?: Record<string, unknown> };
@@ -636,7 +637,9 @@ export class PoBLuaApiClient extends PoBApiBase {
     this.options = {
       cwd: forkSrc,
       cmd: options.cmd || "luajit",
-      args: options.args || ["HeadlessWrapper.lua"],
+      // HeadlessBoot.lua (api-stdio fork) strips the #@ launcher header that current
+      // LuaJIT (Oct 2026+) no longer skips; fall back to the wrapper on older forks.
+      args: options.args || [fs.existsSync(path.join(forkSrc, "HeadlessBoot.lua")) ? "HeadlessBoot.lua" : "HeadlessWrapper.lua"],
       env: options.env || {},
       timeoutMs: options.timeoutMs ?? 30000,
     };

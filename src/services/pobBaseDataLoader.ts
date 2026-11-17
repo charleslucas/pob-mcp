@@ -189,7 +189,14 @@ function basesDir(): string {
 function parseBaseFile(path: string, sourceFile: string): PobBase[] {
   const source = readFileSync(path, "utf-8");
   const ast = luaparse.parse(source, { comments: false, ranges: false });
-  const body = (ast as { body: LuaNode[] }).body;
+  // PoB <=2.67: top-level `local itemBases = ...` + assignments.
+  // PoB 2.68+ (3.30): `return function(itemBases) <assignments> end`. Flatten both.
+  const body: LuaNode[] = [];
+  for (const stmt of (ast as { body: LuaNode[] }).body) {
+    const fn = stmt.type === "ReturnStatement" ? (stmt as { arguments?: LuaNode[] }).arguments?.[0] : undefined;
+    if (fn && fn.type === "FunctionDeclaration") body.push(...((fn as { body?: LuaNode[] }).body ?? []));
+    else body.push(stmt);
+  }
   const out: PobBase[] = [];
   for (const stmt of body) {
     if (stmt.type !== "AssignmentStatement") continue;
