@@ -177,7 +177,7 @@ export async function handleGetNearbyNodes(
     const textLines: string[] = [
       `=== Nearby Nodes (within ${distance} nodes) ===`,
       '',
-      `Build: ${buildName}`,
+      `Build: ${buildName || '(build open in PoB)'}`,
       `Found ${nearbyNodes.length} nodes`,
       '',
     ];

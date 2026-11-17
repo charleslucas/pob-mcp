@@ -1167,7 +1167,13 @@ export async function handleLuaStatWeights(
     if (args.focus !== undefined && !['dps', 'defence', 'both'].includes(args.focus)) {
       throw new Error("focus must be 'dps', 'defence' or 'both'");
     }
-    const { report, note } = await computeStatWeights(luaClient, { focus: args.focus, slot: args.slot });
+    // The service needs calc_with's base stats and unparsed lines, which our plain
+    // calcWith() does not return (it yields the output alone); adapt to calcWithDetail.
+    const client = {
+      getItems: () => luaClient.getItems(),
+      calcWith: (params: Parameters<typeof luaClient.calcWithDetail>[0]) => luaClient.calcWithDetail(params),
+    };
+    const { report, note } = await computeStatWeights(client, { focus: args.focus, slot: args.slot });
     if (!report) throw new Error(note ?? 'stat weights produced no result');
     return { content: [{ type: "text" as const, text: formatStatWeights(report) }] };
   });
@@ -1187,6 +1193,14 @@ export async function handleExportFullStats(context: LuaHandlerContext, filter?:
     let total = 0;
     for (const [key, value] of Object.entries(all)) {
       if (key.startsWith('_')) {
+        // The minion block is several hundred keys too; apply the filter inside it.
+        if (key === '_minion' && needle && value && typeof value === 'object') {
+          const sub = Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).filter(([k]) => k.toLowerCase().includes(needle)),
+          );
+          if (Object.keys(sub).length > 0) picked[key] = sub;
+          continue;
+        }
         picked[key] = value;
         continue;
       }
