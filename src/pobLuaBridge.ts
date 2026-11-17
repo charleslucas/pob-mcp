@@ -415,10 +415,33 @@ abstract class PoBApiBase {
     };
   }
 
-  async calcWith(params: { addNodes?: number[]; removeNodes?: number[]; masteryEffects?: Record<string | number, number>; useFullDPS?: boolean }): Promise<any> {
-    const res = await this.send({ action: "calc_with", params });
+  async calcWith(params: CalcWithParams): Promise<any> {
+    const res = await this.send({ action: "calc_with", params: params as Record<string, unknown> });
     if (!res.ok) throw new Error(res.error || "calc_with failed");
     return res.output;
+  }
+
+  /** calc_with with the base stats and any repItem lines PoB could not parse. */
+  async calcWithDetail(params: CalcWithParams): Promise<{ output: any; base: any; unrecognisedLines?: string[] }> {
+    const res = await this.send({ action: "calc_with", params: params as Record<string, unknown> });
+    if (!res.ok) throw new Error(res.error || "calc_with failed");
+    return {
+      output: res.output,
+      base: res.base,
+      unrecognisedLines: Array.isArray(res.unrecognisedLines) ? (res.unrecognisedLines as string[]) : undefined,
+    };
+  }
+
+  /** Run item text through PoB's parser without adding it to the build. */
+  async parseItem(text: string): Promise<ParsedItem> {
+    const res = await this.send({ action: "parse_item", params: { text } });
+    if (!res.ok) throw new Error(res.error || "parse_item failed");
+    const item = res.item as ParsedItem;
+    // dkjson encodes an empty Lua table as {} rather than [].
+    for (const key of ["implicits", "explicits", "crafted", "fractured", "enchants", "unparsed"] as const) {
+      if (!Array.isArray(item[key])) item[key] = [];
+    }
+    return item;
   }
 
   async evaluateAnointCandidates(params: { slot: string; focus?: "dps" | "defence" | "both"; limit?: number }): Promise<{
@@ -577,6 +600,40 @@ abstract class PoBApiBase {
  * would inflict on the configured enemy. They differ whenever the ailment is
  * chance-based, because PoB only applies guaranteed or hand-configured ones.
  */
+export interface CalcWithParams {
+  addNodes?: Array<number | string>;
+  removeNodes?: Array<number | string>;
+  masteryEffects?: Record<string | number, number>;
+  /** Item text to substitute into repSlotName for this one calculation. */
+  repItem?: string;
+  /** Exact PoB slot name (e.g. "Ring 2"); required with repItem. */
+  repSlotName?: string;
+  /** Flask slot 1-5 to toggle for this calculation. */
+  toggleFlask?: number;
+  useFullDPS?: boolean;
+  /** Extra scalar output keys to return beyond the defaults (e.g. MissingFireResist). */
+  fields?: string[];
+}
+
+export interface ParsedItem {
+  name?: string;
+  base: string;
+  rarity?: string;
+  type?: string;
+  itemLevel?: number;
+  quality?: number;
+  corrupted: boolean;
+  identified: boolean;
+  implicits: string[];
+  explicits: string[];
+  crafted: string[];
+  fractured: string[];
+  enchants: string[];
+  /** Mod lines PoB kept as text but could not turn into modifiers. */
+  unparsed: string[];
+  requirements: { level?: number; str?: number; dex?: number; int?: number };
+}
+
 export interface AilmentReport {
   name: string;
   chanceOnHit: number;

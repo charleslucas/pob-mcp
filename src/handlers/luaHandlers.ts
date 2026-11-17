@@ -1,4 +1,5 @@
 import type { AilmentReport, AnyLuaClient } from "../pobLuaBridge.js";
+import { computeStatWeights, type ProbeResult, type StatWeightReport, type WeightFocus } from "../services/statWeights.js";
 import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
 import fs from "fs/promises";
 import path from "path";
@@ -1092,5 +1093,82 @@ export async function handleCreateItemSet(context: LuaHandlerContext, title?: st
       text += `\n\nUse select_item_set with id ${newest.id} to switch to it.`;
     }
     return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleParseItem(context: LuaHandlerContext, text: string | undefined) {
+  return wrapHandler('parse item', async () => {
+    if (typeof text !== 'string' || text.trim() === '') {
+      throw new Error('item text is required');
+    }
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) {
+      throw new Error('Lua client not initialized');
+    }
+
+    const item = await luaClient.parseItem(text);
+    const lines = [`=== Parsed item: ${item.name ?? item.base} ===`, '', JSON.stringify(item, null, 2)];
+    if (item.unparsed.length > 0) {
+      lines.push(
+        '',
+        `WARNING: PoB could not turn ${item.unparsed.length} mod line(s) into modifiers, so they would calculate as nothing. Check the wording against the in-game text before relying on this item: ${item.unparsed.map((l) => JSON.stringify(l)).join(', ')}`,
+      );
+    }
+    lines.push('', 'The loaded build is unchanged; this item was not added or equipped.');
+    return { content: [{ type: "text" as const, text: lines.join('\n') }] };
+  });
+}
+
+const formatPct = (value: number): string => `${value >= 0 ? '+' : ''}${value.toFixed(value !== 0 && Math.abs(value) < 0.1 ? 3 : 2)}%`;
+
+const weightRow = (r: ProbeResult): string =>
+  `  ${r.label}  (roll ${r.roll}): DPS ${formatPct(r.dpsPct)}, EHP ${formatPct(r.ehpPct)}${r.status === 'nonlinear' ? '  [nonlinear]' : ''}${r.note ? `  — ${r.note}` : ''}`;
+
+export function formatStatWeights(report: StatWeightReport): string {
+  const lines = [
+    `=== Stat weights (${report.focus}) ===`,
+    '',
+    `Measured by substituting ${report.slot} with a copy carrying one extra line, one calculation per line. The loaded build is unchanged.`,
+    `Baseline: ${Math.round(report.baseDps).toLocaleString()} ${report.dpsSource === 'minion' ? 'minion DPS (main skill is a minion skill)' : 'DPS'}, ${Math.round(report.baseEhp).toLocaleString()} EHP. Each row is the effect of ONE typical high-tier roll of that affix; they are not per-point values, so compare rows rather than scaling them.`,
+    '',
+  ];
+  const offence = report.ranked.filter((r) => r.group === 'offence');
+  const defence = report.ranked.filter((r) => r.group === 'defence');
+  const section = (title: string, rows: ProbeResult[]) => {
+    if (rows.length === 0) return;
+    lines.push(`${title}:`, ...rows.map(weightRow), '');
+  };
+  if (report.focus === 'defence') { section('Defence', defence); section('Offence', offence); }
+  else { section('Offence', offence); section('Defence', defence); }
+
+  const unmeasured = report.inert.filter((r) => r.status === 'capped' || r.status === 'unrecognised');
+  if (unmeasured.length > 0) {
+    lines.push('Capped or not measurable:');
+    for (const r of unmeasured) lines.push(`  ${r.label}${r.note ? `  — ${r.note}` : ''}`);
+    lines.push('');
+  }
+  const irrelevant = report.inert.filter((r) => r.status === 'no_effect');
+  if (irrelevant.length > 0) {
+    lines.push(`No effect on this build (${irrelevant.length}): ${irrelevant.map((r) => r.label).join(', ')}.`);
+    lines.push('A zero here means PoB parsed the line and DPS and EHP did not move: the build does not scale that affix, or something else already caps it. A stat outside DPS and EHP (movement speed, recovery, charges) would not show.');
+  }
+  return lines.join('\n').trimEnd();
+}
+
+export async function handleLuaStatWeights(
+  context: LuaHandlerContext,
+  args: { focus?: WeightFocus; slot?: string },
+) {
+  return wrapHandler('stat weights', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    if (args.focus !== undefined && !['dps', 'defence', 'both'].includes(args.focus)) {
+      throw new Error("focus must be 'dps', 'defence' or 'both'");
+    }
+    const { report, note } = await computeStatWeights(luaClient, { focus: args.focus, slot: args.slot });
+    if (!report) throw new Error(note ?? 'stat weights produced no result');
+    return { content: [{ type: "text" as const, text: formatStatWeights(report) }] };
   });
 }
