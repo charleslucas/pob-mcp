@@ -135,14 +135,20 @@ export async function handleSetConfig(
   // Set new value - build params object dynamically
   const params: Record<string, any> = {};
   params[args.config_name] = args.value;
-  await luaClient.setConfig(params);
+  const setResult = await luaClient.setConfigDetail(params);
 
   // Read back and VERIFY the value actually landed. Reporting the requested value without
   // checking made unsupported options look like they applied while PoB silently ignored
   // them — sims then ran on stale config and nobody could tell.
   const afterConfig = await luaClient.getConfig();
   const storedValue = afterConfig?.[args.config_name];
+  const isUnset = args.value === '__unset__';
+  // Custom modifiers live in their own "pob-mcp" Custom Modifiers group, not in the
+  // config inputs, so they never read back from get_config; trust what set_config applied.
+  const isCustomMods = args.config_name === 'customMods';
   const matches =
+    (isUnset && storedValue === undefined) ||
+    (isCustomMods && setResult.applied?.customMods !== undefined) ||
     storedValue === args.value ||
     String(storedValue) === String(args.value) ||
     (typeof storedValue === "boolean" && storedValue === (args.value === true || args.value === "true"));
@@ -154,12 +160,20 @@ export async function handleSetConfig(
   output += `${args.config_name}:\n`;
   output += `  Old Value: ${formatValue(oldValue)}\n`;
   output += `  Requested: ${formatValue(args.value)}\n`;
-  output += `  Stored:    ${formatValue(storedValue)}\n`;
+  output += isCustomMods
+    ? `  Stored:    in the "pob-mcp" Custom Modifiers group${args.value === '' ? ' (removed)' : ''}\n`
+    : `  Stored:    ${isUnset && storedValue === undefined ? '(PoB default)' : formatValue(storedValue)}\n`;
   if (!matches) {
     output += `\n⚠ PoB did not store the requested value — do NOT trust any simulation that assumes it applied.\n`;
     output += `  Check the option name against PoB's Config tab (it must match the internal var name).\n`;
   }
   output += `\n`;
+
+  // Custom modifiers apply line by line; a line PoB cannot parse does nothing.
+  const unparsed = setResult.rejected?.customModsUnparsed;
+  if (isCustomMods && Array.isArray(unparsed) && unparsed.length > 0) {
+    output += `⚠ Path of Building could not parse these lines, so they have NO effect: ${unparsed.map((l) => JSON.stringify(l)).join(', ')}\n\n`;
+  }
 
   if (newStats.TotalDPS) {
     output += `=== Current Stats ===\n`;

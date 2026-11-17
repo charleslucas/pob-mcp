@@ -227,6 +227,17 @@ abstract class PoBApiBase {
     return res.config;
   }
 
+  /** set_config plus what was applied and any per-key rejections (e.g. unparsed custom mod lines). */
+  async setConfigDetail(params: Record<string, any>): Promise<{ config: any; applied?: Record<string, unknown>; rejected?: Record<string, unknown> }> {
+    const res = await this.send({ action: "set_config", params });
+    if (!res.ok) throw new Error(res.error || "set_config failed");
+    return {
+      config: res.config,
+      applied: res.applied as Record<string, unknown> | undefined,
+      rejected: res.rejected as Record<string, unknown> | undefined,
+    };
+  }
+
   /** Switch the visible PoB GUI tab (TREE/SKILLS/ITEMS/CALCS/CONFIG/NOTES/IMPORT/PARTY/COMPARE). TCP/GUI only. */
   async setViewMode(mode: string): Promise<string> {
     const res = await this.send({ action: "set_view_mode", params: { mode } });

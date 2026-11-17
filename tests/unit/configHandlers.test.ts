@@ -21,6 +21,22 @@ function makeLuaClient(
     setConfig: jest.fn<(p: Record<string, any>) => Promise<void>>().mockImplementation(async (p) => {
       if (applyWrites) Object.assign(state, p);
     }),
+    setConfigDetail: jest.fn<(p: Record<string, any>) => Promise<any>>().mockImplementation(async (p) => {
+      const unparsed = typeof p.customMods === 'string'
+        ? p.customMods.split('\n').filter((l: string) => l.includes('frobnication'))
+        : [];
+      if (applyWrites) {
+        for (const [k, v] of Object.entries(p)) {
+          if (k === 'customMods') continue; // lives in a Custom Modifiers group, not the inputs
+          if (v === '__unset__') delete state[k]; else state[k] = v;
+        }
+      }
+      return {
+        config: { ...state },
+        applied: applyWrites ? { ...p } : {},
+        rejected: unparsed.length ? { customModsUnparsed: unparsed } : undefined,
+      };
+    }),
     getStats: jest.fn<() => Promise<any>>().mockResolvedValue(stats),
   };
 }
@@ -81,7 +97,7 @@ describe('handleSetConfig', () => {
     const client = makeLuaClient({ bandit: 'None' }, { TotalDPS: 50000 });
     const ctx = makeContext(client);
     await handleSetConfig(ctx, { config_name: 'bandit', value: 'Alira' });
-    expect(client.setConfig).toHaveBeenCalledWith({ bandit: 'Alira' });
+    expect(client.setConfigDetail).toHaveBeenCalledWith({ bandit: 'Alira' });
   });
 
   it('shows old, requested and stored values in output', async () => {
@@ -119,5 +135,24 @@ describe('handleSetConfig', () => {
     const ctx = makeContext(client);
     const result = await handleSetConfig(ctx, { config_name: 'bandit', value: 'Oak' });
     expect(result.content[0].text).not.toContain('Total DPS');
+  });
+
+  it('treats customMods as applied (it lives in a Custom Modifiers group) and warns on unparsed lines', async () => {
+    const client = makeLuaClient({});
+    const ctx = makeContext(client);
+    const result = await handleSetConfig(ctx, { config_name: 'customMods', value: '+500 to maximum Life\nGrants frobnication' });
+    const text = result.content[0].text;
+    expect(text).toContain('Configuration Updated');
+    expect(text).toContain('"pob-mcp" Custom Modifiers group');
+    expect(text).toMatch(/could not parse.*Grants frobnication/);
+  });
+
+  it("reports '__unset__' as applied when the option is cleared to PoB's default", async () => {
+    const client = makeLuaClient({ usePowerCharges: true });
+    const ctx = makeContext(client);
+    const result = await handleSetConfig(ctx, { config_name: 'usePowerCharges', value: '__unset__' });
+    const text = result.content[0].text;
+    expect(text).toContain('Configuration Updated');
+    expect(text).toContain('(PoB default)');
   });
 });
