@@ -85,7 +85,10 @@ export async function handleGetBuildIssues(context: BuildGoalsHandlerContext) {
     const totalDPS = (stats.TotalDPS as number) ?? 0;
     const combinedDPS = (stats.CombinedDPS as number) ?? 0;
     const minionDPS = (stats.MinionTotalDPS as number) ?? 0;
-    if (totalDPS === 0 && combinedDPS === 0 && minionDPS === 0) {
+    // FullDPS covers minion builds: their main socket group (e.g. an aura group after
+    // import) can show 0 player DPS while the Full DPS roll-up includes every minion.
+    const fullDPS = (stats.FullDPS as number) ?? 0;
+    if (totalDPS === 0 && combinedDPS === 0 && minionDPS === 0 && fullDPS === 0) {
       issues.push({ severity: 'error', category: 'gems', message: 'Build does 0 DPS — no main skill selected, gems not linked, or skill not dealing damage. Check skill setup.' });
     }
 
