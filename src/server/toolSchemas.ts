@@ -914,6 +914,54 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "list_skill_sets",
+      description: "List all skill sets in the currently loaded build. A skill set is a separate set of socket groups/gems (PoB's skill set dropdown).",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "select_skill_set",
+      description: "Switch the active skill set in the currently loaded build. Recalculates stats with the selected set's gems.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "Skill set ID (use list_skill_sets to see available skill sets)" },
+        },
+        required: ["id"],
+      },
+    },
+    {
+      name: "list_config_sets",
+      description: "List all config sets in the currently loaded build. A config set is a separate set of configuration assumptions (enemy level, buffs, custom mods).",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "select_config_set",
+      description: "Switch the active config set in the currently loaded build. Recalculates stats using that set's configuration.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "Config set ID (use list_config_sets to see available config sets)" },
+        },
+        required: ["id"],
+      },
+    },
+    {
+      name: "list_loadouts",
+      description: "List PoB loadouts. A loadout is not stored data: it is a set of passive tree spec + item set + skill set + config set that share the same title, as shown in PoB's loadout dropdown. Reports each family's match and whether the loadout is complete.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "select_loadout",
+      description: "Switch to a loadout by name, switching passive tree spec, item set, skill set and config set together (matching title, case-insensitive). Use this instead of combining select_spec + select_item_set manually; mixing families silently produces wrong stats.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Loadout name, e.g. \"ME\" or \"Default\" (use list_loadouts to see names)" },
+          index: { type: "number", description: "Alternative to name: 1-based index from list_loadouts" },
+        },
+      },
+    },
+    {
       name: "set_character_level",
       description: "Set the character level for the currently loaded build. Recalculates all stats.",
       inputSchema: {

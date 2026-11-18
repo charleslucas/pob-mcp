@@ -144,6 +144,12 @@ Concrete-numbers complement to `suggest_crafting` (which produces poedb-derived 
 | `rename_spec` | Rename a spec |
 | `list_item_sets` | List all item sets |
 | `select_item_set` | Switch the active item set |
+| `list_skill_sets` | List all skill sets |
+| `select_skill_set` | Switch the active skill set |
+| `list_config_sets` | List all config sets |
+| `select_config_set` | Switch the active config set |
+| `list_loadouts` | List loadouts (sets sharing a title across all four families) |
+| `select_loadout` | Switch every family of a loadout by name (`name`, or `index`) |
 
 ---
 

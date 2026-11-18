@@ -19,7 +19,7 @@ import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handle
 import { handleCompareTrees, handleConnectNodes, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodePower } from "../handlers/treeHandlers.js";
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
 import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
-import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetAilments, handleParseItem, handleLuaStatWeights, handleExportFullStats, handleLuaGetTimelessJewels, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleGetGemDetail, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet } from "../handlers/luaHandlers.js";
+import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetAilments, handleParseItem, handleLuaStatWeights, handleExportFullStats, handleLuaGetTimelessJewels, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleGetGemDetail, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet, handleListSkillSets, handleSelectSkillSet, handleListConfigSets, handleSelectConfigSet, handleListLoadouts, handleSelectLoadout } from "../handlers/luaHandlers.js";
 import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSharePobb } from "../handlers/importHandlers.js";
 import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
@@ -664,6 +664,31 @@ export async function routeToolCall(
         args?.title as string | undefined,
         args?.copyFrom as number | undefined,
         args?.activate as boolean | undefined,
+      );
+
+    case "list_skill_sets":
+      return await handleListSkillSets(luaContext);
+
+    case "select_skill_set":
+      if (args?.id == null) throw new Error("Missing id");
+      return await handleSelectSkillSet(luaContext, args.id as number);
+
+    case "list_config_sets":
+      return await handleListConfigSets(luaContext);
+
+    case "select_config_set":
+      if (args?.id == null) throw new Error("Missing id");
+      return await handleSelectConfigSet(luaContext, args.id as number);
+
+    case "list_loadouts":
+      return await handleListLoadouts(luaContext);
+
+    case "select_loadout":
+      if (args?.name == null && args?.index == null) throw new Error("Missing name or index");
+      return await handleSelectLoadout(
+        luaContext,
+        args?.name as string | undefined,
+        args?.index as number | undefined,
       );
 
     // Phase 9: Configuration Tools

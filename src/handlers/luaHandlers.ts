@@ -1099,6 +1099,135 @@ export async function handleCreateItemSet(context: LuaHandlerContext, title?: st
   });
 }
 
+export async function handleListSkillSets(context: LuaHandlerContext) {
+  return wrapHandler('list skill sets', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.listSkillSets();
+    if (!result?.skillSets?.length) {
+      return { content: [{ type: "text" as const, text: "No skill sets found. Load a build first." }] };
+    }
+    const textLines: string[] = [`=== Skill Sets (${result.skillSets.length} total) ===`, ''];
+    for (const s of result.skillSets) {
+      textLines.push(`${s.active ? '▶' : ' '} [${s.id}] ${s.title} — ${s.socketGroupCount} socket group(s)`);
+    }
+    textLines.push(`\nActive: Skill Set ${result.activeSkillSetId}. Use select_skill_set to switch.`);
+    return { content: [{ type: "text" as const, text: textLines.join('\n') }] };
+  });
+}
+
+export async function handleSelectSkillSet(context: LuaHandlerContext, id: number) {
+  return wrapHandler('select skill set', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.selectSkillSet(id);
+    const active = result?.skillSets?.find((s: any) => s.active);
+    let text = `✅ Switched to Skill Set ${id}`;
+    if (active) text += ` — ${active.title} (${active.socketGroupCount} socket group(s))`;
+    text += '.\n\nStats have been recalculated for this skill set.';
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleListConfigSets(context: LuaHandlerContext) {
+  return wrapHandler('list config sets', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.listConfigSets();
+    if (!result?.configSets?.length) {
+      return { content: [{ type: "text" as const, text: "No config sets found. Load a build first." }] };
+    }
+    const textLines: string[] = [`=== Config Sets (${result.configSets.length} total) ===`, ''];
+    for (const s of result.configSets) {
+      let line = `${s.active ? '▶' : ' '} [${s.id}] ${s.title}`;
+      if (s.customModCount) line += ` — ${s.customModCount} custom mod(s)`;
+      textLines.push(line);
+    }
+    textLines.push(`\nActive: Config Set ${result.activeConfigSetId}. Use select_config_set to switch.`);
+    return { content: [{ type: "text" as const, text: textLines.join('\n') }] };
+  });
+}
+
+export async function handleSelectConfigSet(context: LuaHandlerContext, id: number) {
+  return wrapHandler('select config set', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.selectConfigSet(id);
+    const active = result?.configSets?.find((s: any) => s.active);
+    let text = `✅ Switched to Config Set ${id}`;
+    if (active) text += ` — ${active.title}`;
+    text += '.\n\nStats have been recalculated with this config set.';
+    return { content: [{ type: "text" as const, text }] };
+  });
+}
+
+export async function handleListLoadouts(context: LuaHandlerContext) {
+  return wrapHandler('list loadouts', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.listLoadouts();
+    if (!result?.loadouts?.length) {
+      return { content: [{ type: "text" as const, text: "No loadouts found. Load a build first." }] };
+    }
+    const textLines: string[] = [`=== Loadouts (${result.loadouts.length} total) ===`, ''];
+    for (let i = 0; i < result.loadouts.length; i++) {
+      const lo = result.loadouts[i];
+      textLines.push(`${lo.active ? '▶' : ' '} [${i + 1}] ${lo.name}`);
+      if (!lo.complete) textLines.push('      ⚠ incomplete: not every set family has a matching title');
+      const parts: string[] = [];
+      parts.push(lo.treeSpec ? `tree "${lo.treeSpec.title}" (#${lo.treeSpec.id})` : 'tree — no match');
+      parts.push(lo.itemSet ? `items "${lo.itemSet.title}" (#${lo.itemSet.id})` : 'items — no match');
+      parts.push(lo.skillSet ? `skills "${lo.skillSet.title}" (#${lo.skillSet.id})` : 'skills — no match');
+      parts.push(lo.configSet ? `config "${lo.configSet.title}" (#${lo.configSet.id})` : 'config — no match');
+      textLines.push(`      ${parts.join('  |  ')}`);
+    }
+    const a = result.active ?? {};
+    textLines.push(
+      '',
+      `Active: tree #${a.treeSpecIndex}, item set #${a.itemSetId}, skill set #${a.skillSetId}, config set #${a.configSetId}.`,
+      'Use select_loadout with a loadout name to switch all four families at once.',
+    );
+    return { content: [{ type: "text" as const, text: textLines.join('\n') }] };
+  });
+}
+
+export async function handleSelectLoadout(context: LuaHandlerContext, name?: string, index?: number) {
+  return wrapHandler('select loadout', async () => {
+    if (name == null && index == null) {
+      throw new Error('Provide a loadout name (or index from list_loadouts)');
+    }
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const params: { name?: string; index?: number } = {};
+    if (name != null) params.name = name;
+    if (index != null) params.index = index;
+    const result = await luaClient.selectLoadout(params);
+    const sel = result?.selected;
+    const lines: string[] = [`✅ Switched to loadout "${sel?.name ?? name ?? index}".`];
+    if (sel) {
+      const fmt = (label: string, set: any) =>
+        `   ${label}: ${set ? `"${set.title}" (#${set.id})` : 'no matching set — left unchanged'}`;
+      lines.push(
+        fmt('tree spec ', sel.treeSpec),
+        fmt('item set  ', sel.itemSet),
+        fmt('skill set ', sel.skillSet),
+        fmt('config set', sel.configSet),
+      );
+      if (!sel.complete) {
+        lines.push('', '⚠ This loadout is incomplete: the build is now in a mixed state across families.');
+      }
+    }
+    lines.push('', 'Stats have been recalculated for this loadout.');
+    return { content: [{ type: "text" as const, text: lines.join('\n') }] };
+  });
+}
+
 export async function handleParseItem(context: LuaHandlerContext, text: string | undefined) {
   return wrapHandler('parse item', async () => {
     if (typeof text !== 'string' || text.trim() === '') {

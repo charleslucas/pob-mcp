@@ -86,6 +86,9 @@ POE_ACCOUNT_NAME="account#1234"               # default account for lua_list_cha
 | `rename_spec` | Rename a tree spec |
 | `list_item_sets` | List all item sets |
 | `select_item_set` | Switch active item set |
+| `list_skill_sets` / `select_skill_set` | List / switch skill (gem) sets |
+| `list_config_sets` / `select_config_set` | List / switch config sets |
+| `list_loadouts` / `select_loadout` | List / switch loadouts (spec + items + skills + config by shared title) |
 | `get_mastery_options` | List mastery cluster options in the current tree |
 | `plan_leveling` | Generate a leveling plan |
 | `lua_list_characters` | List PoE account characters via the official API |

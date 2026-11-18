@@ -603,6 +603,42 @@ abstract class PoBApiBase {
     return res.result;
   }
 
+  async listSkillSets(): Promise<any> {
+    const res = await this.send({ action: "list_skill_sets" });
+    if (!res.ok) throw new Error(res.error || "list_skill_sets failed");
+    return res.result;
+  }
+
+  async selectSkillSet(id: number): Promise<any> {
+    const res = await this.send({ action: "select_skill_set", params: { id } });
+    if (!res.ok) throw new Error(res.error || "select_skill_set failed");
+    return res.result;
+  }
+
+  async listConfigSets(): Promise<any> {
+    const res = await this.send({ action: "list_config_sets" });
+    if (!res.ok) throw new Error(res.error || "list_config_sets failed");
+    return res.result;
+  }
+
+  async selectConfigSet(id: number): Promise<any> {
+    const res = await this.send({ action: "select_config_set", params: { id } });
+    if (!res.ok) throw new Error(res.error || "select_config_set failed");
+    return res.result;
+  }
+
+  async listLoadouts(): Promise<any> {
+    const res = await this.send({ action: "list_loadouts" });
+    if (!res.ok) throw new Error(res.error || "list_loadouts failed");
+    return res.result;
+  }
+
+  async selectLoadout(params: { name?: string; index?: number }): Promise<any> {
+    const res = await this.send({ action: "select_loadout", params: params || {} });
+    if (!res.ok) throw new Error(res.error || "select_loadout failed");
+    return res.result;
+  }
+
   async generateWeightedTradeQuery(slot: string, options?: Record<string, unknown>): Promise<{ query: unknown; warning?: string }> {
     const res = await this.send({ action: "generate_weighted_trade_query", params: { slot, options: options || {} } });
     if (!res.ok) throw new Error(res.error || "generate_weighted_trade_query failed");

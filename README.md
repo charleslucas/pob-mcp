@@ -331,6 +331,12 @@ The server registers **~123 tools** across 10+ categories.
 | `rename_spec` | Rename a tree spec |
 | `list_item_sets` | List all item sets in the current build |
 | `select_item_set` | Switch active item set |
+| `list_skill_sets` | List all skill sets (gem sets) in the current build |
+| `select_skill_set` | Switch active skill set |
+| `list_config_sets` | List all config sets in the current build |
+| `select_config_set` | Switch active config set |
+| `list_loadouts` | List loadouts (matching title across spec/item/skill/config sets) |
+| `select_loadout` | Switch tree spec + item set + skill set + config set by loadout name |
 | `plan_leveling` | Generate a leveling plan for a build |
 | `lua_list_characters` | List characters on a PoE account via the official API (sorted by last login) |
 | `lua_import_character` | Import a live character (tree/jewels/items/gems) into the loaded build with a before/after diff |
