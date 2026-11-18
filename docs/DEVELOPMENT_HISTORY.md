@@ -212,6 +212,44 @@ Import paths in `poe_stash.py`, `poe_char.py`, `poe_pricer.py`, and `poe_all.py`
 
 ---
 
+## Phase 7 — Loadouts, Skill Sets, and Config Sets
+
+### The loadout model: a derived view, not stored data
+
+There is no loadout object anywhere in PoB. `buildMode:SyncLoadouts()` (`src/Modules/Build.lua`, ~line 771) rebuilds the dropdown from four independent families — `treeTab.specList`, `itemsTab.itemSets` + `itemSetOrderList`, `skillsTab.skillSets` + `skillSetOrderList`, `configTab.configSets` + `configSetOrderList` — and offers a loadout for every tree spec title that also exists in the other three. Details that matter for any tool touching this:
+
+- A family with **exactly one** set is a wildcard (`oneItem or itemList[tree]`), so a build with one item set shows every tree spec as a live loadout.
+- Titles containing `{id1,id2}` are **link identifiers**, not names: they match by shared id instead of by title, and the loadout is displayed as `name {id}`. Sets with a link identifier are excluded from plain title matching.
+- The switch itself is just four `SetActive*` calls in the GUI's dropdown handler (`SetActiveSpec` → `SetActiveItemSet` → `SetActiveSkillSet` → `SetActiveConfigSet`), and each one calls `SyncLoadouts()` again.
+- Jewels belong to the spec (`<Tree><Spec><Sockets>`), so `SetActiveSpec` also re-sockets jewels per spec. A spec with an empty `<Sockets/>` (like the live-character spec in this build) carries no jewels at all.
+
+`list_loadouts` / `select_loadout` (plus `list_skill_sets` / `select_skill_set`, `list_config_sets` / `select_config_set`) implement exactly this derivation in `src/API/BuildOps.lua`, and report per family with a `complete` flag rather than assuming all four matched.
+
+### Stale `active` flags in the selection result
+
+First version computed the per-family report before switching, so `select_loadout("ME")` returned `{"treeSpec": {"id": 2, "active": false}, ...}` for the sets it had just activated — the switch worked but the report contradicted it. Fix: rebuild the flags after `get_main_output()` (the freshly computed `result.active` block was already correct, which is what exposed the inconsistency). Any new `select_*` action that returns a report must derive it **after** the mutation.
+
+### Matching must not be "forgiving"
+
+`select_loadout` resolves strictly like the GUI: exact title (case-insensitive) for plain titles, shared identifier for link titles, wildcard only for single-set families. A looser rule (substring, prefix, or falling back to a plain-title set for a linked tree) would let two different loadouts cross-match and reintroduce the mixed-state bug the tool exists to prevent.
+
+### Lua parse check in CI-less environments
+
+The repo's Lua uses `goto continue` (LuaJIT / 5.2+), so `luaparse` must be told `{ luaVersion: "5.3" }` — the default 5.1 parser fails with `'=' expected near 'continue'` on untouched, working code. A quick syntax gate before restarting PoB:
+
+```bash
+node -e "require('luaparse').parse(require('fs').readFileSync('../PathOfBuilding/src/API/BuildOps.lua','utf8'),{luaVersion:'5.3'})"
+```
+
+### Verifying without the MCP session
+
+Adding tools to a running session is awkward: the tool list is fixed per process. Two checks that avoid one:
+
+1. Direct bridge probe — import `build/pobLuaBridge.js`, construct `PoBLuaTcpClient({ port: 59166 })`, call the new methods, then `stop()`. Proves Lua + bridge in isolation.
+2. Standalone MCP handshake — spawn `build/index.js` and send `initialize` → `tools/list` → `tools/call` over stdio. Proves schema/registry/router wiring (the tool count is a quick sanity signal: 143 → 149).
+
+---
+
 - **PoB's Lua environment**: LuaJIT 2.x, standard libs available. `os.clock()` works. `io.open` works with paths relative to the PoB install directory.
 - **socket.dll**: Ships with PoB, entry point `luaopen_socket_core`. Not a standard LuaSocket install.
 - **WM_TIMER vs WM_NULL**: Timer messages are synthesized and low-priority; real posted messages trigger the render loop.

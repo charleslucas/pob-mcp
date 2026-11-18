@@ -556,7 +556,7 @@ ls "$POB_FORK_PATH/Modules/"              # must exist
 
 **Stats don't match PoB GUI**
 - Check bandit/pantheon/enemy settings with `get_config`
-- Ensure the correct tree spec is active — use `list_specs` and `select_spec` to switch
+- Ensure the right loadout is active — `list_loadouts` then `select_loadout` (a loadout switches tree spec, item set, skill set and config together; switching one family alone gives wrong stats)
 - Verify your PathOfBuilding fork (`charleslucas/PathOfBuilding`, `api-stdio` branch) is up to date
 
 **TCP mode: `Cannot connect to PoB GUI at 127.0.0.1:59166`**

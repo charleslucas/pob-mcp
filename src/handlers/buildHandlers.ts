@@ -94,7 +94,7 @@ export async function handleAnalyzeBuild(context: HandlerContext, buildName: str
           }
           if (parts.length > 0) {
             specContextLines.push(`[Analyzing: ${parts.join(' | ')}]`);
-            specContextLines.push('Use select_spec / select_item_set to switch before re-analyzing.');
+            specContextLines.push('Use select_loadout to switch the whole loadout (spec + items + skills + config) before re-analyzing.');
           }
         }
       } catch { /* advisory only */ }
