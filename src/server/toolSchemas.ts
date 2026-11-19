@@ -952,12 +952,13 @@ export function getLuaToolSchemas(): any[] {
     },
     {
       name: "select_loadout",
-      description: "Switch to a loadout by name, switching passive tree spec, item set, skill set and config set together (matching title, case-insensitive). Use this instead of combining select_spec + select_item_set manually; mixing families silently produces wrong stats.",
+      description: "Switch to a loadout, switching passive tree spec, item set, skill set and config set together, as PoB's loadout dropdown does. Matches a loadout title from list_loadouts (case-insensitive), or its plain name when unambiguous. Refuses an incomplete loadout (some family has no matching set) unless allowPartial is true. Use this instead of combining select_spec + select_item_set manually; mixing families silently produces wrong stats.",
       inputSchema: {
         type: "object",
         properties: {
-          name: { type: "string", description: "Loadout name, e.g. \"ME\" or \"Default\" (use list_loadouts to see names)" },
+          name: { type: "string", description: "Loadout title or name from list_loadouts, e.g. \"Mapping {1}\" or \"Mapping\"" },
           index: { type: "number", description: "Alternative to name: 1-based index from list_loadouts" },
+          allowPartial: { type: "boolean", description: "Switch the families that match even if the loadout is incomplete (default false)" },
         },
       },
     },

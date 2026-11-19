@@ -633,7 +633,7 @@ abstract class PoBApiBase {
     return res.result;
   }
 
-  async selectLoadout(params: { name?: string; index?: number }): Promise<any> {
+  async selectLoadout(params: { name?: string; index?: number; allowPartial?: boolean }): Promise<any> {
     const res = await this.send({ action: "select_loadout", params: params || {} });
     if (!res.ok) throw new Error(res.error || "select_loadout failed");
     return res.result;

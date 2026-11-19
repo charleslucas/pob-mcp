@@ -1177,7 +1177,7 @@ export async function handleListLoadouts(context: LuaHandlerContext) {
     const textLines: string[] = [`=== Loadouts (${result.loadouts.length} total) ===`, ''];
     for (let i = 0; i < result.loadouts.length; i++) {
       const lo = result.loadouts[i];
-      textLines.push(`${lo.active ? '▶' : ' '} [${i + 1}] ${lo.name}`);
+      textLines.push(`${lo.active ? '▶' : ' '} [${i + 1}] ${lo.title ?? lo.name}`);
       if (!lo.complete) textLines.push('      ⚠ incomplete: not every set family has a matching title');
       const parts: string[] = [];
       parts.push(lo.treeSpec ? `tree "${lo.treeSpec.title}" (#${lo.treeSpec.id})` : 'tree — no match');
@@ -1196,7 +1196,7 @@ export async function handleListLoadouts(context: LuaHandlerContext) {
   });
 }
 
-export async function handleSelectLoadout(context: LuaHandlerContext, name?: string, index?: number) {
+export async function handleSelectLoadout(context: LuaHandlerContext, name?: string, index?: number, allowPartial = false) {
   return wrapHandler('select loadout', async () => {
     if (name == null && index == null) {
       throw new Error('Provide a loadout name (or index from list_loadouts)');
@@ -1204,12 +1204,13 @@ export async function handleSelectLoadout(context: LuaHandlerContext, name?: str
     await context.ensureLuaClient();
     const luaClient = context.getLuaClient();
     if (!luaClient) throw new Error('Lua client not initialized');
-    const params: { name?: string; index?: number } = {};
+    const params: { name?: string; index?: number; allowPartial?: boolean } = {};
     if (name != null) params.name = name;
     if (index != null) params.index = index;
+    if (allowPartial) params.allowPartial = true;
     const result = await luaClient.selectLoadout(params);
     const sel = result?.selected;
-    const lines: string[] = [`✅ Switched to loadout "${sel?.name ?? name ?? index}".`];
+    const lines: string[] = [`✅ Switched to loadout "${sel?.title ?? sel?.name ?? name ?? index}".`];
     if (sel) {
       const fmt = (label: string, set: any) =>
         `   ${label}: ${set ? `"${set.title}" (#${set.id})` : 'no matching set — left unchanged'}`;
@@ -1220,7 +1221,8 @@ export async function handleSelectLoadout(context: LuaHandlerContext, name?: str
         fmt('config set', sel.configSet),
       );
       if (!sel.complete) {
-        lines.push('', '⚠ This loadout is incomplete: the build is now in a mixed state across families.');
+        const missing = Array.isArray(sel.missing) && sel.missing.length ? ` (no matching ${sel.missing.join(', ')})` : '';
+        lines.push('', `⚠ This loadout is incomplete${missing}: the build is now in a mixed state across families.`);
       }
     }
     lines.push('', 'Stats have been recalculated for this loadout.');

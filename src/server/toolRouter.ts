@@ -689,6 +689,7 @@ export async function routeToolCall(
         luaContext,
         args?.name as string | undefined,
         args?.index as number | undefined,
+        args?.allowPartial === true,
       );
 
     // Phase 9: Configuration Tools

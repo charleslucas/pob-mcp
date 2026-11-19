@@ -233,6 +233,15 @@ First version computed the per-family report before switching, so `select_loadou
 
 `select_loadout` resolves strictly like the GUI: exact title (case-insensitive) for plain titles, shared identifier for link titles, wildcard only for single-set families. A looser rule (substring, prefix, or falling back to a plain-title set for a linked tree) would let two different loadouts cross-match and reintroduce the mixed-state bug the tool exists to prevent.
 
+Follow-up review fixes:
+
+- **Set-to-set matching is exact and case-sensitive**, as in `SyncLoadouts`; only the user's input to `select_loadout` is compared case-insensitively, and against the loadout rows rather than the raw sets. Selecting a linked loadout by its plain name ("Mapping" for `Mapping {1}`) previously dropped the link and switched only the tree.
+- **One row per link id**: a tree titled `Name {1,2}` yields `Name {1}` and `Name {2}`, like the GUI. A bare name matching several rows is reported as ambiguous.
+- **Incomplete loadouts are refused** unless `allowPartial` is passed, and the error names the missing families. Nothing is switched on refusal.
+- **Colour codes** (`^4`, `^xRRGGBB`) are stripped from titles in every set listing and from the user's input.
+- **`select_spec` calls `SetActiveSpec`**: assigning `activeSpec`/`build.spec` directly kept the previous spec's jewels socketed.
+- Tests: `PathOfBuilding/src/API/tests/loadouts_test.lua` (stub build, run with `luajit` from the PoB root) and `tests/unit/loadoutHandlers.test.ts`.
+
 ### Lua parse check in CI-less environments
 
 The repo's Lua uses `goto continue` (LuaJIT / 5.2+), so `luaparse` must be told `{ luaVersion: "5.3" }` — the default 5.1 parser fails with `'=' expected near 'continue'` on untouched, working code. A quick syntax gate before restarting PoB:
