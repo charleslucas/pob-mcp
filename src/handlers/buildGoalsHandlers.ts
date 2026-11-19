@@ -14,6 +14,8 @@ const ISSUES_FIELDS = [
   'SpellSuppressionChance', 'EffectiveSpellSuppressionChance',
   // DPS fields needed by handleGetPassiveUpgrades for baseDPS scoring
   'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
+  // Roll-up used by the zero-DPS check (minion builds can show 0 in the fields above)
+  'FullDPS',
   // EHP field needed by handleGetPassiveUpgrades for baseEHP scoring
   'TotalEHP',
 ];
@@ -117,9 +119,19 @@ export async function handleGetBuildIssues(context: BuildGoalsHandlerContext) {
     try {
       const items = await luaClient.getItems();
       if (Array.isArray(items)) {
-        // Find jewel slots that are empty (id === 0)
+        // Find jewel slots that are empty (id === 0). PoB lists a slot for every socket on
+        // the tree, so only sockets whose passive node is allocated count as empty.
+        let allocatedNodes: Set<number> | null = null;
+        try {
+          const tree = await luaClient.getTree();
+          if (Array.isArray(tree?.nodes)) allocatedNodes = new Set((tree.nodes as any[]).map(Number));
+        } catch { /* fall back to reporting every empty slot */ }
         const jewelSlots = items.filter((it: any) => it.slot && /jewel/i.test(it.slot));
-        const emptyJewelSlots = jewelSlots.filter((it: any) => !it.id || it.id === 0);
+        const emptyJewelSlots = jewelSlots.filter((it: any) => {
+          if (it.id && it.id !== 0) return false;
+          const nodeId = /^Jewel (\d+)$/.exec(it.slot)?.[1];
+          return !allocatedNodes || !nodeId || allocatedNodes.has(Number(nodeId));
+        });
         if (emptyJewelSlots.length > 0) {
           issues.push({
             severity: 'warning',
