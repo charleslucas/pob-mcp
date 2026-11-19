@@ -18,6 +18,51 @@ function fmt(n: number): string {
   return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString() : String(Math.round(n * 100) / 100);
 }
 
+interface BreakdownRow {
+  name: string;
+  total: number;
+  skillPart?: string;
+}
+
+/** Community rules of thumb from playbooks/dps-analysis.md. They are not measurements. */
+const UPTIME_SCENARIOS = [
+  { label: "Stationary target, ranged or triggered minions", low: 0.9, high: 0.95 },
+  { label: "Moving target, melee minions", low: 0.6, high: 0.8 },
+];
+
+/** PoB labels a minion's row "Minion Name: Skill Part". */
+const isMinionRow = (r: BreakdownRow) => (r.skillPart ?? "").includes(": ");
+/** Ailment and DoT roll-ups, which PoB does not attribute per skill. */
+const isRollupRow = (r: BreakdownRow) => /^(Best|Full) .+ DPS$|^Corrupting Blood DPS$/.test(r.name);
+
+function realisticEstimateLines(rows: BreakdownRow[], fullDps: number): string[] {
+  const sum = (list: BreakdownRow[]) => list.reduce((acc, r) => acc + r.total, 0);
+  const minionHits = sum(rows.filter(isMinionRow));
+  if (minionHits <= 0 || fullDps <= 0) return [];
+  const otherHits = sum(rows.filter((r) => !isMinionRow(r) && !isRollupRow(r)));
+  const rollups = sum(rows.filter(isRollupRow));
+  const minionPart = Math.min(fullDps, minionHits + rollups * (minionHits / (minionHits + otherHits)));
+  const otherPart = fullDps - minionPart;
+
+  return [
+    "",
+    "**Realistic estimate (rule of thumb, not measured):**",
+    `Minion-driven damage: ${fmt(minionPart)} of ${fmt(fullDps)} Full DPS (${fmt((100 * minionPart) / fullDps)}%). ` +
+      "Ailment and DoT rows are split by each side's share of direct hits.",
+    "",
+    "| Scenario | Minion uptime | Estimated Full DPS |",
+    "|---|---|---|",
+    ...UPTIME_SCENARIOS.map(
+      (s) =>
+        `| ${s.label} | ${Math.round(s.low * 100)}-${Math.round(s.high * 100)}% | ` +
+        `${fmt(otherPart + minionPart * s.low)} - ${fmt(otherPart + minionPart * s.high)} |`
+    ),
+    "",
+    "Pick the row that fits the fight. These ranges cover minions losing attack time only: the Count " +
+      "values and any buffs PoB treats as permanent are still taken at face value. Calibrate against a timed kill.",
+  ];
+}
+
 export async function handleMinionDpsBreakdown(context: LuaHandlerContext) {
   return wrapHandler("get minion DPS breakdown", async () => {
     await context.ensureLuaClient();
@@ -80,9 +125,10 @@ export async function handleMinionDpsBreakdown(context: LuaHandlerContext) {
         '"Include in Full DPS" is absent from this table entirely.'
     );
     lines.push(
-      "PoB assumes perfect minion uptime — apply per-type haircuts for real-world estimates " +
+      "PoB assumes perfect minion uptime, so the totals above are a best case " +
         "(playbooks/dps-analysis.md, minion section)."
     );
+    lines.push(...realisticEstimateLines(rows, grandTotal));
 
     return { content: [{ type: "text" as const, text: lines.join("\n") }] };
   });

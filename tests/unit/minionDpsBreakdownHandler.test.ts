@@ -47,6 +47,39 @@ describe('handleMinionDpsBreakdown', () => {
     expect(text).toContain('perfect minion uptime');
   });
 
+  it('estimates realistic Full DPS, discounting only minion-driven damage', async () => {
+    const client = {
+      getFullDpsBreakdown: jest.fn<() => Promise<any>>().mockResolvedValue({
+        skills: [
+          { name: 'Summon Raging Spirit', dps: 3_000, count: 20, skillPart: 'Raging Spirit: Melee' },
+          { name: 'Fireball', dps: 20_000, count: 1, skillPart: '' },
+          { name: 'Full Poison DPS', dps: 40_000, count: 1 },
+        ],
+        fullDPS: 120_000,
+        fullDotDPS: 40_000,
+        playerDPS: 20_000,
+      }),
+    };
+    const text = (await handleMinionDpsBreakdown(makeContext(client))).content[0].text;
+    // Poison splits 60:20, so minions drive 60k + 30k = 90k and the other 30k is untouched.
+    expect(text).toContain('Minion-driven damage: 90,000 of 120,000 Full DPS (75%)');
+    expect(text).toContain('| Stationary target, ranged or triggered minions | 90-95% | 111,000 - 115,500 |');
+    expect(text).toContain('| Moving target, melee minions | 60-80% | 84,000 - 102,000 |');
+  });
+
+  it('omits the estimate when no row is a minion', async () => {
+    const client = {
+      getFullDpsBreakdown: jest.fn<() => Promise<any>>().mockResolvedValue({
+        skills: [{ name: 'Fireball', dps: 20_000, count: 1, skillPart: '' }],
+        fullDPS: 20_000,
+        fullDotDPS: 0,
+        playerDPS: 20_000,
+      }),
+    };
+    const text = (await handleMinionDpsBreakdown(makeContext(client))).content[0].text;
+    expect(text).not.toContain('Realistic estimate');
+  });
+
   it('gives setup guidance when no groups are flagged for Full DPS', async () => {
     const client = {
       getFullDpsBreakdown: jest.fn<() => Promise<any>>().mockResolvedValue({

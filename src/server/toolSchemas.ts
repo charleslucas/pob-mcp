@@ -994,7 +994,7 @@ export function getLuaToolSchemas(): any[] {
     {
       name: "minion_dps_breakdown",
       description:
-        "Per-skill Full DPS table for minion and multi-skill builds — each flagged socket group's DPS per instance × count, share of total, from PoB's cached calc (free, no recompute, build untouched). Requires socket groups to have 'Include in Full DPS' checked and their Count field set to the real minion quantity (PoB does NOT auto-multiply by minion limit); the tool explains how when nothing is flagged. Use whenever a build's damage lives in minions or multiple skills — the main-skill DPS alone under-reports those builds.",
+        "Per-skill Full DPS table for minion and multi-skill builds — each flagged socket group's DPS per instance × count, share of total, from PoB's cached calc (free, no recompute, build untouched). Requires socket groups to have 'Include in Full DPS' checked and their Count field set to the real minion quantity (PoB does NOT auto-multiply by minion limit); the tool explains how when nothing is flagged. Also prints a rule-of-thumb realistic estimate from minion uptime ranges. Use whenever a build's damage lives in minions or multiple skills — the main-skill DPS alone under-reports those builds.",
       inputSchema: { type: "object", properties: {} },
     },
     {
