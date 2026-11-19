@@ -42,7 +42,7 @@ export async function handleFindBestAnointment(
     const lines: string[] = [
       `=== Best Anointment (slot: ${result.slot} / ${result.baseType}, focus: ${result.focus}) ===`,
       '',
-      `Base main-skill DPS: ${Math.round(result.base.CombinedDPS).toLocaleString()}  |  Base TotalEHP: ${Math.round(result.base.TotalEHP).toLocaleString()}`,
+      `Base main-skill DPS: ${Math.round(result.base.CombinedDPS).toLocaleString("en-US")}  |  Base TotalEHP: ${Math.round(result.base.TotalEHP).toLocaleString("en-US")}`,
       `Evaluated ${result.evaluated} anointable notables (${result.skipped} skipped), showing top ${Math.min(maxResults, result.candidates.length)}:`,
       '',
     ];
@@ -54,7 +54,7 @@ export async function handleFindBestAnointment(
       const ehpPct = result.base.TotalEHP > 0 ? (c.ehpDelta / result.base.TotalEHP) * 100 : 0;
       lines.push(
         `${i + 1}. **${c.name}** [${c.nodeId}]`,
-        `   Score: ${c.score.toFixed(4)}  |  DPS Δ: ${c.dpsDelta >= 0 ? '+' : ''}${Math.round(c.dpsDelta).toLocaleString()} (${dpsPct >= 0 ? '+' : ''}${dpsPct.toFixed(2)}%)  |  EHP Δ: ${c.ehpDelta >= 0 ? '+' : ''}${Math.round(c.ehpDelta).toLocaleString()} (${ehpPct >= 0 ? '+' : ''}${ehpPct.toFixed(2)}%)`,
+        `   Score: ${c.score.toFixed(4)}  |  DPS Δ: ${c.dpsDelta >= 0 ? '+' : ''}${Math.round(c.dpsDelta).toLocaleString("en-US")} (${dpsPct >= 0 ? '+' : ''}${dpsPct.toFixed(2)}%)  |  EHP Δ: ${c.ehpDelta >= 0 ? '+' : ''}${Math.round(c.ehpDelta).toLocaleString("en-US")} (${ehpPct >= 0 ? '+' : ''}${ehpPct.toFixed(2)}%)`,
       );
       if (c.recipe && c.recipe.length > 0) {
         lines.push(`   Oils: ${c.recipe.join(' + ')}`);

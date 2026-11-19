@@ -262,16 +262,16 @@ export async function handleExportBuildSummary(context: ExportContext) {
 
   output += `## Key Stats\n\n`;
   output += `| Stat | Value |\n|------|-------|\n`;
-  output += `| Life | ${Number(stats.Life ?? 0).toLocaleString()} |\n`;
+  output += `| Life | ${Number(stats.Life ?? 0).toLocaleString("en-US")} |\n`;
   if (Number(stats.EnergyShield ?? 0) > 100) {
-    output += `| Energy Shield | ${Number(stats.EnergyShield).toLocaleString()} |\n`;
+    output += `| Energy Shield | ${Number(stats.EnergyShield).toLocaleString("en-US")} |\n`;
   }
-  output += `| ${dpsLabel} | ${Math.round(dps).toLocaleString()} |\n`;
-  output += `| Total EHP | ${Number(stats.TotalEHP ?? 0).toLocaleString()} |\n`;
+  output += `| ${dpsLabel} | ${Math.round(dps).toLocaleString("en-US")} |\n`;
+  output += `| Total EHP | ${Number(stats.TotalEHP ?? 0).toLocaleString("en-US")} |\n`;
   output += `| Fire/Cold/Light Resist | ${stats.FireResist ?? '?'}% / ${stats.ColdResist ?? '?'}% / ${stats.LightningResist ?? '?'}% |\n`;
   output += `| Chaos Resist | ${stats.ChaosResist ?? '?'}% |\n`;
-  if (Number(stats.Armour ?? 0) > 0) output += `| Armour | ${Number(stats.Armour).toLocaleString()} |\n`;
-  if (Number(stats.Evasion ?? 0) > 0) output += `| Evasion | ${Number(stats.Evasion).toLocaleString()} |\n`;
+  if (Number(stats.Armour ?? 0) > 0) output += `| Armour | ${Number(stats.Armour).toLocaleString("en-US")} |\n`;
+  if (Number(stats.Evasion ?? 0) > 0) output += `| Evasion | ${Number(stats.Evasion).toLocaleString("en-US")} |\n`;
   if (Number(stats.BlockChance ?? 0) > 0) output += `| Block | ${stats.BlockChance}% |\n`;
   if (Number(stats.SpellSuppressionChance ?? 0) > 0) output += `| Spell Suppression | ${stats.SpellSuppressionChance}% |\n`;
   output += '\n';

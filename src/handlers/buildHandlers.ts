@@ -283,7 +283,7 @@ export async function handleCompareBuilds(context: HandlerContext, build1Name: s
   if (luaOk && r1 && r2) {
     const fmtNum = (n: any) =>
       n != null && !isNaN(Number(n)) && Number(n) !== 0
-        ? Math.round(Number(n)).toLocaleString()
+        ? Math.round(Number(n)).toLocaleString("en-US")
         : 'N/A';
 
     const row = (label: string, v1: any, v2: any, higherIsBetter = true) => {

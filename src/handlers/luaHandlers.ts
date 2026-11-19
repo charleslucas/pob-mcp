@@ -248,7 +248,7 @@ export async function handleLuaLoadBuild(
         'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist', 'TotalEHP']).catch(() => null);
       if (s) {
         const { value: dps, label: dpsLabel } = resolveBuildDps(s);
-        summaryLines.push(`Life: ${Number(s.Life ?? 0).toLocaleString()} | ${dpsLabel}: ${Math.round(dps).toLocaleString()} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString()}`);
+        summaryLines.push(`Life: ${Number(s.Life ?? 0).toLocaleString("en-US")} | ${dpsLabel}: ${Math.round(dps).toLocaleString("en-US")} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString("en-US")}`);
         summaryLines.push(`Resists: F${s.FireResist}% C${s.ColdResist}% L${s.LightningResist}% Ch${s.ChaosResist}%`);
       }
 
@@ -332,7 +332,7 @@ export async function handleLuaGetAilments(context: LuaHandlerContext) {
         const cap = a.thresholdTable.find((r) => r.note === 'maximum');
         if (cap) {
           lines.push(
-            `  Reaches the ${cap.effect}% maximum against an ailment threshold of ${cap.ailmentThreshold.toLocaleString()} or less`,
+            `  Reaches the ${cap.effect}% maximum against an ailment threshold of ${cap.ailmentThreshold.toLocaleString("en-US")} or less`,
           );
         }
       }
@@ -1133,7 +1133,7 @@ export function formatStatWeights(report: StatWeightReport): string {
     `=== Stat weights (${report.focus}) ===`,
     '',
     `Measured by substituting ${report.slot} with a copy carrying one extra line, one calculation per line. The loaded build is unchanged.`,
-    `Baseline: ${Math.round(report.baseDps).toLocaleString()} ${report.dpsSource === 'minion' ? 'minion DPS (main skill is a minion skill)' : 'DPS'}, ${Math.round(report.baseEhp).toLocaleString()} EHP. Each row is the effect of ONE typical high-tier roll of that affix; they are not per-point values, so compare rows rather than scaling them.`,
+    `Baseline: ${Math.round(report.baseDps).toLocaleString("en-US")} ${report.dpsSource === 'minion' ? 'minion DPS (main skill is a minion skill)' : 'DPS'}, ${Math.round(report.baseEhp).toLocaleString("en-US")} EHP. Each row is the effect of ONE typical high-tier roll of that affix; they are not per-point values, so compare rows rather than scaling them.`,
     '',
   ];
   const offence = report.ranked.filter((r) => r.group === 'offence');

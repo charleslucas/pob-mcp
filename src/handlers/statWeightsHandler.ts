@@ -65,7 +65,7 @@ const MINION_PROBES: Probe[] = [
 ];
 
 function fmt(n: number): string {
-  if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString();
+  if (Math.abs(n) >= 1000) return Math.round(n).toLocaleString("en-US");
   return String(Math.round(n * 100) / 100);
 }
 

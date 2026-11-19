@@ -468,8 +468,8 @@ export class BuildExportService {
 
       if (metadata.statsSnapshot) {
         const stats = metadata.statsSnapshot;
-        output += `   Stats: Life: ${stats.life?.toLocaleString() || 'N/A'} | `;
-        output += `DPS: ${stats.dps?.toLocaleString() || 'N/A'} | `;
+        output += `   Stats: Life: ${stats.life?.toLocaleString("en-US") || 'N/A'} | `;
+        output += `DPS: ${stats.dps?.toLocaleString("en-US") || 'N/A'} | `;
         output += `Nodes: ${stats.allocatedNodes || 'N/A'}\n`;
       }
 

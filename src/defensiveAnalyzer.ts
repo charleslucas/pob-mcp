@@ -124,7 +124,7 @@ export function analyzeDefenses(stats: Record<string, any>): DefensiveAnalysis {
     `${avoidanceLayer ? '✓' : '✗'} Avoidance: ${avoidance.summary}`
   );
   defensiveLayerSummary.push(
-    `${mitigationLayer ? '✓' : '✗'} Mitigation: ${mitigation.overall} (armour ${mitigation.armour.value.toLocaleString()}, PDR ${mitigation.physicalDamageReduction}%)`
+    `${mitigationLayer ? '✓' : '✗'} Mitigation: ${mitigation.overall} (armour ${mitigation.armour.value.toLocaleString("en-US")}, PDR ${mitigation.physicalDamageReduction}%)`
   );
   defensiveLayerSummary.push(
     `${recoveryLayer ? '✓' : '✗'} Recovery: ${sustain.overall} (regen ${sustain.lifeRegen.percentOfMax.toFixed(1)}%/s${sustain.hasLeech ? ', has leech' : ''})`
@@ -498,7 +498,7 @@ function generateLifePoolRecommendations(analysis: LifePoolAnalysis): Recommenda
     recs.push({
       priority: analysis.status === 'critical' ? 'critical' : 'high',
       category: 'life',
-      issue: `Total Life/ES: ${analysis.total.toLocaleString()} (${analysis.status})`,
+      issue: `Total Life/ES: ${analysis.total.toLocaleString("en-US")} (${analysis.status})`,
       solutions: [
         'Prioritize life/ES nodes on passive tree',
         'Look for +maximum life on all gear pieces',
@@ -511,7 +511,7 @@ function generateLifePoolRecommendations(analysis: LifePoolAnalysis): Recommenda
     recs.push({
       priority: 'medium',
       category: 'life',
-      issue: `Life/ES is adequate (${analysis.total.toLocaleString()}) but could be better`,
+      issue: `Life/ES is adequate (${analysis.total.toLocaleString("en-US")}) but could be better`,
       solutions: [
         'Look for opportunities to add life nodes without sacrificing too much damage',
         'Upgrade gear with higher life rolls when possible',
@@ -648,7 +648,7 @@ export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
     critical: '🚨',
   };
   output += `Overall: ${scoreEmoji[analysis.overallScore]} ${analysis.overallScore.toUpperCase()}\n`;
-  output += `EHP: ${analysis.lifePool.ehp.toLocaleString()} (effective HP including mitigation)\n\n`;
+  output += `EHP: ${analysis.lifePool.ehp.toLocaleString("en-US")} (effective HP including mitigation)\n\n`;
 
   // Defensive Layers summary
   output += `**Defensive Layers: ${analysis.defensiveLayerCount}/3**\n`;
@@ -667,11 +667,11 @@ export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
 
   // Life Pool
   output += '**Life Pool:**\n';
-  output += `Life: ${analysis.lifePool.life.toLocaleString()}\n`;
+  output += `Life: ${analysis.lifePool.life.toLocaleString("en-US")}\n`;
   if (analysis.lifePool.energyShield > 0) {
-    output += `Energy Shield: ${analysis.lifePool.energyShield.toLocaleString()}\n`;
+    output += `Energy Shield: ${analysis.lifePool.energyShield.toLocaleString("en-US")}\n`;
   }
-  output += `Total: ${analysis.lifePool.total.toLocaleString()} (${analysis.lifePool.status})\n\n`;
+  output += `Total: ${analysis.lifePool.total.toLocaleString("en-US")} (${analysis.lifePool.status})\n\n`;
 
   // Avoidance
   output += '**Avoidance Layer:**\n';
@@ -680,7 +680,7 @@ export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
     output += `${suppIcon} Spell Suppression: ${analysis.avoidance.spellSuppression}%${analysis.avoidance.spellSuppression >= 50 ? ' (capped)' : ' (below 50% cap)'}\n`;
   }
   if (analysis.avoidance.estimatedEvadeChance > 0) {
-    output += `  Evasion: ${analysis.avoidance.evasionRating.toLocaleString()} (~${analysis.avoidance.estimatedEvadeChance}% evade)\n`;
+    output += `  Evasion: ${analysis.avoidance.evasionRating.toLocaleString("en-US")} (~${analysis.avoidance.estimatedEvadeChance}% evade)\n`;
   }
   if (analysis.avoidance.dodge > 0) {
     output += `  Dodge: ${analysis.avoidance.dodge}%\n`;
@@ -698,7 +698,7 @@ export function formatDefensiveAnalysis(analysis: DefensiveAnalysis): string {
 
   // Mitigation
   output += '**Mitigation Layer:**\n';
-  output += `Armour: ${analysis.mitigation.armour.value.toLocaleString()} — ${analysis.mitigation.armour.effectiveness}\n`;
+  output += `Armour: ${analysis.mitigation.armour.value.toLocaleString("en-US")} — ${analysis.mitigation.armour.effectiveness}\n`;
   if (analysis.mitigation.physicalDamageReduction > 0) {
     output += `Physical Damage Reduction: ${analysis.mitigation.physicalDamageReduction}%\n`;
   }

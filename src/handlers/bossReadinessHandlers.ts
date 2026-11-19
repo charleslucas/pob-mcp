@@ -112,19 +112,19 @@ export async function handleCheckBossReadiness(context: BossReadinessContext, bo
   const checks: StatCheck[] = [
     {
       label: 'Life',
-      value: life.toLocaleString(),
+      value: life.toLocaleString("en-US"),
       pass: life >= threshold.minLife,
       critical: life < threshold.minLife * 0.7,
     },
     {
       label: 'Effective HP',
-      value: ehp.toLocaleString(),
+      value: ehp.toLocaleString("en-US"),
       pass: ehp >= threshold.minEHP,
       critical: ehp < threshold.minEHP * 0.6,
     },
     {
       label: 'DPS',
-      value: `${Math.round(dps).toLocaleString()}${dpsLabel === 'DPS' ? '' : ` (${dpsLabel})`}`,
+      value: `${Math.round(dps).toLocaleString("en-US")}${dpsLabel === 'DPS' ? '' : ` (${dpsLabel})`}`,
       pass: dps >= threshold.minDPS,
       critical: dps < threshold.minDPS * 0.3,
     },
@@ -154,9 +154,9 @@ export async function handleCheckBossReadiness(context: BossReadinessContext, bo
   for (const c of checks) {
     const icon = c.pass ? '✅' : c.critical ? '🔴' : '🟡';
     const req =
-      c.label === 'Life'         ? ` (need ${threshold.minLife.toLocaleString()}+)` :
-      c.label === 'Effective HP' ? ` (need ${threshold.minEHP.toLocaleString()}+)` :
-      c.label === 'DPS'          ? ` (need ~${threshold.minDPS.toLocaleString()}+)` :
+      c.label === 'Life'         ? ` (need ${threshold.minLife.toLocaleString("en-US")}+)` :
+      c.label === 'Effective HP' ? ` (need ${threshold.minEHP.toLocaleString("en-US")}+)` :
+      c.label === 'DPS'          ? ` (need ~${threshold.minDPS.toLocaleString("en-US")}+)` :
       c.label !== 'Chaos Resist' ? ' (need 75%)' : ' (need 0%+)';
     output += `  ${icon} ${c.label}: ${c.value}${req}\n`;
   }

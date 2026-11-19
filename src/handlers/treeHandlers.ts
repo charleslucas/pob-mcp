@@ -698,7 +698,7 @@ export async function handleGetPassiveUpgrades(
   const textLines: string[] = [
     `=== Passive Upgrades (focus: ${focus}) ===`,
     '',
-    `Base DPS: ${mainSkillDps > 0 ? `${Math.round(baseDPS).toLocaleString()} (main skill)` : 'n/a'}  |  Base EHP: ${Math.round(baseEHP).toLocaleString()}`,
+    `Base DPS: ${mainSkillDps > 0 ? `${Math.round(baseDPS).toLocaleString("en-US")} (main skill)` : 'n/a'}  |  Base EHP: ${Math.round(baseEHP).toLocaleString("en-US")}`,
     ...(mainSkillDps > 0 ? [] : [NO_MAIN_SKILL_DPS_NOTE]),
     `Evaluated ${candidates.length} candidate notables, showing top ${top.length}:`,
     ...(skippedForeign > 0
@@ -711,8 +711,8 @@ export async function handleGetPassiveUpgrades(
     const { node, dpsDelta, ehpDelta, score } = top[i];
     textLines.push(`${i + 1}. **${node.name}** [${node.id}]`);
     let scoreLine = `   Score: ${score.toFixed(4)}`;
-    if (dpsDelta !== 0) scoreLine += `  |  DPS Δ: ${dpsDelta > 0 ? '+' : ''}${Math.round(dpsDelta).toLocaleString()}`;
-    if (ehpDelta !== 0) scoreLine += `  |  EHP Δ: ${ehpDelta > 0 ? '+' : ''}${Math.round(ehpDelta).toLocaleString()}`;
+    if (dpsDelta !== 0) scoreLine += `  |  DPS Δ: ${dpsDelta > 0 ? '+' : ''}${Math.round(dpsDelta).toLocaleString("en-US")}`;
+    if (ehpDelta !== 0) scoreLine += `  |  EHP Δ: ${ehpDelta > 0 ? '+' : ''}${Math.round(ehpDelta).toLocaleString("en-US")}`;
     textLines.push(scoreLine);
     if (node.stats && node.stats.length > 0) {
       for (const stat of (node.stats as string[]).slice(0, 2)) {
@@ -1184,14 +1184,14 @@ export async function handleConnectNodes(
           const after = output?.[key];
           if (typeof before !== 'number' || typeof after !== 'number' || before === after) continue;
           const diff = after - before;
-          deltas.push(`  ${title}: ${Math.round(before).toLocaleString()} -> ${Math.round(after).toLocaleString()} (${diff > 0 ? '+' : ''}${Math.round(diff).toLocaleString()})`);
+          deltas.push(`  ${title}: ${Math.round(before).toLocaleString("en-US")} -> ${Math.round(after).toLocaleString("en-US")} (${diff > 0 ? '+' : ''}${Math.round(diff).toLocaleString("en-US")})`);
         }
         // Minion builds: the player's DPS is 0, the minions' is what moves.
         const mBefore = base?.Minion?.CombinedDPS;
         const mAfter = output?.Minion?.CombinedDPS;
         if (typeof mBefore === 'number' && typeof mAfter === 'number' && mBefore !== mAfter) {
           const diff = mAfter - mBefore;
-          deltas.unshift(`  Minion DPS: ${Math.round(mBefore).toLocaleString()} -> ${Math.round(mAfter).toLocaleString()} (${diff > 0 ? '+' : ''}${Math.round(diff).toLocaleString()})`);
+          deltas.unshift(`  Minion DPS: ${Math.round(mBefore).toLocaleString("en-US")} -> ${Math.round(mAfter).toLocaleString("en-US")} (${diff > 0 ? '+' : ''}${Math.round(diff).toLocaleString("en-US")})`);
         }
         lines.push('', '=== Stat change if allocated (PoB calcWith) ===');
         lines.push(...(deltas.length > 0 ? deltas : ['  No change in the tracked stats.']));

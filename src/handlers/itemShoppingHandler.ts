@@ -271,7 +271,7 @@ export async function handleFindItemUpgrades(
 
     // --- BUILD GAPS ---
     const gaps: string[] = [];
-    if (!lifeGood) gaps.push(`${defenceLabel} is ${defenceValue.toLocaleString()} — target ${isESBuild ? '4000+' : '4500+'}`);
+    if (!lifeGood) gaps.push(`${defenceLabel} is ${defenceValue.toLocaleString("en-US")} — target ${isESBuild ? '4000+' : '4500+'}`);
     if (fireMissing > 0) gaps.push(`Fire resist ${fireResist}% — ${fireMissing}% short of cap (${resistLabel(fireMissing)} priority)`);
     if (coldMissing > 0) gaps.push(`Cold resist ${coldResist}% — ${coldMissing}% short of cap (${resistLabel(coldMissing)} priority)`);
     if (lightningMissing > 0) gaps.push(`Lightning resist ${lightningResist}% — ${lightningMissing}% short of cap (${resistLabel(lightningMissing)} priority)`);
@@ -284,7 +284,7 @@ export async function handleFindItemUpgrades(
       text += '\n';
     } else if (luaClient) {
       text += `## Build Status\n`;
-      text += `- ${defenceLabel}: ${defenceValue.toLocaleString()} ✓\n`;
+      text += `- ${defenceLabel}: ${defenceValue.toLocaleString("en-US")} ✓\n`;
       text += `- Resistances: Fire ${fireResist}% / Cold ${coldResist}% / Lightning ${lightningResist}% / Chaos ${chaosResist}% ✓\n`;
       text += `- No critical gaps — this is a quality-of-life upgrade\n`;
       text += '\n';

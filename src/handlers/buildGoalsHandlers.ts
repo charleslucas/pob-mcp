@@ -254,9 +254,9 @@ export function formatIssuesResponse(issues: BuildIssue[], stats: Record<string,
   // Minion builds can read 0 in both fields above; only the Full DPS roll-up has their damage.
   const fullDps = Math.round(Number(stats.FullDPS) || 0);
   const dpsParts: string[] = [];
-  if (dps > 0 || (minionDps === 0 && fullDps === 0)) dpsParts.push(`DPS: ${dps.toLocaleString()}`);
-  if (minionDps > 0) dpsParts.push(`Minion DPS: ${minionDps.toLocaleString()}`);
-  if (fullDps > 0 && fullDps !== dps) dpsParts.push(`Full DPS: ${fullDps.toLocaleString()}`);
+  if (dps > 0 || (minionDps === 0 && fullDps === 0)) dpsParts.push(`DPS: ${dps.toLocaleString("en-US")}`);
+  if (minionDps > 0) dpsParts.push(`Minion DPS: ${minionDps.toLocaleString("en-US")}`);
+  if (fullDps > 0 && fullDps !== dps) dpsParts.push(`Full DPS: ${fullDps.toLocaleString("en-US")}`);
   text += `${dpsParts.join('  |  ')}\n`;
 
   return {

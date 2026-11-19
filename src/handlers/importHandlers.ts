@@ -999,7 +999,7 @@ export async function handleImportPobb(
         if (s) {
           const { value: dps, label: dpsLabel } = resolveBuildDps(s);
           summaryLines.push(
-            `Life: ${Number(s.Life ?? 0).toLocaleString()} | ${dpsLabel}: ${Math.round(dps).toLocaleString()} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString()}`
+            `Life: ${Number(s.Life ?? 0).toLocaleString("en-US")} | ${dpsLabel}: ${Math.round(dps).toLocaleString("en-US")} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString("en-US")}`
           );
           summaryLines.push(`Resists: F${s.FireResist}% C${s.ColdResist}% L${s.LightningResist}% Ch${s.ChaosResist}%`);
         }

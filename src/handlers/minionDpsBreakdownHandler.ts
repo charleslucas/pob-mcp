@@ -15,7 +15,7 @@ import { wrapHandler } from "../utils/errorHandling.js";
 import type { LuaHandlerContext } from "./luaHandlers.js";
 
 function fmt(n: number): string {
-  return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString() : String(Math.round(n * 100) / 100);
+  return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("en-US") : String(Math.round(n * 100) / 100);
 }
 
 interface BreakdownRow {

@@ -273,7 +273,7 @@ export async function handleCalculateModOdds(args: CalculateModOddsArgs) {
   if (tierFactor < 1) lines.push(`Tier-filter factor: ${(tierFactor * 100).toFixed(2)}%`);
   lines.push(`Combined probability: ${pct(combined)}`);
   if (Number.isFinite(attempts) && combined > 0) {
-    lines.push(`≈ ${Math.round(attempts).toLocaleString()} full rerolls on average to hit (1 / P)`);
+    lines.push(`≈ ${Math.round(attempts).toLocaleString("en-US")} full rerolls on average to hit (1 / P)`);
   }
   lines.push("");
   lines.push(

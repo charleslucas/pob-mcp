@@ -231,7 +231,7 @@ export async function handleSuggestOptimalNodes(
     }
     if (goal === 'damage' || goal === 'dps') {
       const current = resolveBuildDps(stats);
-      text += `Current ${current.label}: ${current.value ? Math.round(current.value).toLocaleString() : 'N/A'}\n`;
+      text += `Current ${current.label}: ${current.value ? Math.round(current.value).toLocaleString("en-US") : 'N/A'}\n`;
     }
     if (goal === 'es') {
       text += `Current Energy Shield: ${stats.EnergyShield || 'N/A'}\n`;
@@ -334,7 +334,7 @@ export async function handleOptimizeTree(
     text += `Life: ${stats.Life || 'N/A'}\n`;
     text += `Energy Shield: ${stats.EnergyShield || 'N/A'}\n`;
     const buildDps = resolveBuildDps(stats);
-    text += `${buildDps.label}: ${buildDps.value ? Math.round(buildDps.value).toLocaleString() : 'N/A'}\n`;
+    text += `${buildDps.label}: ${buildDps.value ? Math.round(buildDps.value).toLocaleString("en-US") : 'N/A'}\n`;
     text += `Fire/Cold/Lightning Resist: ${stats.FireResist || 0}%/${stats.ColdResist || 0}%/${stats.LightningResist || 0}%\n\n`;
 
     // Recommendations based on nearby nodes
