@@ -249,9 +249,15 @@ export function formatIssuesResponse(issues: BuildIssue[], stats: Record<string,
   text += '=== Current Stats ===\n';
   text += `Life: ${stats.Life ?? 'N/A'}  |  ES: ${stats.EnergyShield ?? 'N/A'}  |  Mana: ${stats.Mana ?? 'N/A'}\n`;
   text += `Fire: ${stats.FireResist ?? 0}%  |  Cold: ${stats.ColdResist ?? 0}%  |  Lightning: ${stats.LightningResist ?? 0}%  |  Chaos: ${stats.ChaosResist ?? 0}%\n`;
-  const dps = stats.CombinedDPS ?? stats.TotalDPS ?? 0;
-  const minionDps = stats.MinionTotalDPS ?? 0;
-  text += `DPS: ${Number(dps).toLocaleString()}${minionDps > 0 ? `  |  Minion DPS: ${Number(minionDps).toLocaleString()}` : ''}\n`;
+  const dps = Math.round(Number(stats.CombinedDPS) || Number(stats.TotalDPS) || 0);
+  const minionDps = Math.round(Number(stats.MinionTotalDPS) || 0);
+  // Minion builds can read 0 in both fields above; only the Full DPS roll-up has their damage.
+  const fullDps = Math.round(Number(stats.FullDPS) || 0);
+  const dpsParts: string[] = [];
+  if (dps > 0 || (minionDps === 0 && fullDps === 0)) dpsParts.push(`DPS: ${dps.toLocaleString()}`);
+  if (minionDps > 0) dpsParts.push(`Minion DPS: ${minionDps.toLocaleString()}`);
+  if (fullDps > 0 && fullDps !== dps) dpsParts.push(`Full DPS: ${fullDps.toLocaleString()}`);
+  text += `${dpsParts.join('  |  ')}\n`;
 
   return {
     content: [{ type: 'text' as const, text }],
