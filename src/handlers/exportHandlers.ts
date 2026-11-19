@@ -1,3 +1,4 @@
+import { BUILD_DPS_FIELDS, resolveBuildDps } from "../utils/buildDps.js";
 import type { BuildService } from "../services/buildService.js";
 import type { BuildExportService } from "../services/buildExportService.js";
 import type { AnyLuaClient } from "../pobLuaBridge.js";
@@ -238,7 +239,7 @@ export async function handleExportBuildSummary(context: ExportContext) {
   try {
     stats = await luaClient.getStats([
       'Life', 'EnergyShield', 'Mana', 'ManaUnreserved',
-      'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
+      ...BUILD_DPS_FIELDS,
       'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
       'Armour', 'Evasion', 'PhysicalDamageReduction', 'TotalEHP',
       'LifeRegen', 'SpellSuppressionChance', 'BlockChance',
@@ -253,8 +254,7 @@ export async function handleExportBuildSummary(context: ExportContext) {
   const level = info?.level || '?';
   const ascendancy = info?.ascendancy || '';
 
-  const dps = Number(stats.CombinedDPS || stats.TotalDPS || stats.MinionTotalDPS || 0);
-  const dpsLabel = (stats.MinionTotalDPS && !stats.TotalDPS) ? 'Minion DPS' : 'DPS';
+  const { value: dps, label: dpsLabel } = resolveBuildDps(stats);
 
   let output = `# ${buildName}\n\n`;
   output += `**Class:** ${className}${ascendancy ? ` (${ascendancy})` : ''}  \n`;

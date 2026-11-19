@@ -1,3 +1,4 @@
+import { resolveBuildDps } from "../utils/buildDps.js";
 import type { AnyLuaClient } from "../pobLuaBridge.js";
 import type { BuildService } from "../services/buildService.js";
 import type { TreeService } from "../services/treeService.js";
@@ -229,7 +230,8 @@ export async function handleSuggestOptimalNodes(
       text += `Current Life: ${stats.Life || 'N/A'}\n`;
     }
     if (goal === 'damage' || goal === 'dps') {
-      text += `Current Total DPS: ${stats.TotalDPS ? Math.round(Number(stats.TotalDPS)).toLocaleString() : 'N/A'}\n`;
+      const current = resolveBuildDps(stats);
+      text += `Current ${current.label}: ${current.value ? Math.round(current.value).toLocaleString() : 'N/A'}\n`;
     }
     if (goal === 'es') {
       text += `Current Energy Shield: ${stats.EnergyShield || 'N/A'}\n`;
@@ -331,7 +333,8 @@ export async function handleOptimizeTree(
     text += `=== Current Stats ===\n`;
     text += `Life: ${stats.Life || 'N/A'}\n`;
     text += `Energy Shield: ${stats.EnergyShield || 'N/A'}\n`;
-    text += `Total DPS: ${stats.TotalDPS ? Math.round(Number(stats.TotalDPS)).toLocaleString() : 'N/A'}\n`;
+    const buildDps = resolveBuildDps(stats);
+    text += `${buildDps.label}: ${buildDps.value ? Math.round(buildDps.value).toLocaleString() : 'N/A'}\n`;
     text += `Fire/Cold/Lightning Resist: ${stats.FireResist || 0}%/${stats.ColdResist || 0}%/${stats.LightningResist || 0}%\n\n`;
 
     // Recommendations based on nearby nodes

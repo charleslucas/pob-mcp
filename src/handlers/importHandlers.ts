@@ -9,6 +9,7 @@
  * the Lua side for the actual import.
  */
 
+import { BUILD_DPS_FIELDS, resolveBuildDps } from "../utils/buildDps.js";
 import type { LuaHandlerContext } from "./luaHandlers.js";
 import {
   fetchCharacterList,
@@ -991,13 +992,12 @@ export async function handleImportPobb(
 
         const s = await luaClient
           .getStats([
-            "Life", "TotalDPS", "CombinedDPS", "MinionTotalDPS",
+            "Life", ...BUILD_DPS_FIELDS,
             "FireResist", "ColdResist", "LightningResist", "ChaosResist", "TotalEHP",
           ])
           .catch(() => null);
         if (s) {
-          const dps = Number(s.CombinedDPS || s.TotalDPS || s.MinionTotalDPS || 0);
-          const dpsLabel = s.MinionTotalDPS && !s.TotalDPS ? "Minion DPS" : "DPS";
+          const { value: dps, label: dpsLabel } = resolveBuildDps(s);
           summaryLines.push(
             `Life: ${Number(s.Life ?? 0).toLocaleString()} | ${dpsLabel}: ${Math.round(dps).toLocaleString()} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString()}`
           );

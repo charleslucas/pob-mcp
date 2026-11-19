@@ -108,7 +108,7 @@ export async function handleSuggestCrafting(
       try {
         const stats = await luaClient.getStats([
           'Life', 'EnergyShield', 'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
-          'TotalDPS', 'MinionTotalDPS', 'Armour', 'Evasion',
+          'TotalDPS', 'MinionTotalDPS', 'MinionCombinedDPS', 'FullDPS', 'Armour', 'Evasion',
         ]);
         buildContext = stats;
 

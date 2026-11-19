@@ -1,3 +1,4 @@
+import { BUILD_DPS_FIELDS, resolveBuildDps } from "../utils/buildDps.js";
 import type { AilmentReport, AnyLuaClient } from "../pobLuaBridge.js";
 import { computeStatWeights, type ProbeResult, type StatWeightReport, type WeightFocus } from "../services/statWeights.js";
 import { handleGetBuildIssues } from "./buildGoalsHandlers.js";
@@ -243,11 +244,10 @@ export async function handleLuaLoadBuild(
         summaryLines.push(`**${info.name || name}** | Level ${info.level} ${info.className ?? ''}${info.ascendClassName ? ` (${info.ascendClassName})` : ''}`);
       }
 
-      const s = await luaClient.getStats(['Life', 'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
+      const s = await luaClient.getStats(['Life', ...BUILD_DPS_FIELDS,
         'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist', 'TotalEHP']).catch(() => null);
       if (s) {
-        const dps = Number(s.CombinedDPS || s.TotalDPS || s.MinionTotalDPS || 0);
-        const dpsLabel = (s.MinionTotalDPS && !s.TotalDPS) ? 'Minion DPS' : 'DPS';
+        const { value: dps, label: dpsLabel } = resolveBuildDps(s);
         summaryLines.push(`Life: ${Number(s.Life ?? 0).toLocaleString()} | ${dpsLabel}: ${Math.round(dps).toLocaleString()} | EHP: ${Number(s.TotalEHP ?? 0).toLocaleString()}`);
         summaryLines.push(`Resists: F${s.FireResist}% C${s.ColdResist}% L${s.LightningResist}% Ch${s.ChaosResist}%`);
       }
@@ -401,7 +401,7 @@ export async function handleLuaGetStats(context: LuaHandlerContext, category?: s
     let fields: string[] | undefined;
     if (category === 'offense') {
       fields = [
-        'TotalDPS', 'CombinedDPS', 'TotalDot', 'TotalDotDPS', 'WithBleedDPS', 'WithIgniteDPS',
+        'FullDPS', 'FullDotDPS', 'TotalDPS', 'CombinedDPS', 'TotalDot', 'TotalDotDPS', 'WithBleedDPS', 'WithIgniteDPS',
         'WithPoisonDPS', 'IgniteDPS', 'BleedDPS', 'PoisonDPS', 'AverageDamage', 'AverageBurstDamage',
         'Speed', 'HitChance', 'CritChance', 'CritMultiplier', 'PreEffectiveCritChance',
         'EffectiveCritChance', 'MainHandAccuracy', 'OffHandAccuracy', 'ManaCost', 'ManaPerSecondCost',

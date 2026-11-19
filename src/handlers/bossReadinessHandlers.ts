@@ -1,3 +1,4 @@
+import { BUILD_DPS_FIELDS, resolveBuildDps } from "../utils/buildDps.js";
 import type { AnyLuaClient } from "../pobLuaBridge.js";
 import { wrapHandler } from "../utils/errorHandling.js";
 
@@ -87,7 +88,7 @@ export async function handleCheckBossReadiness(context: BossReadinessContext, bo
 
   const stats = await luaClient.getStats([
     'Life', 'TotalEHP', 'EnergyShield',
-    'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
+    ...BUILD_DPS_FIELDS,
     'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist',
     'EffectiveSpellSuppressionChance', 'SpellSuppressionChance',
     'Armour', 'PhysicalDamageReduction', 'EvasionChance',
@@ -95,7 +96,7 @@ export async function handleCheckBossReadiness(context: BossReadinessContext, bo
 
   const life = Number(stats.Life ?? 0);
   const ehp = Number(stats.TotalEHP ?? life);
-  const dps = Number(stats.CombinedDPS ?? stats.TotalDPS ?? stats.MinionTotalDPS ?? 0);
+  const { value: dps, label: dpsLabel } = resolveBuildDps(stats);
   const fireRes = Number(stats.FireResist ?? -60);
   const coldRes = Number(stats.ColdResist ?? -60);
   const lightRes = Number(stats.LightningResist ?? -60);
@@ -123,7 +124,7 @@ export async function handleCheckBossReadiness(context: BossReadinessContext, bo
     },
     {
       label: 'DPS',
-      value: dps.toLocaleString(),
+      value: `${Math.round(dps).toLocaleString()}${dpsLabel === 'DPS' ? '' : ` (${dpsLabel})`}`,
       pass: dps >= threshold.minDPS,
       critical: dps < threshold.minDPS * 0.3,
     },

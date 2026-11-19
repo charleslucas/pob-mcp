@@ -1,3 +1,4 @@
+import { resolveBuildDps } from "../utils/buildDps.js";
 import { XMLBuilder } from "fast-xml-parser";
 import fs from "fs/promises";
 import { atomicWriteFile } from "../utils/atomicWrite.js";
@@ -182,7 +183,11 @@ export class BuildExportService {
       tag,
       statsSnapshot: {
         life: this.extractStat(build, 'Life'),
-        dps: this.extractStat(build, 'TotalDPS'),
+        dps: resolveBuildDps({
+          TotalDPS: this.extractStat(build, 'TotalDPS'),
+          CombinedDPS: this.extractStat(build, 'CombinedDPS'),
+          FullDPS: this.extractStat(build, 'FullDPS'),
+        }).value,
         allocatedNodes: nodes.length,
       },
     };

@@ -42,7 +42,7 @@ export async function handleFindBestAnointment(
     const lines: string[] = [
       `=== Best Anointment (slot: ${result.slot} / ${result.baseType}, focus: ${result.focus}) ===`,
       '',
-      `Base CombinedDPS: ${Math.round(result.base.CombinedDPS).toLocaleString()}  |  Base TotalEHP: ${Math.round(result.base.TotalEHP).toLocaleString()}`,
+      `Base main-skill DPS: ${Math.round(result.base.CombinedDPS).toLocaleString()}  |  Base TotalEHP: ${Math.round(result.base.TotalEHP).toLocaleString()}`,
       `Evaluated ${result.evaluated} anointable notables (${result.skipped} skipped), showing top ${Math.min(maxResults, result.candidates.length)}:`,
       '',
     ];

@@ -1,3 +1,4 @@
+import { resolveBuildDps } from "../utils/buildDps.js";
 import type { BuildService } from "../services/buildService.js";
 import type { TreeService } from "../services/treeService.js";
 import type { ValidationService } from "../services/validationService.js";
@@ -327,9 +328,10 @@ export async function handleCompareBuilds(context: HandlerContext, build1Name: s
     lines.push('');
 
     // Offense
-    const dps1 = s1.CombinedDPS || s1.TotalDPS || s1.MinionTotalDPS;
-    const dps2 = s2.CombinedDPS || s2.TotalDPS || s2.MinionTotalDPS;
-    lines.push(row('DPS (combined)', dps1, dps2));
+    const dps1 = resolveBuildDps(s1);
+    const dps2 = resolveBuildDps(s2);
+    lines.push(row(dps1.label === dps2.label ? dps1.label : 'DPS (mixed measures)', dps1.value, dps2.value));
+    if (dps1.label !== dps2.label) lines.push(`  Measured as: ${dps1.label} vs ${dps2.label}`);
     lines.push(row('Crit Chance %', s1.CritChance, s2.CritChance));
     lines.push(row('Crit Multi %', s1.CritMultiplier, s2.CritMultiplier));
     lines.push('');

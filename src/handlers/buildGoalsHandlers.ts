@@ -14,8 +14,8 @@ const ISSUES_FIELDS = [
   'SpellSuppressionChance', 'EffectiveSpellSuppressionChance',
   // DPS fields needed by handleGetPassiveUpgrades for baseDPS scoring
   'TotalDPS', 'CombinedDPS', 'MinionTotalDPS',
-  // Roll-up used by the zero-DPS check (minion builds can show 0 in the fields above)
-  'FullDPS',
+  // Minion hit + ailment DPS and the roll-up (minion builds can show 0 in the fields above)
+  'MinionCombinedDPS', 'FullDPS',
   // EHP field needed by handleGetPassiveUpgrades for baseEHP scoring
   'TotalEHP',
 ];
@@ -250,7 +250,7 @@ export function formatIssuesResponse(issues: BuildIssue[], stats: Record<string,
   text += `Life: ${stats.Life ?? 'N/A'}  |  ES: ${stats.EnergyShield ?? 'N/A'}  |  Mana: ${stats.Mana ?? 'N/A'}\n`;
   text += `Fire: ${stats.FireResist ?? 0}%  |  Cold: ${stats.ColdResist ?? 0}%  |  Lightning: ${stats.LightningResist ?? 0}%  |  Chaos: ${stats.ChaosResist ?? 0}%\n`;
   const dps = Math.round(Number(stats.CombinedDPS) || Number(stats.TotalDPS) || 0);
-  const minionDps = Math.round(Number(stats.MinionTotalDPS) || 0);
+  const minionDps = Math.round(Number(stats.MinionCombinedDPS) || Number(stats.MinionTotalDPS) || 0);
   // Minion builds can read 0 in both fields above; only the Full DPS roll-up has their damage.
   const fullDps = Math.round(Number(stats.FullDPS) || 0);
   const dpsParts: string[] = [];

@@ -77,7 +77,7 @@ abstract class PoBApiBase {
     });
   }
 
-  protected async send(obj: LuaRequest): Promise<LuaResponse> {
+  protected async send(obj: LuaRequest, timeoutMs?: number): Promise<LuaResponse> {
     if (!this.isAlive()) throw new Error("PoB bridge not connected or not ready");
     if (this.killed)     throw new Error("PoB bridge disconnected");
     if (this.isSending)  throw new Error("Concurrent request not supported");
@@ -89,7 +89,7 @@ abstract class PoBApiBase {
       let attempts = 0;
       const maxAttempts = 100;
       while (attempts < maxAttempts) {
-        const line = await this.readLineWithTimeout();
+        const line = await this.readLineWithTimeout(timeoutMs);
         attempts++;
         if (!line.trim() || !line.trim().startsWith("{")) continue;
         try { return JSON.parse(line); } catch {}
@@ -489,7 +489,8 @@ abstract class PoBApiBase {
     baseType: string;
     focus: string;
   }> {
-    const res = await this.send({ action: "evaluate_anoint_candidates", params });
+    // One calculation per anointable notable (~400): far longer than a normal request.
+    const res = await this.send({ action: "evaluate_anoint_candidates", params }, 300_000);
     if (!res.ok) throw new Error(res.error || "evaluate_anoint_candidates failed");
     return {
       candidates: (res.candidates as any[]) || [],
