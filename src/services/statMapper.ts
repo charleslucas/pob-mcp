@@ -604,6 +604,23 @@ export class StatMapper {
   }
 
   /**
+   * Every trade stat known to this process, keyed for matching a mod LINE to a
+   * trade stat id. `getAllMappings()` only exposes the small curated
+   * STAT_MAPPINGS table; after `loadFromTradeAPI` this holds all ~18k entries
+   * with their real `#`-placeholder text, which is what an item's mod lines must
+   * be matched against.
+   */
+  getTradeStatIndex(): Array<{ id: string; text: string }> {
+    if (this.allStats.length > 0) {
+      return this.allStats.map((m) => ({
+        id: m.tradeId,
+        text: (m as any).description ?? m.pobName ?? '',
+      }));
+    }
+    return STAT_MAPPINGS.map((m) => ({ id: m.tradeId, text: m.pobName ?? '' }));
+  }
+
+  /**
    * Convert a PoB stat requirement to Trade API stat filter
    */
   pobStatToTradeFilter(pobStatName: string, min?: number, max?: number): { id: string; min?: number; max?: number } | null {

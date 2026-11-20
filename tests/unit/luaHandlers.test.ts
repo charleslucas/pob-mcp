@@ -6,6 +6,7 @@ import {
   handleLuaNewBuild,
   handleUpdateTreeDelta,
   handleSearchTreeNodes,
+  handleCopyLoadout,
 } from '../../src/handlers/luaHandlers';
 import type { LuaHandlerContext } from '../../src/handlers/luaHandlers';
 
@@ -244,5 +245,174 @@ describe('handleSearchTreeNodes', () => {
     const ctx = makeContext(client);
     const result = await handleSearchTreeNodes(ctx, 'Heartseeker');
     expect(result.content[0].text).toContain('Heartseeker');
+  });
+});
+
+// -- handleCopyLoadout ---------------------------------------------------------
+
+function loadoutRow(name: string, id: number, active = false, extra: Record<string, any> = {}) {
+  return {
+    name,
+    title: name,
+    complete: true,
+    active,
+    treeSpec: { id, title: name },
+    itemSet: { id, title: name },
+    skillSet: { id, title: name },
+    configSet: { id, title: name },
+    ...extra,
+  };
+}
+
+function makeLoadoutClient(loadouts: any[], familyTitles: string[] = []) {
+  const titles = [...new Set([...loadouts.map((l) => l.name), ...familyTitles])];
+  return {
+    listLoadouts: jest.fn<() => Promise<any>>().mockResolvedValue({ loadouts }),
+    listSpecs: jest.fn<() => Promise<any>>().mockResolvedValue({
+      specs: titles.map((title, i) => ({ index: i + 1, title })),
+    }),
+    listItemSets: jest.fn<() => Promise<any>>().mockResolvedValue({
+      itemSets: titles.map((title, i) => ({ id: i + 1, title })),
+    }),
+    listSkillSets: jest.fn<() => Promise<any>>().mockResolvedValue({
+      skillSets: titles.map((title, i) => ({ id: i + 1, title })),
+    }),
+    listConfigSets: jest.fn<() => Promise<any>>().mockResolvedValue({
+      configSets: titles.map((title, i) => ({ id: i + 1, title })),
+    }),
+    createLoadout: jest.fn<(params: any) => Promise<any>>().mockImplementation(async (params: any) => ({
+      created: { spec: true, items: true, skills: true, config: true },
+      selected: {
+        name: params.title,
+        complete: true,
+        treeSpec: { id: 9, title: params.title },
+        itemSet: { id: 9, title: params.title },
+        skillSet: { id: 9, title: params.title },
+        configSet: { id: 9, title: params.title },
+      },
+      loadouts: [],
+    })),
+  };
+}
+
+describe('handleCopyLoadout', () => {
+  it('copies the named loadout even when a different one is active', async () => {
+    const client = makeLoadoutClient([
+      loadoutRow('ME', 1, true),
+      loadoutRow('BUDGET', 2),
+    ]);
+    const ctx = makeContext(client);
+
+    const result = await handleCopyLoadout(ctx, { from: 'budget', to: 'BUDGET 2' });
+
+    expect(client.createLoadout).toHaveBeenCalledWith({
+      title: 'BUDGET 2',
+      copyFrom: { spec: 2, items: 2, skills: 2, config: 2 },
+      activate: true,
+    });
+    expect(result.content[0].text).toContain('Copied loadout "BUDGET" → "BUDGET 2"');
+    expect(result.content[0].text).toContain('Source loadout "BUDGET" is unchanged');
+  });
+
+  it('auto-names the copy and skips names already taken', async () => {
+    const client = makeLoadoutClient(
+      [loadoutRow('ME', 1, true)],
+      ['ME (copy)'],
+    );
+    const ctx = makeContext(client);
+
+    const result = await handleCopyLoadout(ctx, { from: 'ME' });
+
+    expect(client.createLoadout).toHaveBeenCalledWith({
+      title: 'ME (copy) 2',
+      copyFrom: { spec: 1, items: 1, skills: 1, config: 1 },
+      activate: true,
+    });
+    expect(result.content[0].text).toContain('"ME (copy) 2"');
+  });
+
+  it('accepts a numeric string as a 1-based index when no loadout is named like that', async () => {
+    const client = makeLoadoutClient([
+      loadoutRow('ME', 1, true),
+      loadoutRow('BUDGET', 2),
+    ]);
+    const ctx = makeContext(client);
+
+    await handleCopyLoadout(ctx, { from: '2' });
+
+    expect(client.createLoadout).toHaveBeenCalledWith({
+      title: 'BUDGET (copy)',
+      copyFrom: { spec: 2, items: 2, skills: 2, config: 2 },
+      activate: true,
+    });
+  });
+
+  it('defaults the source to the active loadout', async () => {
+    const client = makeLoadoutClient([
+      loadoutRow('ME', 1, true),
+      loadoutRow('BUDGET', 2),
+    ]);
+    const ctx = makeContext(client);
+
+    await handleCopyLoadout(ctx, {});
+
+    expect(client.createLoadout).toHaveBeenCalledWith({
+      title: 'ME (copy)',
+      copyFrom: { spec: 1, items: 1, skills: 1, config: 1 },
+      activate: true,
+    });
+  });
+
+  it('refuses a destination title that is already in use', async () => {
+    const client = makeLoadoutClient([
+      loadoutRow('ME', 1, true),
+      loadoutRow('BUDGET', 2),
+    ]);
+    const ctx = makeContext(client);
+
+    await expect(handleCopyLoadout(ctx, { from: 'ME', to: 'BUDGET' }))
+      .rejects.toThrow(/already uses that title/i);
+    expect(client.createLoadout).not.toHaveBeenCalled();
+  });
+
+  it('refuses to copy an incomplete loadout unless told otherwise', async () => {
+    const broken = loadoutRow('BROKEN', 3, false, { skillSet: null, complete: false });
+    const client = makeLoadoutClient([loadoutRow('ME', 1, true), broken]);
+    const ctx = makeContext(client);
+
+    await expect(handleCopyLoadout(ctx, { from: 'BROKEN', to: 'BROKEN 2' }))
+      .rejects.toThrow(/incomplete/i);
+    expect(client.createLoadout).not.toHaveBeenCalled();
+
+    await handleCopyLoadout(ctx, { from: 'BROKEN', to: 'BROKEN 2', allowIncomplete: true });
+    expect(client.createLoadout).toHaveBeenCalledWith({
+      title: 'BROKEN 2',
+      copyFrom: { spec: 3, items: 3, skills: undefined, config: 3 },
+      activate: true,
+    });
+  });
+
+  it('can copy without switching to the copy', async () => {
+    const client = makeLoadoutClient([loadoutRow('ME', 1, true)]);
+    const ctx = makeContext(client);
+
+    const result = await handleCopyLoadout(ctx, { from: 'ME', to: 'ME ALT', activate: false });
+
+    expect(client.createLoadout).toHaveBeenCalledWith({
+      title: 'ME ALT',
+      copyFrom: { spec: 1, items: 1, skills: 1, config: 1 },
+      activate: false,
+    });
+    expect(result.content[0].text).toContain('not activated');
+  });
+
+  it('reports an ambiguous partial name instead of guessing', async () => {
+    const client = makeLoadoutClient([
+      loadoutRow('BUDGET A', 1, true),
+      loadoutRow('BUDGET B', 2),
+    ]);
+    const ctx = makeContext(client);
+
+    await expect(handleCopyLoadout(ctx, { from: 'BUDGET' })).rejects.toThrow(/ambiguous/i);
   });
 });

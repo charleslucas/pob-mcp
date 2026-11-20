@@ -8,6 +8,10 @@ import { CostBenefitAnalyzer } from '../services/costBenefitAnalyzer.js';
 import { PoeNinjaClient } from '../services/poeNinjaClient.js';
 import type { AnyLuaClient } from '../pobLuaBridge.js';
 import { resolveLeague } from '../services/leagueResolver.js';
+import { buildTradeQuery, buildTradeSearchUrl, normalizeModText, firstModValue, tradeCategoryFor, pickStatId, classifyMod, TRADE_IDS, TradeUrlSpec, SlotNeeds } from '../services/tradeUrl.js';
+import { decodeTradeUrl, type DecodedTradeUrlErr } from '../services/tradeUrl.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 interface TradeContext {
   tradeClient: TradeApiClient;
@@ -161,6 +165,631 @@ export async function handleSearchTradeItems(
     return {
       content: [{ type: 'text', text: output }],
     };
+  });
+}
+
+/**
+ * Generate a trade-site search URL WITHOUT calling the trade API.
+ *
+ * The URL is produced exactly like Path of Building's "Buy similar" button
+ * (see services/tradeUrl.ts). Use this whenever only a link is needed — it
+ * costs no API request, so it is safe to call for every gear slot, and it is
+ * the correct tool before reaching for `search_trade_items`.
+ */
+export async function handleGenerateTradeUrl(
+  args: {
+    league: string;
+    query?: Record<string, unknown>;
+    item_name?: string;
+    item_type?: string;
+    category?: string;
+    rarity?: 'normal' | 'magic' | 'rare' | 'unique' | 'nonunique' | 'any';
+    min_links?: number;
+    stats?: Array<{ id: string; min?: number; max?: number; disabled?: boolean }>;
+    online_only?: boolean;
+    /** Read this equipped slot and derive the filters from the item's own mods. */
+    item_slot?: string;
+    /** Same, but from raw clipboard text instead of an equipped slot. */
+    item_text?: string;
+    /** Lower bound for derived numeric filters, as a fraction of the item's roll. */
+    min_roll_pct?: number;
+    /** What this slot must supply, from the requirement sheet. */
+    needs?: SlotNeeds;
+    /** Emit an OR group (fire/cold/lightning) instead of a pseudo total. */
+    or_mode?: boolean;
+    /**
+     * Whether to add the item's own mods as stat filters. Defaults to true for
+     * uniques (they pin the variant) and false for rares (an exact base plus
+     * every mod matches nothing in practice — the caller fills in the stats).
+     */
+    include_mods?: boolean;
+    /** Also constrain the base type when deriving filters from a rare item. */
+    same_base?: boolean;
+    /**
+     * Corruption filter (`misc_filters.corrupted`). **Omitted by default** — no
+     * filter is sent, so clean and corrupted listings both appear. Pass `true`
+     * or `false` only when the caller explicitly wants to restrict the search;
+     * never infer it from the item.
+     */
+    corrupted?: boolean;
+    /**
+     * Get a server-issued search id (one trade API request) instead of a
+     * self-contained payload. Default false: the link carries gzip+base64url of
+     * the bare query, as PoB's own "Buy similar" builds it (TradeQuery.lua), and
+     * costs no request. "Failed to load search state" comes from wrapping the
+     * payload as { query, sort } — see services/tradeUrl.ts.
+     */
+    use_api?: boolean;
+  },
+  deps?: {
+    statMapper?: StatMapper;
+    getLuaClient?: () => AnyLuaClient | null;
+    ensureLuaClient?: () => Promise<void>;
+    tradeClient?: TradeApiClient;
+  }
+): Promise<{
+  content: Array<{
+    type: string;
+    text: string;
+  }>;
+}> {
+  return wrapHandler('generate trade url', async () => {
+    if (!args.league) {
+      throw new Error('Missing required argument: league');
+    }
+
+    const spec: TradeUrlSpec = {
+      name: args.item_name,
+      type: args.item_type,
+      category: args.category,
+      rarity: args.rarity,
+      minLinks: args.min_links,
+      stats: args.stats ? [...args.stats] : [],
+      onlineOnly: args.online_only,
+      // No corruption filter unless the caller asks for one: an omitted filter
+      // shows clean and corrupted listings alike, which is the safe default.
+      // Guessing "clean only" hides cheap corrupted copies the buyer may want.
+      corrupted: args.corrupted,
+    };
+
+    const derivedFrom: string[] = [];
+
+    // Deriving filters from an item is the whole point: an item's own mods are
+    // what makes two variants of the same unique distinguishable (The Light of
+    // Meaning grants chaos res OR elemental res, Ashes quality ranges, The Gull
+    // has a Foulborn twin, ...). Name-only filters silently match any variant.
+    if (args.item_slot || args.item_text) {
+      await deps?.ensureLuaClient?.();
+      const lua = deps?.getLuaClient?.();
+      if (!lua) throw new Error('Lua bridge not active — needed to read the equipped item.');
+
+      let raw = args.item_text ?? '';
+      if (args.item_slot) {
+        const items = await lua.getItems();
+        const wanted = args.item_slot.trim().toLowerCase();
+        const entry = (items as any[]).find((it: any) => String(it.slot ?? '').trim().toLowerCase() === wanted);
+        if (!entry || !entry.id || !entry.raw) {
+          throw new Error(`Slot "${args.item_slot}" is empty — equip the item first, or pass item_text.`);
+        }
+        raw = entry.raw;
+      }
+
+      const parsed = await lua.parseItem(raw);
+      const unique = String(parsed.rarity ?? '').toUpperCase() === 'UNIQUE';
+
+      if (unique) {
+        // PoB returns "<unique name>, <base type>" in `name`; the trade site
+        // matches on the bare unique name and rejects the combined string.
+        // Foulborn variants carry the prefix in their display name but the site
+        // indexes them under the base unique ("Kikazaru", not "Foulborn
+        // Kikazaru") — the variant is pinned by the mod filters instead.
+        const bareName = String(parsed.name ?? '')
+          .split(',')[0]
+          .replace(/^Foulborn\s+/i, '')
+          .trim();
+        spec.name = bareName || spec.name;
+        spec.rarity = 'unique';
+      } else {
+        spec.rarity = 'nonunique';
+      }
+
+      // Category always scopes the search (a jewel query would otherwise match a
+      // ring with the same three mods). The BASE TYPE is different: it is only
+      // worth pinning when the base itself carries meaning — jewellery, weapons,
+      // jewels, or a base whose implicit defines the item. For ordinary ES/EV/AR
+      // armour a base filter throws away every equally good item of a
+      // neighbouring base, so the search states a defence minimum instead.
+      const category = tradeCategoryFor(String(parsed.type ?? '')) ?? tradeCategoryFor(args.item_slot ?? '');
+      if (category) spec.category = category;
+
+      const armourSlot = !!category && category.startsWith('armour.');
+      const baseIsMeaningful = !armourSlot || category === 'armour.quiver';
+      if (args.same_base === true || (args.same_base !== false && baseIsMeaningful)) {
+        if (parsed.base) spec.type = parsed.base;
+      }
+
+      if (armourSlot) {
+        // Read the defence pool straight off the item text ("Evasion: 191",
+        // "Energy Shield: 74") — no base table needed, and a hybrid item asks
+        // for both pools.
+        const rawText = String(raw);
+        const equipment: { ar?: number; ev?: number; es?: number; ward?: number } = {};
+        if (/^\s*Armour:/im.test(rawText)) equipment.ar = 1;
+        if (/^\s*Evasion:/im.test(rawText)) equipment.ev = 1;
+        if (/^\s*Energy Shield:/im.test(rawText)) equipment.es = 1;
+        if (/^\s*Ward:/im.test(rawText)) equipment.ward = 1;
+        if (Object.keys(equipment).length > 0) spec.equipment = equipment;
+      }
+
+      if (parsed.type && /jewel/i.test(String(parsed.type)) && args.min_links === undefined) {
+        spec.minLinks = undefined;
+      }
+
+      // Eldritch implicits are rolled separately by the buyer (ichor/ember), so
+      // requiring the seller's exact eldritch roll narrows the search to almost
+      // nothing. If the item carries either eldritch tag, no implicit is pinned.
+      const hasEldritch = /Searing Exarch Item|Eater of Worlds Item/i.test(String(raw));
+      if (hasEldritch) {
+        derivedFrom.push('Item has eldritch implicits — implicit filters skipped (the buyer rolls them).');
+      }
+
+      const mapper = deps?.statMapper;
+      // Floors come from the slot's NEEDS (what the requirement sheet says this
+      // slot must supply), never from the item's own rolls: a high-roll target
+      // would otherwise set a threshold the market cannot meet. Life keeps a
+      // 70%-of-roll fallback so a 10-life base never shows up.
+
+      // One normalised-text index over every trade stat, built per call.
+      const byText = new Map<string, string[]>();
+      if (mapper) {
+        for (const entry of mapper.getTradeStatIndex()) {
+          const key = normalizeModText(String(entry.text ?? ''));
+          if (!key) continue;
+          const list = byText.get(key) ?? [];
+          list.push(entry.id);
+          byText.set(key, list);
+        }
+      }
+
+      const modLines: Array<{ line: string; domain: string }> = [
+        ...(hasEldritch ? [] : (parsed.implicits ?? []).map((l: string) => ({ line: l, domain: 'implicit' }))),
+        ...(parsed.explicits ?? []).map((l: string) => ({ line: l, domain: 'explicit' })),
+        ...(parsed.fractured ?? []).map((l: string) => ({ line: l, domain: 'fractured' })),
+        ...(parsed.crafted ?? []).map((l: string) => ({ line: l, domain: 'crafted' })),
+      ];
+
+      // Mods stay in by default - the caller decides which to switch off on the trade site.
+      const includeMods = args.include_mods ?? true;
+
+      const unmet: string[] = [];
+      const needs = args.needs ?? {};
+      const OR_MODE = args.or_mode === true;
+
+      // Bucket every mod by intent first; the bucket decides the filter shape.
+      const buckets: Record<string, Array<{ line: string; id: string; value: number | null; domain: string }>> = {
+        ele_res: [], chaos_res: [], life: [], dex: [], str: [], int: [], other: [],
+      };
+      for (const { line, domain } of (includeMods ? modLines : [])) {
+        const key = normalizeModText(line);
+        const candidates = byText.get(key) ?? [];
+        const id = candidates.length > 0 ? pickStatId(candidates, domain) : undefined;
+        if (!id) {
+          unmet.push(line);
+          continue;
+        }
+        // An implicit on a base we already pin adds nothing and only narrows
+        // (every Amethyst ring has its chaos implicit).
+        if (domain === 'implicit' && spec.type) {
+          derivedFrom.push(`${line} -> skipped (base ${spec.type} already pins it)`);
+          continue;
+        }
+        buckets[classifyMod(line)].push({ line, id, value: firstModValue(line), domain });
+      }
+
+      const push = (id: string, min: number | undefined, note: string) => {
+        const filter: { id: string; min?: number } = { id };
+        if (typeof min === 'number' && min > 0) filter.min = min;
+        spec.stats!.push(filter);
+        derivedFrom.push(note);
+      };
+
+      // A floor from the item's own roll: `min_roll_pct` was documented but only
+      // ever applied to life, so every resistance/attribute filter came out as
+      // presence-only and a buyer could not tell what roll actually closes the
+      // cap. The slot's NEEDS always win; the roll is only a fallback.
+      const pct = typeof args.min_roll_pct === 'number' && args.min_roll_pct > 0 ? args.min_roll_pct : undefined;
+      const floorFromRoll = (roll: number | null | undefined): number | undefined => {
+        if (!pct || !roll || roll <= 0) return undefined;
+        return Math.max(1, Math.floor(roll * pct));
+      };
+
+      // Resistances: the slot's job is a *total*, so any mix of elements counts.
+      if (buckets.ele_res.length > 0) {
+        if (OR_MODE && buckets.ele_res.length === 1) {
+          // "any one of fire / cold / lightning at this threshold"
+          const orMin = needs.ele_res ?? floorFromRoll(Math.max(...buckets.ele_res.map((b) => b.value ?? 0)));
+          spec.orStats = [
+            { id: TRADE_IDS.fireRes, min: orMin },
+            { id: TRADE_IDS.coldRes, min: orMin },
+            { id: TRADE_IDS.lightRes, min: orMin },
+          ].filter((f) => typeof f.min === 'number' && f.min > 0);
+          derivedFrom.push(
+            `elemental res (${buckets.ele_res.length} line) -> OR group fire/cold/lightning${orMin ? ` (min ${orMin} each)` : ''}`
+          );
+        } else {
+          const rolls = buckets.ele_res.map((b) => b.value ?? 0).reduce((a, b) => a + b, 0);
+          const min = needs.ele_res ?? floorFromRoll(rolls);
+          push(TRADE_IDS.totalEleRes, min, `elemental res -> pseudo total (min ${min ?? 'none'}; item rolls ${rolls})`);
+        }
+      }
+      if (buckets.life.length > 0) {
+        const roll = Math.max(...buckets.life.map((b) => b.value ?? 0));
+        const min = needs.life ?? (roll > 0 ? Math.round(roll * (pct ?? 0.7)) : undefined);
+        push(TRADE_IDS.totalLife, min, `life -> pseudo total (min ${min ?? 'none'})`);
+      }
+      for (const bucket of ['chaos_res', 'dex', 'str', 'int'] as const) {
+        for (const mod of buckets[bucket]) {
+          const need = bucket === 'chaos_res' ? needs.chaos_res : (needs as any)[bucket];
+          const min = need ?? floorFromRoll(mod.value);
+          push(mod.id, min, `${mod.line} -> ${mod.id}${min ? ` (min ${min})` : ' (no floor)'}`);
+        }
+      }
+      for (const mod of buckets.other) {
+        push(mod.id, undefined,
+          `${mod.line} -> ${mod.id}` + (mod.domain === 'fractured' && mod.id.startsWith('explicit.') ? '  [fractured mod searched as explicit]' : ''));
+      }
+
+      if (unmet.length > 0) {
+        derivedFrom.push('', 'No trade stat matched these lines (left out):', ...unmet.map((l) => `  - ${l}`));
+      }
+
+      // Two mods can map to the same trade stat (e.g. an Amethyst ring's chaos
+      // implicit and its chaos explicit). The trade site rejects a query that
+      // repeats a stat id, so merge them and keep the stricter bound.
+      const merged = new Map<string, { id: string; min?: number; max?: number; disabled?: boolean }>();
+      for (const filter of spec.stats!) {
+        const existing = merged.get(filter.id);
+        if (!existing) {
+          merged.set(filter.id, { ...filter });
+          continue;
+        }
+        if (filter.min !== undefined) {
+          existing.min = existing.min === undefined ? filter.min : Math.max(existing.min, filter.min);
+        }
+        if (filter.max !== undefined) {
+          existing.max = existing.max === undefined ? filter.max : Math.min(existing.max, filter.max);
+        }
+      }
+      spec.stats = Array.from(merged.values());
+      if (spec.stats.length < modLines.length) {
+        derivedFrom.push(`(${modLines.length - spec.stats.length} duplicate stat id(s) merged)`);
+      }
+
+      derivedFrom.push('', `Matched against ${byText.size} trade stat texts (mapper ${mapper ? 'loaded' : 'MISSING'}).`);
+    }
+
+    const query = args.query ?? buildTradeQuery(spec);
+
+    let url: string;
+    let total: number | undefined;
+    let via = 'local payload (offline)';
+
+    const wantsApi = args.use_api === true;
+    if (wantsApi) {
+      if (!deps?.tradeClient) {
+        throw new Error('Trade API is not enabled — pass use_api:false for the offline payload, or enable POE_TRADE_ENABLED.');
+      }
+      const result = await deps.tradeClient.searchItems(args.league, {
+        query: query as any,
+        sort: { price: 'asc' },
+      } as any);
+      url = `https://www.pathofexile.com/trade/search/${encodeURIComponent(args.league)}/${result.id}`;
+      total = result.total;
+      via = 'server-issued search id';
+    } else {
+      url = buildTradeSearchUrl(args.league, query);
+    }
+
+    const parts = [`=== Trade URL (${args.league}) ===`, '', url, ''];
+    if (total !== undefined) parts.push(`Matching listings: ${total}`);
+    if (derivedFrom.length > 0) {
+      parts.push('', 'Filters derived from the item:', ...derivedFrom);
+    }
+    parts.push(
+      '',
+      `Link via ${via}.`,
+      wantsApi
+        ? 'One search request was used; the id comes from the trade site itself.'
+        : 'Offline payload; no request was made. Verify it with decode_trade_url before handing it over — a hand-copied payload is the only way this link breaks.',
+      'Note: This product is not affiliated with or endorsed by Grinding Gear Games.'
+    );
+
+    return { content: [{ type: 'text', text: parts.join('\n') }] };
+  });
+}
+
+/**
+ * Search AND fetch the cheapest listings with their prices in one step.
+ *
+ * This is the TOS-sensitive path (two API requests: search + fetch), so it is a
+ * separate, opt-in tool rather than the default behaviour of
+ * `search_trade_items`. Use only when actual prices are needed; if a link is
+ * enough, use `generate_trade_url` (zero requests).
+ */
+export async function handleSearchTradeListings(
+  context: TradeContext,
+  args: {
+    league: string;
+    item_name?: string;
+    item_type?: string;
+    category?: string;
+    rarity?: 'normal' | 'magic' | 'rare' | 'unique' | 'nonunique' | 'any';
+    min_links?: number;
+    stats?: Array<{ id: string; min?: number; max?: number }>;
+    mods?: Array<{ stat_id: string; min?: number; max?: number }>;
+    max_price?: number;
+    price_currency?: string;
+    limit?: number;
+  }
+): Promise<{
+  content: Array<{
+    type: string;
+    text: string;
+  }>;
+}> {
+  return wrapHandler('search trade listings', async () => {
+    const {
+      league,
+      item_name,
+      item_type,
+      category,
+      rarity,
+      min_links,
+      stats,
+      mods,
+      max_price,
+      price_currency = 'chaos',
+      limit = 5,
+    } = args;
+
+    const builder = new TradeQueryBuilder();
+    if (item_name) builder.withName(item_name);
+    if (item_type) builder.withType(item_type);
+    if (rarity && rarity !== 'any') builder.withRarity(rarity as any);
+    if (min_links) builder.withLinks(min_links);
+
+    const statFilters = toStatFilters(stats, mods);
+    if (statFilters.length > 0) builder.withStats(statFilters);
+
+    if (category) {
+      // Category is not part of the public builder API; attach it directly to
+      // the built query so callers can scope a search to `armour.shield` etc.
+      builder.applyOptions({ league, sort: 'price_asc', limit });
+      const query = builder.build();
+      query.query.filters = query.query.filters ?? {};
+      query.query.filters.type_filters = query.query.filters.type_filters ?? { filters: {} };
+      (query.query.filters.type_filters as any).filters = {
+        ...((query.query.filters.type_filters as any).filters ?? {}),
+        category: { option: category },
+      };
+      if (rarity && rarity !== 'any') {
+        (query.query.filters.type_filters as any).filters.rarity = { option: rarity };
+      }
+      if (max_price) {
+        query.query.filters.trade_filters = {
+          filters: { price: { min: 0, max: max_price, option: price_currency } as any },
+        };
+      }
+      const result = await context.tradeClient.searchItems(league, query);
+      return formatListingsResponse(league, result, context, limit);
+    }
+
+    builder.applyOptions({ league, maxPrice: max_price, priceCurrency: price_currency, sort: 'price_asc', limit });
+    const query = builder.build();
+    const result = await context.tradeClient.searchItems(league, query);
+    return formatListingsResponse(league, result, context, limit);
+  });
+}
+
+async function formatListingsResponse(
+  league: string,
+  searchResult: { id: string; total: number; result: string[] },
+  context: TradeContext,
+  limit: number
+): Promise<{ content: Array<{ type: string; text: string }> }> {
+  if (!searchResult.result || searchResult.result.length === 0) {
+    return { content: [{ type: 'text', text: `No items found in ${league}.` }] };
+  }
+
+  const ids = searchResult.result.slice(0, Math.min(limit, 10));
+  const listings = await context.tradeClient.fetchItems(ids, searchResult.id);
+
+  const lines: string[] = [
+    `=== Cheapest listings (${league}) ===`,
+    `Total matching: ${searchResult.total}`,
+    '',
+  ];
+
+  for (const listing of listings) {
+    const amount = listing.listing?.price?.amount;
+    const currency = listing.listing?.price?.currency;
+    const price = amount !== undefined ? `${amount} ${currency}` : 'no price';
+    const mods = (listing.item?.explicitMods ?? []).slice(0, 6).join(' | ');
+    lines.push(`• ${price} — ${listing.item?.typeLine ?? '?'}`);
+    if (mods) lines.push(`   ${mods}`);
+  }
+
+  lines.push('', `🔗 ${getTradeSearchUrl(league, searchResult.id)}`);
+  lines.push('Note: This product is not affiliated with or endorsed by Grinding Gear Games.');
+
+  return { content: [{ type: 'text', text: lines.join('\n') }] };
+}
+
+/**
+ * Report the trade API rate-limit state for this server process.
+ * Call it before a batch of searches instead of discovering the limit the hard
+ * way (a tripped limit blocks every request for a minute or more).
+ */
+export async function handleTradeRateLimit(context: TradeContext): Promise<{
+  content: Array<{ type: string; text: string }>;
+}> {
+  return wrapHandler('trade rate limit', async () => {
+    const info = context.tradeClient.getRateLimitInfo();
+    if (!info) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'No trade API request has been made yet in this session — no rate-limit data to report.',
+          },
+        ],
+      };
+    }
+    const lines = [
+      '=== Trade API rate limit (per IP) ===',
+      `Window limit : ${info.limit}`,
+      `Remaining    : ${info.remaining}`,
+      info.retryAfter ? `Retry after  : ${info.retryAfter} ms` : 'Retry after  : —',
+    ];
+    if (info.remaining <= 0) {
+      lines.push('', '⛔ Quota exhausted — wait for the window to reset before searching again.');
+      lines.push('Use generate_trade_url (no API) meanwhile.');
+    } else if (info.remaining <= 2) {
+      lines.push('', '⚠️ Nearly exhausted. Prefer generate_trade_url over more searches.');
+    }
+    return { content: [{ type: 'text', text: lines.join('\n') }] };
+  });
+}
+
+/**
+ * Batch generation: build links for several slots at once, verify every one by
+ * decoding it back, and write a markdown file. Returning a path instead of a
+ * wall of 400-character strings is the whole point — a hand-copied payload is
+ * the only way these links ever break.
+ */
+export async function handleGenerateTradeUrls(
+  args: {
+    league: string;
+    slots?: string[];
+    items?: Array<{ label: string; item_slot?: string; item_text?: string; needs?: SlotNeeds; or_mode?: boolean; corrupted?: boolean }>;
+    out_file?: string;
+    use_api?: boolean;
+    include_mods?: boolean;
+    min_roll_pct?: number;
+  },
+  deps?: {
+    statMapper?: StatMapper;
+    getLuaClient?: () => AnyLuaClient | null;
+    ensureLuaClient?: () => Promise<void>;
+    tradeClient?: TradeApiClient;
+  }
+): Promise<{ content: Array<{ type: string; text: string }> }> {
+  return wrapHandler('generate trade urls', async () => {
+    if (!args.league) throw new Error('Missing required argument: league');
+
+    const targets: Array<{ label: string; item_slot?: string; item_text?: string; needs?: SlotNeeds; or_mode?: boolean; corrupted?: boolean }> =
+      args.items && args.items.length > 0
+        ? args.items
+        : (args.slots ?? []).map((s) => ({ label: s, item_slot: s }));
+
+    if (targets.length === 0) {
+      throw new Error('Provide `slots` (equipped slot names) or `items` (label + item_slot/item_text).');
+    }
+
+    const rows: Array<{ label: string; url: string; verified: boolean; note?: string }> = [];
+
+    for (const target of targets) {
+      const singleRes = await handleGenerateTradeUrl(
+        {
+          league: args.league,
+          item_slot: target.item_slot,
+          item_text: target.item_text,
+          use_api: args.use_api,
+          include_mods: args.include_mods,
+          min_roll_pct: args.min_roll_pct,
+          needs: target.needs,
+          or_mode: target.or_mode,
+          corrupted: target.corrupted,
+        },
+        deps
+      );
+      const single = singleRes.content?.[0]?.text ?? '';
+      const match = single.match(/https:\/\/\S+/);
+      if (!match) {
+        rows.push({ label: target.label, url: '', verified: false, note: 'no URL produced' });
+        continue;
+      }
+      const check = decodeTradeUrl(match[0]);
+      rows.push({
+        label: target.label,
+        url: match[0],
+        verified: check.ok,
+        note: check.ok ? undefined : (check as DecodedTradeUrlErr).error,
+      });
+    }
+
+    const outFile = args.out_file || path.join(process.cwd(), 'trade_links.md');
+    const lines = [
+      `# Trade links (${args.league})`,
+      '',
+      `Generated ${new Date().toISOString()} — every link verified by decoding it back.`,
+      args.use_api ? 'Mode: server-issued ids.' : 'Mode: local payloads (no API requests).',
+      '',
+    ];
+    for (const row of rows) {
+      lines.push(`## ${row.label}`);
+      lines.push(row.url || '(failed)');
+      if (!row.verified) lines.push(`> NOT VERIFIED: ${row.note}`);
+      lines.push('');
+    }
+    await fs.writeFile(outFile, lines.join('\n'), 'utf8');
+
+    const failed = rows.filter((r) => !r.verified);
+    const summary = [
+      `=== Generated ${rows.length} link(s) → ${outFile} ===`,
+      `Verified: ${rows.length - failed.length}/${rows.length}`,
+      ...failed.map((r) => `FAILED: ${r.label} — ${r.note}`),
+    ].join('\n');
+
+    return { content: [{ type: 'text', text: summary }] };
+  });
+}
+
+/** Decode a trade link someone handed us, and report what it actually contains. */
+export async function handleDecodeTradeUrl(args: { url?: string; payload?: string }): Promise<{
+  content: Array<{ type: string; text: string }>;
+}> {
+  return wrapHandler('decode trade url', async () => {
+    const input = args.url ?? args.payload;
+    if (!input) throw new Error('Provide `url` or `payload`.');
+    const decoded = decodeTradeUrl(input);
+    if (!decoded.ok) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text:
+              `=== Trade URL: INVALID ===\n${decoded.error}\n` +
+              `payload length: ${decoded.payloadLength}\n\n` +
+              'This is the signature of a hand-copied/mangled payload, not of a bad query format.',
+          },
+        ],
+      };
+    }
+    const q: any = decoded.query;
+    const filters = q?.stats?.[0]?.filters ?? [];
+    const text = [
+      '=== Trade URL: valid ===',
+      `status     : ${q?.status?.option ?? '—'}${q?.status?.option === 'securable' ? '  (Instant Buyout)' : ''}`,
+      `name/type  : ${q?.name ?? '—'} / ${q?.type ?? '—'}`,
+      `category   : ${q?.filters?.type_filters?.filters?.category?.option ?? '—'}`,
+      `rarity     : ${q?.filters?.type_filters?.filters?.rarity?.option ?? '—'}`,
+      `stat filters: ${filters.length}`,
+      ...filters.map((f: any) => `  - ${f.id}${f.value && Object.keys(f.value).length ? ` ${JSON.stringify(f.value)}` : ''}`),
+      '',
+      JSON.stringify(q),
+    ].join('\n');
+    return { content: [{ type: 'text', text }] };
   });
 }
 

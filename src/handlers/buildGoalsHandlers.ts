@@ -20,6 +20,41 @@ const ISSUES_FIELDS = [
   'TotalEHP',
 ];
 
+/**
+ * Read PoB's own warning list — the lines behind the "N Warnings" bar in the
+ * GUI (attribute requirements, unreserved mana, point overruns, ...).
+ *
+ * This complements `get_build_issues`, which is a curated checks layer (resists,
+ * life, suppression): anything PoB validates internally but never exposes as a
+ * stat is only visible here. Always run this before declaring a build ready.
+ */
+export async function handleGetPobWarnings(context: BuildGoalsHandlerContext) {
+  return wrapHandler('get PoB warnings', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua bridge not active. Use lua_start and lua_load_build first.');
+
+    const { warnings, count } = await luaClient.getWarnings();
+
+    if (count === 0) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: '=== PoB Warnings ===\n\nNo warnings — PoB reports the build as clean.',
+          },
+        ],
+      };
+    }
+
+    const lines = [`=== PoB Warnings (${count}) ===`, ''];
+    for (const w of warnings) lines.push(`• ${w}`);
+    lines.push('', 'Source: the build\'s own warning bar, i.e. exactly what PoB shows in the GUI.');
+
+    return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
+  });
+}
+
 export async function handleGetBuildIssues(context: BuildGoalsHandlerContext) {
   return wrapHandler('get build issues', async () => {
     await context.ensureLuaClient();

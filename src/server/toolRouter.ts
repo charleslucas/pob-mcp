@@ -18,13 +18,15 @@ import { handleListBuilds, handleAnalyzeBuild, handleCompareBuilds, handleGetBui
 import { handleStartWatching, handleStopWatching, handleGetRecentChanges, handleWatchStatus, handleRefreshTreeData } from "../handlers/watchHandlers.js";
 import { handleCompareTrees, handleConnectNodes, handleGetNearbyNodes, handleFindPath, handlePlanTreePaths, handleGetPassiveUpgrades, handleSuggestMasteries, handleGetNodePower } from "../handlers/treeHandlers.js";
 import { handleFindBestAnointment } from "../handlers/anointHandlers.js";
-import { handleGetBuildIssues, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
-import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetAilments, handleParseItem, handleLuaStatWeights, handleExportFullStats, handleLuaGetTimelessJewels, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleGetGemDetail, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet, handleListSkillSets, handleSelectSkillSet, handleListConfigSets, handleSelectConfigSet, handleListLoadouts, handleSelectLoadout } from "../handlers/luaHandlers.js";
+import { handleGetBuildIssues, handleGetPobWarnings, formatIssuesResponse } from "../handlers/buildGoalsHandlers.js";
+import { handleLuaStart, handleLuaStop, handleLuaCloseBuild, handleLuaNewBuild, handleLuaSaveBuild, handleLuaLoadBuild, handleLuaGetAilments, handleParseItem, handleLuaStatWeights, handleExportFullStats, handleLuaGetTimelessJewels, handleLuaGetStats, handleLuaGetTree, handleLuaSetTree, handleSearchTreeNodes, handleLuaGetBuildInfo, handleGetGemDetail, handleLuaReloadBuild, handleUpdateTreeDelta, handleCreateSpec, handleListSpecs, handleSelectSpec, handleDeleteSpec, handleRenameSpec, handleListItemSets, handleSelectItemSet, handleCreateItemSet, handleListSkillSets, handleSelectSkillSet, handleListConfigSets, handleSelectConfigSet, handleListLoadouts, handleSelectLoadout, handleCreateLoadout, handleCopyLoadout, type CreateLoadoutParams } from "../handlers/luaHandlers.js";
 import { handleListCharacters, handleImportCharacter, handleImportPobb, handleSharePobb } from "../handlers/importHandlers.js";
 import { handleGetContextUsage } from "../handlers/contextHandlers.js";
 import { handleComputeConstraintMargins, handleSyncCharacterCache } from "../handlers/characterDataHandlers.js";
 import { handleComputeStatWeights } from "../handlers/statWeightsHandler.js";
 import { handleMinionDpsBreakdown } from "../handlers/minionDpsBreakdownHandler.js";
+import { handleCompareItems } from "../handlers/itemCompareHandler.js";
+import { handleCompareGemQuality } from "../handlers/gemCompareHandler.js";
 import { handleAddItem, handleClearItemSlot, handleGetEquippedItems, handleGetSocketColors, handleToggleFlask, handleGetSkillSetup, handleSetMainSkill, handleCreateSocketGroup, handleAddGem, handleSetGemLevel, handleSetGemQuality, handleRemoveSkill, handleRemoveGem, handleSetupSkillWithGems, handleAddMultipleItems, handleSetSocketGroupEnabled, handleSetGemEnabled, handleListSpectres, handleSetSpectres } from "../handlers/itemSkillHandlers.js";
 import { handleAnalyzeDefenses, handleSuggestOptimalNodes, handleOptimizeTree } from "../handlers/optimizationHandlers.js";
 import { handleAnalyzeItems, handleOptimizeSkillLinks, handleCreateBudgetBuild } from "../handlers/advancedOptimizationHandlers.js";
@@ -33,7 +35,7 @@ import { PoBLuaTcpClient } from "../pobLuaBridge.js";
 import { handleValidateBuild } from "../handlers/validationHandlers.js";
 import { handleExportBuild, handleSaveTree, handleSnapshotBuild, handleListSnapshots, handleRestoreSnapshot, handleExportBuildSummary } from "../handlers/exportHandlers.js";
 import { handleAnalyzeSkillLinks, handleSuggestSupportGems, handleCompareGemSetups, handleValidateGemQuality, handleFindOptimalLinks, handleGemUpgradePath } from "../handlers/skillGemHandlers.js";
-import { handleSearchTradeItems, handleGetItemPrice, handleGetLeagues, handleSearchStats, handleFindItemUpgrades, handleFindResistanceGear, handleCompareTradeItems, handleFindWeightedTradeItems } from "../handlers/tradeHandlers.js";
+import { handleSearchTradeItems, handleGetItemPrice, handleGetLeagues, handleSearchStats, handleFindItemUpgrades, handleFindResistanceGear, handleCompareTradeItems, handleFindWeightedTradeItems, handleGenerateTradeUrl, handleGenerateTradeUrls, handleDecodeTradeUrl, handleSearchTradeListings, handleTradeRateLimit } from "../handlers/tradeHandlers.js";
 import { handleGetCurrencyRates, handleFindArbitrage, handleCalculateTradingProfit } from "../handlers/poeNinjaHandlers.js";
 import { handleSearchClusterJewels, handleAnalyzeClusterJewels, handleAnalyzeBuildClusterJewels } from "../handlers/clusterJewelHandlers.js";
 import { handleGenerateShoppingList } from "../handlers/shoppingListHandlers.js";
@@ -56,6 +58,7 @@ import { resolveLeague } from "../services/leagueResolver.js";
 import { handleGetActiveLeagues } from "../handlers/leagueStatusHandler.js";
 import { handleAnalyzeItemMods } from "../handlers/analyzeItemModsHandler.js";
 import { handleSearchMasterCrafts, handleGetEssenceDetail } from "../handlers/craftQueryHandlers.js";
+import { handleSearchEldritchImplicits } from "../handlers/eldritchImplicitHandler.js";
 import { handleGetStatBreakdown } from "../handlers/statBreakdownHandler.js";
 import { handleGetCalcBreakdown } from "../handlers/calcBreakdownHandler.js";
 import { handleCalculateModOdds } from "../handlers/calculateModOddsHandler.js";
@@ -101,6 +104,8 @@ const AUTO_VIEW_BY_TOOL: Record<string, string> = {
   setup_skill_with_gems: "SKILLS",
   set_main_skill: "SKILLS",
   add_item: "ITEMS",
+  compare_items: "ITEMS",
+  compare_gem_quality: "SKILLS",
   add_multiple_items: "ITEMS",
   clear_item_slot: "ITEMS",
 };
@@ -443,6 +448,17 @@ export async function routeToolCall(
         raw_json: args?.raw_json as boolean | undefined,
       });
 
+    case "search_eldritch_implicits":
+      return await handleSearchEldritchImplicits({
+        base_name: args?.base_name as string | undefined,
+        item_type: args?.item_type as string | undefined,
+        source: args?.source as string | undefined,
+        stat_contains: args?.stat_contains as string | undefined,
+        include_conditional: args?.include_conditional as boolean | undefined,
+        max_results: args?.max_results as number | undefined,
+        raw_json: args?.raw_json as boolean | undefined,
+      });
+
     case "get_stat_breakdown":
       if (!args) throw new Error("Missing arguments");
       return await handleGetStatBreakdown(
@@ -692,6 +708,22 @@ export async function routeToolCall(
         args?.allowPartial === true,
       );
 
+    case "create_loadout":
+      if (args?.title == null) throw new Error("Missing title");
+      return await handleCreateLoadout(luaContext, {
+        title: args.title as string,
+        copyFrom: args?.copyFrom as CreateLoadoutParams["copyFrom"],
+        activate: args?.activate as boolean | undefined,
+      });
+
+    case "copy_loadout":
+      return await handleCopyLoadout(luaContext, {
+        from: args?.from as string | number | undefined,
+        to: args?.to as string | undefined,
+        activate: args?.activate as boolean | undefined,
+        allowIncomplete: args?.allowIncomplete as boolean | undefined,
+      });
+
     // Phase 9: Configuration Tools
     case "get_config":
       const getConfigContext = {
@@ -780,6 +812,25 @@ export async function routeToolCall(
 
     case "get_equipped_items":
       return await handleGetEquippedItems(itemSkillContext);
+
+    case "compare_gem_quality":
+      if (!args) throw new Error("Missing arguments");
+      return await handleCompareGemQuality(itemSkillContext, {
+        gem: args.gem as string,
+        group_index: args.group_index as number | undefined,
+        slot: args.slot as string | undefined,
+        qualities: args.qualities as number[] | undefined,
+      });
+
+    case "compare_items":
+      if (!args) throw new Error("Missing arguments");
+      return await handleCompareItems(itemSkillContext, {
+        slot: args.slot as string,
+        items: args.items as any,
+        assume_quality: args.assume_quality as number | undefined,
+        chaos_per_div: args.chaos_per_div as number | undefined,
+        restore: args.restore as boolean | undefined,
+      });
 
     case "get_socket_colors":
       return await handleGetSocketColors(itemSkillContext);
@@ -1002,6 +1053,92 @@ export async function routeToolCall(
     // ========================================
     // Trade API Tools
     // ========================================
+    case "generate_trade_urls": {
+      if (!args) throw new Error("Missing arguments");
+      return await handleGenerateTradeUrls(
+        {
+          league: resolveLeague(args.league as string | undefined),
+          slots: args.slots as string[] | undefined,
+          items: args.items as any,
+          out_file: args.out_file as string | undefined,
+          use_api: args.use_api as boolean | undefined,
+          include_mods: args.include_mods as boolean | undefined,
+          min_roll_pct: args.min_roll_pct as number | undefined,
+        },
+        {
+          statMapper: deps.statMapper || undefined,
+          getLuaClient: deps.getLuaClient,
+          ensureLuaClient: deps.ensureLuaClient,
+          tradeClient: deps.tradeClient || undefined,
+        }
+      );
+    }
+
+    case "decode_trade_url": {
+      if (!args) throw new Error("Missing arguments");
+      return await handleDecodeTradeUrl({
+        url: args.url as string | undefined,
+        payload: args.payload as string | undefined,
+      });
+    }
+
+    case "generate_trade_url": {
+      if (!args) throw new Error("Missing arguments");
+      return await handleGenerateTradeUrl(
+        {
+          league: resolveLeague(args.league as string | undefined),
+          query: args.query as Record<string, unknown> | undefined,
+          item_name: args.item_name as string | undefined,
+          item_type: args.item_type as string | undefined,
+          category: args.category as string | undefined,
+          rarity: args.rarity as any,
+          min_links: args.min_links as number | undefined,
+          stats: args.stats as any,
+          online_only: args.online_only as boolean | undefined,
+          item_slot: args.item_slot as string | undefined,
+          item_text: args.item_text as string | undefined,
+          min_roll_pct: args.min_roll_pct as number | undefined,
+          same_base: args.same_base as boolean | undefined,
+          corrupted: args.corrupted as boolean | undefined,
+          use_api: args.use_api as boolean | undefined,
+          needs: args.needs as any,
+          or_mode: args.or_mode as boolean | undefined,
+        },
+        {
+          statMapper: deps.statMapper || undefined,
+          getLuaClient: deps.getLuaClient,
+          ensureLuaClient: deps.ensureLuaClient,
+          tradeClient: deps.tradeClient || undefined,
+        }
+      );
+    }
+
+    case "search_trade_listings": {
+      if (!deps.tradeClient) {
+        throw new Error("Trade API is not enabled. Set POE_TRADE_ENABLED=true to enable.");
+      }
+      if (!args) throw new Error("Missing arguments");
+      const tradeContext = {
+        tradeClient: deps.tradeClient,
+        statMapper: deps.statMapper || undefined,
+        ninjaClient: deps.ninjaClient
+      };
+      const merged = { ...args, league: resolveLeague(args.league as string | undefined) };
+      return await handleSearchTradeListings(tradeContext, merged as any);
+    }
+
+    case "trade_rate_limit": {
+      if (!deps.tradeClient) {
+        throw new Error("Trade API is not enabled. Set POE_TRADE_ENABLED=true to enable.");
+      }
+      const tradeContext = {
+        tradeClient: deps.tradeClient,
+        statMapper: deps.statMapper || undefined,
+        ninjaClient: deps.ninjaClient
+      };
+      return await handleTradeRateLimit(tradeContext);
+    }
+
     case "search_trade_items": {
       if (!deps.tradeClient) {
         throw new Error("Trade API is not enabled. Set POE_TRADE_ENABLED=true to enable.");
@@ -1189,6 +1326,14 @@ export async function routeToolCall(
     }
 
     // Build Goals Tools
+    case "get_pob_warnings": {
+      const warningsContext = {
+        getLuaClient: deps.getLuaClient,
+        ensureLuaClient: deps.ensureLuaClient,
+      };
+      return await handleGetPobWarnings(warningsContext);
+    }
+
     case "get_build_issues": {
       const goalsContext = {
         getLuaClient: deps.getLuaClient,

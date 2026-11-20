@@ -37,7 +37,7 @@ import { ContextBuilder } from "./utils/contextBuilder.js";
 // Import server modules
 import { ToolGate } from "./server/toolGate.js";
 import { LuaClientManager } from "./server/luaClientManager.js";
-import { getToolSchemas, getLuaToolSchemas, getOptimizationToolSchemas, getConfigToolSchemas, getValidationToolSchemas, getExportToolSchemas, getSkillGemToolSchemas, getTradeToolSchemas, getPoeNinjaToolSchemas, getBuildGoalsToolSchemas } from "./server/toolSchemas.js";
+import { getToolSchemas, getLuaToolSchemas, getOptimizationToolSchemas, getConfigToolSchemas, getValidationToolSchemas, getExportToolSchemas, getSkillGemToolSchemas, getTradeToolSchemas, getTradeUrlToolSchemas, getPoeNinjaToolSchemas, getBuildGoalsToolSchemas } from "./server/toolSchemas.js";
 import { routeToolCall, type ToolRouterDependencies } from "./server/toolRouter.js";
 import { wrapWithTruncation } from "./server/responseUtils.js";
 
@@ -108,7 +108,11 @@ class PoBMCPServer {
     // Initialize Trade API client (if enabled)
     const tradeEnabled = process.env.POE_TRADE_ENABLED === 'true';
     if (tradeEnabled) {
-      const requestsPerSecond = parseInt(process.env.POE_RATE_LIMIT_PER_SECOND || '4', 10);
+      // GGG rate-limits the trade API per IP, and a tripped limit blocks every
+      // request for a minute or more. Default to a deliberately slow 1 req/s:
+      // interactive use never needs more, and one careless tool loop is enough
+      // to burn the real quota. Override with POE_RATE_LIMIT_PER_SECOND.
+      const requestsPerSecond = parseInt(process.env.POE_RATE_LIMIT_PER_SECOND || '1', 10);
       const cacheTTL = parseInt(process.env.POE_CACHE_TTL || '300', 10);
       this.tradeClient = new TradeApiClient({
         requestsPerSecond,
@@ -294,6 +298,9 @@ class PoBMCPServer {
       if (this.tradeClient) {
         tools.push(...getTradeToolSchemas());
       }
+
+      // Offline trade-URL generation (no API, always available)
+      tools.push(...getTradeUrlToolSchemas());
 
       // Add poe.ninja API tools (always available)
       tools.push(...getPoeNinjaToolSchemas());

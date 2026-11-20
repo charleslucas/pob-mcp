@@ -9,6 +9,48 @@ doing** section is probably your answer.
 
 ## Open
 
+### Shipped (recently, kept here while fresh)
+
+`get_pob_warnings` (2026-11) exposes `build.controls.warnings.lines` — the exact
+lines behind PoB's "N Warnings" bar. This is the only source for checks PoB
+performs internally but never publishes as a stat: unmet attribute requirements
+("You do not meet the Dexterity requirement of Faster Attacks"), unreserved
+mana, passive-point overruns. `get_build_issues` does NOT cover these, and on a
+live loadout it can even report a false "0 DPS" because it reads file-based
+stats — run `get_pob_warnings` before declaring a build ready. Requires the Lua
+action `get_warnings` (`BuildOps.lua` + `Handlers.lua`), so it only appears after
+`InstallTcpApi.ps1` **and a PoB restart**.
+
+### Missing build-file tool: jewels
+Jewels are stored per tree spec, not per item set
+(`<Tree><Spec …><Sockets><Socket itemId="53" nodeId="6230"/></Sockets>`), and
+`add_item`/`clear_item_slot` accept gear slots only, so a jewel cannot be
+equipped or swapped through the MCP surface. Skill and config sets are covered:
+`create_loadout` / `copy_loadout` create all four families under one title (Lua
+`create_skill_set` / `create_config_set` / `create_loadout`).
+
+**What it would take:** a Lua action `set_socket_jewel` (and probably
+`rename_set`) in the PoB API module — the Lua is copied into the PoB app dir and
+loaded at startup only, so it needs `InstallTcpApi.ps1` + a PoB restart, not
+just a rebuild of pob-mcp.
+
+### PoB's "Buy similar" generates dead links
+
+`TradeQuery.lua:1142` builds the search URL as
+`B64GzipEncode(dkjson.encode(query))` — a bare query object, gzipped and
+base64url-encoded. That is still the right format, but two traps bite:
+
+1. Wrapping the payload as `{ query, sort }` produces a URL the site rejects
+   with *"Failed to load search state. The search is no longer valid."* — the
+   trade site's URL form carries the query only; `sort` is API-side.
+2. Pressing the button on an item whose query has no filters (PoB emits
+   `{"status":{"option":"any"},"stats":[{"type":"and","filters":[]}]}`) yields
+   the same error, which reads like a broken encoder rather than an empty query.
+
+Fixed on our side: `src/services/tradeUrl.ts` + the `generate_trade_url` tool
+build these links with **zero API requests** (unit-tested against the gzip
+round-trip). Prefer it over any API search when only a link is needed.
+
 ### Per-skill damage attribution for `get_stat_breakdown`
 
 `get_stat_breakdown` is accurate for **unconditional** stats (life, resists,
@@ -149,3 +191,12 @@ These were once "future work" here and are now live:
 - **`get_stat_breakdown`**: modifier source attribution via a new
   `get_stat_breakdown` Lua action (see the open item for its damage-stat limit).
 - **League-aware defaults** + `get_active_leagues`; `playbooks/league-transition.md`.
+- **`search_eldritch_implicits`**: Searing Exarch / Eater of Worlds pool from
+  `Data/ModEldritch.lua` (`pobEldritchDataLoader.ts`). Slot legality is enforced
+  in the handler, not the loader: the pool carries amulet weights that only the
+  unique **The Eternal Struggle** can use, and it lists six tiers per family
+  while the game cannot roll all six (weight-0 tiers are hidden). Unique
+  exceptions are discovered from the item text flags ("Searing Exarch Item" /
+  "Eater of Worlds Item"), so a new one needs no code change. Cross-checked at
+  write time against both poewiki list pages: every wiki (mod, slot) pair was
+  present with an identical weight.

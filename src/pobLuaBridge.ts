@@ -103,6 +103,21 @@ abstract class PoBApiBase {
   // ── Business methods ────────────────────────────────────────────────────────
   // All shared between stdio and TCP transports — only this.send() differs.
 
+  /**
+   * PoB's own warning list — the lines behind the "N Warnings" bar in the GUI.
+   * The only reliable source for checks PoB performs internally but never
+   * exposes as a stat, e.g. unmet attribute requirements.
+   */
+  async getWarnings(): Promise<{ warnings: string[]; count: number }> {
+    const res = await this.send({ action: "get_warnings" } as any);
+    if (!res.ok) throw new Error(res.error || "get_warnings failed");
+    const warnings = Array.isArray((res as any).warnings) ? (res as any).warnings : [];
+    return {
+      warnings,
+      count: typeof (res as any).count === "number" ? (res as any).count : warnings.length,
+    };
+  }
+
   async ping(): Promise<boolean> {
     const res = await this.send({ action: "ping" });
     return !!res.ok;
@@ -148,6 +163,16 @@ abstract class PoBApiBase {
     const res = await this.send({ action: "add_item_text", params: { text: itemText, slotName, noAutoEquip } });
     if (!res.ok) throw new Error(res.error || "add_item_text failed");
     return res.item;
+  }
+
+  /**
+   * Re-equip an existing item (by id; 0 = empty) in a slot and delete scratch
+   * items, e.g. the candidates a comparison added. Leaves no duplicates behind.
+   */
+  async restoreItemSlot(slotName: string, itemId: number, deleteIds: number[] = []): Promise<{ slot: string; itemId: number; deleted: number[] }> {
+    const res = await this.send({ action: 'restore_item_slot', params: { slotName, itemId, deleteIds } } as any);
+    if (!res.ok) throw new Error(res.error || 'restore_item_slot failed');
+    return res.result as { slot: string; itemId: number; deleted: number[] };
   }
 
   async clearItemSlot(slotName: string): Promise<{ slot: string; cleared: boolean }> {
@@ -636,6 +661,21 @@ abstract class PoBApiBase {
   async selectLoadout(params: { name?: string; index?: number; allowPartial?: boolean }): Promise<any> {
     const res = await this.send({ action: "select_loadout", params: params || {} });
     if (!res.ok) throw new Error(res.error || "select_loadout failed");
+    return res.result;
+  }
+
+  /**
+   * Create a complete PoB loadout (tree spec + item set + skill set + config set
+   * sharing one title) and switch to it. Families that already contain a set with
+   * this title are reused, so re-running with the same name is safe.
+   */
+  async createLoadout(params: {
+    title: string;
+    copyFrom?: { spec?: number; items?: number; skills?: number; config?: number };
+    activate?: boolean;
+  }): Promise<any> {
+    const res = await this.send({ action: "create_loadout", params: params || {} });
+    if (!res.ok) throw new Error(res.error || "create_loadout failed");
     return res.result;
   }
 

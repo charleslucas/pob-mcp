@@ -423,6 +423,22 @@ export function getToolSchemas(): ToolSchema[] {
       },
     },
     {
+      name: "search_eldritch_implicits",
+      description: "Look up the Searing Exarch / Eater of Worlds implicit pool for a slot, from PoB's own `Data/ModEldritch.lua` — the table behind the Items tab's 'Add implicit' picker. Answers 'what eldritch implicit can I put on my helmet?', 'which slot gives chaos resistance as an eldritch implicit?', 'what are the tier rolls of % increased Action Speed on boots?'. Returns, per family: the influence that grants it, the slots it can land on, and every tier with its roll range and spawn weight. Weight-0 tiers are hidden — the data carries six tiers per family, but the game cannot roll the impossible ones (e.g. Pinnacle-presence variants start at tier 3). The 'in your Presence' variants (Unique / Pinnacle Atlas Boss) are separate mods, hidden by default. SLOT RULE (enforced): eldritch implicits apply only to body armour, boots, gloves, helmets, and the unique amulet The Eternal Struggle — a plain amulet base is rejected even though the pool carries amulet weights. Static data, no Lua bridge or trade API needed.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          base_name: { type: "string", description: "Base item name to resolve the slot from, e.g. 'Hubris Circlet', 'Gale Pace'. Also accepts the eldritch-capable unique's own name ('The Eternal Struggle'). Fuzzy suggestions on a miss." },
+          item_type: { type: "string", description: "Slot name instead of a base: 'Helmet', 'Body Armour', 'Gloves', 'Boots' (or 'Amulet', which only applies to The Eternal Struggle)." },
+          source: { type: "string", enum: ["both", "exarch", "eater"], description: "Which influence. Default 'both'." },
+          stat_contains: { type: "string", description: "Case-insensitive substring over the stat text, e.g. 'resistance', 'attack speed', 'chaos'." },
+          include_conditional: { type: "boolean", description: "Include the 'While a Unique Enemy / Pinnacle Atlas Boss is in your Presence' variants. Default false." },
+          max_results: { type: "number", description: "Max families returned. Default 20, 0 = no cap." },
+          raw_json: { type: "boolean", description: "Return structured JSON. Default false." },
+        },
+      },
+    },
+    {
       name: "get_stat_breakdown",
       description: "Explain WHY a stat has its value: tabulates every modifier contributing to it from the live PoB build, with source attribution (which passive, item, or config). Answers 'where does my Life / resistance / armour come from?'. Groups contributions by type — BASE (flat), INC (increased/reduced %), MORE (multiplicative %), OVERRIDE, FLAG — and resolves passive-tree sources to node names. This is SOURCE attribution; for the actual applied multiplier chain (the inc-vs-more diagnosis) use `get_calc_breakdown`.\n\n`stat` is PoB's internal MODIFIER name (CamelCase, no spaces), which often differs from the displayed label. VERIFIED-WORKING names (live-tested): 'Life', 'Mana', 'EnergyShield', 'Armour', 'Evasion', 'FireResist', 'ColdResist', 'LightningResist', 'ChaosResist', 'Str', 'Dex', 'Int', 'LifeRegen', 'ManaRegen', 'MovementSpeed', 'CritChance', 'CritMultiplier'. COMMON TRAPS: resistances are the short '...Resist' form (NOT '...Resistance'); attributes are 'Str'/'Dex'/'Int' (NOT 'Strength'/'Dexterity'/'Intelligence').\n\nGLOBAL vs SKILL config: by default it tabulates the player modDB with NO skill config — complete for unconditional stats (life, resists, attributes, armour/ES, regen, movement speed) but it OMITS skill-conditional mods. Set `use_skill_config: true` to tabulate the MAIN skill's modList with its config instead — this captures skill-conditional modifiers (e.g. 'Damage', 'FireDamage', 'AttackSpeed', 'CritChance' as they apply to the main skill) with full source attribution. For the *whole* damage multiplier chain (base→added→conversion→inc→more→crit→ailment) use `get_calc_breakdown` instead; this tool is per-modifier-name source attribution. Requires a live PoB build (LaunchPoBWithAPI.bat).",
       inputSchema: {
@@ -963,6 +979,47 @@ export function getLuaToolSchemas(): any[] {
       },
     },
     {
+      name: "create_loadout",
+      description: "Create a complete PoB loadout and switch to it. A loadout is not stored data — PoB derives it from one passive tree spec + item set + skill set + config set that share a title, so this creates (or reuses) all four families under one name. Use it whenever you need a new gear setup that must NOT leak into the existing loadouts: creating only an item set leaves the tree/gems/config from whichever loadout happened to be active, which silently produces wrong stats. Families that already contain a set with this title are reused, so calling it twice with the same title is safe. Copied sets are deep copies (gems are not shared between skill sets). A gear/skill/config family with only ONE set is PoB's wildcard (that set belongs to every loadout), so it is shared rather than given a second set — adding one would leave every other loadout without a set in that family; the result lists such families as shared. Requires a loaded build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Loadout name, applied to all four set families, e.g. \"REAL\"" },
+          copyFrom: {
+            type: "object",
+            description: "Per-family source to copy from (all optional; ids from list_specs / list_item_sets / list_skill_sets / list_config_sets)",
+            properties: {
+              spec: { type: "number", description: "Tree spec index (1-based) to copy" },
+              items: { type: "number", description: "Item set id to copy" },
+              skills: { type: "number", description: "Skill set id to copy" },
+              config: { type: "number", description: "Config set id to copy" },
+            },
+          },
+          activate: { type: "boolean", description: "Switch to the new loadout after creating it (default true)" },
+        },
+        required: ["title"],
+      },
+    },
+    {
+      name: "copy_loadout",
+      description: "Duplicate an existing loadout under a new name and switch to it. Copies the source loadout's four sets (tree spec, item set, skill set, config set) as deep copies, so editing the copy cannot leak into the source — the usual way to A/B test a gear variant. Unlike create_loadout, the source is the named loadout rather than whatever is currently active, so the active loadout does not affect what gets copied. Omit `from` to copy the active loadout; omit `to` to auto-name the copy \"<name> (copy)\" (then \"(copy) 2\", \"(copy) 3\" …). Refuses to run if the destination title already exists (create_loadout would reuse that set instead of copying) or if the source loadout is incomplete (missing families would be created empty, not copied). A family with a single set is shared with the copy, not duplicated (PoB's wildcard; see create_loadout). Requires a loaded build.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          from: {
+            description: "Source loadout: name (use list_loadouts) or 1-based index. Defaults to the active loadout.",
+            oneOf: [
+              { type: "string", description: "Loadout name, e.g. \"ME\"" },
+              { type: "number", description: "1-based index from list_loadouts" },
+            ],
+          },
+          to: { type: "string", description: "Name for the copy. Must not collide with any existing loadout/set title. Defaults to \"<source> (copy)\"." },
+          activate: { type: "boolean", description: "Switch to the copy after creating it (default true)" },
+          allowIncomplete: { type: "boolean", description: "Copy a loadout that is missing families anyway, creating those families empty (default false: refuses)" },
+        },
+      },
+    },
+    {
       name: "set_character_level",
       description: "Set the character level for the currently loaded build. Recalculates all stats.",
       inputSchema: {
@@ -1267,6 +1324,66 @@ export function getLuaToolSchemas(): any[] {
           },
         },
         required: ['slot_name'],
+      },
+    },
+    {
+      name: "compare_items",
+      description:
+        "Compare trade copy-pastes against the item currently equipped in a slot, by measuring: each candidate is equipped in turn, PoB recalculates, and FullDPS/TotalDPS/EHP/life/ES plus PoB's own warning count are read off, then the original item is restored. This is the answer to 'is this listing an upgrade and by how much' — no hand maths and no guessing which mods matter for this build. Paste the trade text verbatim (the `Item Class:` / `Note: ~b/o …` lines are fine; the price is parsed out). Requires the loaded build (Lua bridge). Each tested item stays in the build's item list, unequipped — do not save afterwards unless that is intended.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          slot: {
+            type: "string",
+            description: "Slot to test against: 'Weapon 1', 'Weapon 2', 'Helmet', 'Body Armour', 'Gloves', 'Boots', 'Amulet', 'Ring 1', 'Ring 2', 'Belt'",
+          },
+          items: {
+            type: "array",
+            description: "Trade copy-pastes, in order. Plain strings, or { label, text } when the label should be readable.",
+            items: {
+              anyOf: [
+                { type: "string" },
+                {
+                  type: "object",
+                  properties: { label: { type: "string" }, text: { type: "string" } },
+                  required: ["text"],
+                },
+              ],
+            },
+          },
+          assume_quality: {
+            type: "number",
+            description: "Quality to assume when a paste does not state one (trade listings omit it). Set 20 to compare 'as it would be after qualitying'.",
+          },
+          chaos_per_div: {
+            type: "number",
+            description: "Divine rate in chaos, used to convert parsed prices for the value line (e.g. 225).",
+          },
+          restore: {
+            type: "boolean",
+            description: "Put the original item back when done (default true). Set false to leave the last candidate equipped for inspection.",
+          },
+        },
+        required: ["slot", "items"],
+      },
+    },
+    {
+      name: "compare_gem_quality",
+      description:
+        "Measure what a gem's quality is worth: sets the gem to each quality in turn, reads FullDPS/TotalDPS from PoB, restores the original quality, and prints a table with deltas. Answers 'buy 20/0 or 20/20' with a measurement — quality on some supports is worth exactly 0.0% (utility/defensive quality lines), and that is invisible from the mod text. Quality granted by items (an amulet giving quality to all gems) stays in place, so the numbers are the marginal value of this gem's own quality. Disambiguate with group_index or slot when the same support sits in several links.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          gem: { type: "string", description: "Gem name or a distinctive part of it, e.g. 'More Duration', 'Storm Burst of Repulsion'" },
+          group_index: { type: "number", description: "1-based socket group index, when the gem name is ambiguous" },
+          slot: { type: "string", description: "Slot filter, e.g. 'Body Armour' — alternative to group_index" },
+          qualities: {
+            type: "array",
+            items: { type: "number" },
+            description: "Quality values to measure (default [0, 20])",
+          },
+        },
+        required: ["gem"],
       },
     },
     {
@@ -2197,13 +2314,214 @@ export function getExportToolSchemas(): any[] {
 }
 
 /**
+ * Offline trade-URL tool schemas (NO Trade API dependency).
+ *
+ * These are always registered, including when POE_TRADE_ENABLED is false,
+ * because building a trade-site URL costs zero API requests.
+ */
+export function getTradeUrlToolSchemas(): any[] {
+  return [
+    {
+      name: "generate_trade_url",
+      description:
+        "Build a pathofexile.com trade search URL locally (gzip+base64url of the query object) — the exact format Path Building's 'Buy similar' button uses. NO API CALL: safe to call for every gear slot, and prefer it over search_trade_items whenever the caller only needs a link. BEST MODE: pass `item_slot` (an equipped slot) or `item_text` (clipboard text) and the tool reads the item, maps every mod to a trade stat id and builds the filters for you — this is the only reliable way to search a unique with several variants (The Light of Meaning, Ashes of the Stars, The Gull vs Foulborn The Gull, Kikazaru vs Foulborn Kikazaru). Alternatively pass `stats` explicitly. Trade stat ids can also be supplied directly (e.g. 'pseudo.pseudo_total_life', 'explicit.stat_2974417149', 'fractured.stat_3240769289').",
+      inputSchema: {
+        type: "object",
+        properties: {
+          league: {
+            type: "string",
+            description: "EXACT league name, e.g. 'Covens', 'Standard'",
+          },
+          item_slot: {
+            type: "string",
+            description:
+              "Equipped slot to derive filters from, e.g. 'Ring 1', 'Body Armour', 'Gloves', 'Jewel 31683'. Reads the live build via the Lua bridge.",
+          },
+          item_text: {
+            type: "string",
+            description: "Raw in-game clipboard text of an item — same derivation, without needing it equipped.",
+          },
+          min_roll_pct: {
+            type: "number",
+            description:
+              "Optional floor for res/attribute/life filters, as a fraction of the item's own roll (e.g. 0.9). Leave it out for presence-only filters, or pass 1.0 to demand exactly the roll written in the item text. Use `needs` instead when the floor must come from the build (cap minus the rest of the gear).",
+          },
+          needs: {
+            type: "object",
+            description:
+              "Exact floors this slot must supply, e.g. { chaos_res: 33 } when the build is 33 short. Overrides min_roll_pct for the stat it names and is the only way to search 'the roll without which I stay under cap'.",
+            properties: {
+              ele_res: { type: "number", description: "Total elemental resistance this slot must add" },
+              chaos_res: { type: "number", description: "Chaos resistance this slot must add" },
+              life: { type: "number", description: "Flat life floor for the slot" },
+              dex: { type: "number" },
+              str: { type: "number" },
+              int: { type: "number" },
+            },
+          },
+          same_base: {
+            type: "boolean",
+            description: "Also constrain the base type when deriving from a rare item (default false).",
+          },
+          corrupted: {
+            type: "boolean",
+            description:
+              "Corruption filter (misc_filters.corrupted). Leave it OUT by default — with no filter the search shows clean and corrupted listings alike, which is what you want unless the user explicitly asks to restrict. Pass true for corrupted-only, false for clean-only. Never derive it from the item text.",
+          },
+          query: {
+            type: "object",
+            description:
+              "Full query object, used verbatim (query only — NOT wrapped as {query, sort}: that form is rejected by the trade site).",
+          },
+          item_name: { type: "string", description: "Unique item name, e.g. 'Mageblood'" },
+          item_type: { type: "string", description: "Base type, e.g. 'Titanium Spirit Shield'" },
+          category: {
+            type: "string",
+            description:
+              "Trade category, e.g. 'armour.shield', 'armour.gloves', 'armour.boots', 'accessory.ring', 'accessory.amulet', 'jewel'",
+          },
+          rarity: {
+            type: "string",
+            enum: ["normal", "magic", "rare", "unique", "nonunique", "any"],
+          },
+          min_links: { type: "number", description: "Minimum linked sockets (6 = six-link)" },
+          stats: {
+            type: "array",
+            description: "Stat filters: [{ id, min?, max? }] using trade stat ids",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                min: { type: "number" },
+                max: { type: "number" },
+              },
+              required: ["id"],
+            },
+          },
+          online_only: {
+            type: "boolean",
+            description: "Only online sellers (default true)",
+          },
+        },
+        required: ["league"],
+      },
+    },
+    {
+      name: "generate_trade_urls",
+      description:
+        "Batch version of generate_trade_url: builds a link per slot, VERIFIES every link by decoding it back (gzip CRC + JSON), and writes them to a markdown file. Returns the file path and a verified/failed count instead of a wall of 400-character strings — hand-copying a payload is the only way these links actually break. Use this whenever more than one link is needed.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          league: { type: "string", description: "EXACT league name" },
+          slots: {
+            type: "array",
+            items: { type: "string" },
+            description: "Equipped slot names, e.g. ['Body Armour','Gloves','Jewel 6230']",
+          },
+          items: {
+            type: "array",
+            description: "Explicit list: [{ label, item_slot?, item_text?, needs? }] — alternative to `slots`",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string" },
+                item_slot: { type: "string" },
+                item_text: { type: "string" },
+                needs: {
+                  type: "object",
+                  description: "Per-item floors, e.g. { chaos_res: 33 } — the roll without which the build stays under cap",
+                  properties: {
+                    ele_res: { type: "number" },
+                    chaos_res: { type: "number" },
+                    life: { type: "number" },
+                    dex: { type: "number" },
+                    str: { type: "number" },
+                    int: { type: "number" },
+                  },
+                },
+                or_mode: { type: "boolean", description: "Emit an OR group (fire/cold/lightning) instead of a pseudo total" },
+                corrupted: { type: "boolean", description: "Corruption filter for this slot. Omit it (default) to search clean + corrupted alike; true = corrupted only, false = clean only." },
+              },
+              required: ["label"],
+            },
+          },
+          out_file: { type: "string", description: "Where to write the markdown file (default: ./trade_links.md)" },
+          use_api: { type: "boolean", description: "Use server-issued ids (1 request per link). Default false = local payloads, no requests." },
+          include_mods: { type: "boolean", description: "Include the item's own mods as stat filters (default true)" },
+          min_roll_pct: { type: "number", description: "Optional min as a fraction of the item's own roll; omitted = presence-only filters" },
+        },
+        required: ["league"],
+      },
+    },
+    {
+      name: "decode_trade_url",
+      description:
+        "Decode and validate a trade link (or bare payload) offline: reports gzip/JSON validity, status option (securable = Instant Buyout), name/type, category, rarity and every stat filter. Use it on any link handed to you by a human before trusting it — a single changed base64url character breaks the gzip CRC and the site answers 'the search is no longer valid', which is invisible by eye.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Full https://www.pathofexile.com/trade/search/... URL" },
+          payload: { type: "string", description: "Bare base64url payload (the part after the league)" },
+        },
+      },
+    },
+  ];
+}
+
+/**
  * Get Trade API tool schemas (require POE_TRADE_ENABLED=true)
  */
 export function getTradeToolSchemas(): any[] {
   return [
     {
+      name: "search_trade_listings",
+      description:
+        "⚠️ GGG TOS: costs TWO API requests (search + fetch). Search the trade site AND return the cheapest listings with their actual prices. Use only when prices are genuinely needed — if a link is enough use generate_trade_url (zero requests). Rate limits are per IP: call trade_rate_limit first on a batch, and never loop this over many mod variations.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          league: { type: "string", description: "EXACT league name" },
+          item_name: { type: "string", description: "Unique item name" },
+          item_type: { type: "string", description: "Base type" },
+          category: {
+            type: "string",
+            description: "Trade category, e.g. 'armour.shield', 'jewel', 'accessory.ring'",
+          },
+          rarity: {
+            type: "string",
+            enum: ["normal", "magic", "rare", "unique", "nonunique", "any"],
+          },
+          min_links: { type: "number", description: "Minimum linked sockets" },
+          stats: {
+            type: "array",
+            description: "Stat filters: [{ id, min?, max? }]",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                min: { type: "number" },
+                max: { type: "number" },
+              },
+              required: ["id"],
+            },
+          },
+          max_price: { type: "number", description: "Maximum price in chaos" },
+          limit: { type: "number", description: "Listings to fetch (default 5, max 10)" },
+        },
+        required: ["league"],
+      },
+    },
+    {
+      name: "trade_rate_limit",
+      description:
+        "Report the trade API rate-limit state for this server process (limit, remaining, retry-after). Call before a batch of searches — a tripped limit blocks every request for a minute or more, and the counters are shared across all tools.",
+      inputSchema: { type: "object", properties: {} },
+    },
+
+    {
       name: "search_trade_items",
-      description: "⚠️ GGG TOS (confirm once per session): hits pathofexile.com/api/trade — GGG's ToS section 7c restricts automated API access; account bans are possible. Warn user and get explicit confirmation the first time this is called in a session. Search the Path of Exile trade site for items with filters. Returns a clickable trade URL and total listing count — does NOT fetch listing details (ExileExchange pattern, per legal_considerations.md TOS section). User opens the URL to browse results. REQUIRES: POE_TRADE_ENABLED environment variable set to true.",
+      description: "⚠️ GGG TOS (confirm once per session): hits pathofexile.com/api/trade — GGG's ToS section 7c restricts automated API access; account bans are possible. Warn user and get explicit confirmation the first time this is called in a session. Search the Path of Exile trade site for items with filters. Returns a clickable trade URL and total listing count — does NOT fetch listing details (ExileExchange pattern, per legal_considerations.md TOS section). Rate limits are per IP and a tripped limit blocks every request for a minute or more, so prefer generate_trade_url (zero API requests, identical link format) whenever a link is all that is needed; use search_trade_listings only when actual prices are required. REQUIRES: POE_TRADE_ENABLED environment variable set to true.",
       inputSchema: {
         type: "object",
         properties: {
@@ -2457,6 +2775,11 @@ export function getTradeToolSchemas(): any[] {
  */
 export function getBuildGoalsToolSchemas(): any[] {
   return [
+    {
+      name: "get_pob_warnings",
+      description: "Read PoB's OWN warning list — the lines behind the 'N Warnings' bar in the GUI. This is the only place PoB's internal checks appear: unmet attribute requirements ('You do not meet the Dexterity requirement of Faster Attacks'), unreserved-mana problems, passive point overruns, and similar. get_build_issues is a curated checks layer (resists/life/suppression) and does NOT cover these, so run this before declaring a build ready. Requires the Lua bridge.",
+      inputSchema: { type: "object", properties: {} },
+    },
     {
       name: "get_build_issues",
       description: "Quick issue scan: uncapped resistances, low life, over-reserved mana, incomplete spell suppression. Lighter than validate_build. Use this for a fast check; use validate_build when you want full analysis including flask immunities and damage scaling. Do NOT call both.",

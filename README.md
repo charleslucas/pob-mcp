@@ -337,6 +337,8 @@ The server registers **~123 tools** across 10+ categories.
 | `select_config_set` | Switch active config set |
 | `list_loadouts` | List loadouts (matching title across spec/item/skill/config sets) |
 | `select_loadout` | Switch tree spec + item set + skill set + config set by loadout name |
+| `create_loadout` | Create all four sets for a new loadout title and switch to it |
+| `copy_loadout` | Duplicate an existing loadout under a new name (deep copy of tree, items, gems, config) |
 | `plan_leveling` | Generate a leveling plan for a build |
 | `lua_list_characters` | List characters on a PoE account via the official API (sorted by last login) |
 | `lua_import_character` | Import a live character (tree/jewels/items/gems) into the loaded build with a before/after diff |

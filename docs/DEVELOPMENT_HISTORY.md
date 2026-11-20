@@ -242,6 +242,17 @@ Follow-up review fixes:
 - **`select_spec` calls `SetActiveSpec`**: assigning `activeSpec`/`build.spec` directly kept the previous spec's jewels socketed.
 - Tests: `PathOfBuilding/src/API/tests/loadouts_test.lua` (stub build, run with `luajit` from the PoB root) and `tests/unit/loadoutHandlers.test.ts`.
 
+### Loadout creation, trade links, comparisons, eldritch pool (2026-11-19, adopted from a community fork)
+
+Adopted with review fixes:
+
+- **`create_loadout` / `copy_loadout`** (Lua `create_skill_set`, `create_config_set`, `create_loadout`). Fixes: a family with a single set is PoB's wildcard (`SyncLoadouts` treats it as belonging to every loadout), so it is now shared and reported in `shared` — creating a second set there left every existing loadout incomplete. The Lua result now carries `created` (the handlers previously always reported "existing sets reused"). Config-set copies are deep, so custom-mod entries are not shared between sets. An unknown `copyFrom` id is an error instead of a silent empty set.
+- **`create_spec` with `copyFrom`** (pre-existing, found by the live test of `copy_loadout`): the copy skipped `BuildClusterJewelGraphs()`, which `TreeTab:ConvertToVersion` calls after `RestoreUndoState`. Cluster-subgraph nodes and nodes reached through them are only queued by `ImportFromNodeList`, so the copy lost them — on the test build two jewel sockets and five cluster nodes, FullDPS 155.5M → 86.5M. With the call the copy reproduces the source exactly.
+- **`get_pob_warnings`** (Lua `get_warnings`). Fix: the original called a nonexistent `calcsTab:BuildWarnings()` and so returned the previous frame's lines; it now calls `buildMode:RefreshStatList()`, which is what clears and refills `controls.warnings.lines`.
+- **`compare_items`**. Fix: restoring re-added the original's text as a new item and left every candidate in the item list; a slot that started empty kept the last candidate equipped. New Lua action `restore_item_slot` re-selects the original by id (0 = empty) and deletes the candidates; an older PoB API falls back to the previous behaviour and says so. Tests: `tests/unit/itemCompareHandler.test.ts`.
+- **`generate_trade_url(s)` / `decode_trade_url`** build links offline (default); `use_api: true` makes one trade API request per link. A doc comment claimed the API was the default and that local links no longer load; both were wrong and are corrected. `search_trade_listings` and `use_api: true` fall under the suite's trade-API consent rule.
+- **`compare_gem_quality`**, **`search_eldritch_implicits`** (runtime read of PoB's `Data/ModEldritch.lua`; nothing redistributed), `Verify-PoBRuntime.ps1`: adopted as written.
+
 ### Lua parse check in CI-less environments
 
 The repo's Lua uses `goto continue` (LuaJIT / 5.2+), so `luaparse` must be told `{ luaVersion: "5.3" }` — the default 5.1 parser fails with `'=' expected near 'continue'` on untouched, working code. A quick syntax gate before restarting PoB:

@@ -1230,6 +1230,268 @@ export async function handleSelectLoadout(context: LuaHandlerContext, name?: str
   });
 }
 
+export interface CreateLoadoutParams {
+  title: string;
+  copyFrom?: { spec?: number; items?: number; skills?: number; config?: number };
+  activate?: boolean;
+}
+
+export async function handleCreateLoadout(context: LuaHandlerContext, params: CreateLoadoutParams) {
+  return wrapHandler('create loadout', async () => {
+    if (!params?.title || !params.title.trim()) {
+      throw new Error('Provide a loadout title');
+    }
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+    const result = await luaClient.createLoadout(params);
+
+    // Single-set families are PoB's wildcard (shared by every loadout); the Lua
+    // side reports them in `shared` instead of creating a set that would orphan
+    // the other loadouts.
+    const shared = result?.shared ?? {};
+    const sharedList = Object.keys(shared).filter(k => shared[k]);
+
+    // activate:false returns a bare summary instead of the loadout listing.
+    if (!result?.selected) {
+      const created = result?.created ?? {};
+      const made = Object.keys(created).filter(k => created[k]);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `✅ Created loadout "${params.title}" (not activated).\n` +
+            `   sets created: ${made.length ? made.join(', ') : 'none — all four titles already existed'}` +
+            (sharedList.length ? `\n   shared (only set in its family, used by every loadout): ${sharedList.join(', ')}` : ''),
+        }],
+      };
+    }
+
+    const sel = result.selected;
+    const lines: string[] = [`✅ Created loadout "${sel.name}" and switched to it.`];
+    const created = result.created ?? {};
+    const made = Object.keys(created).filter(k => created[k]);
+    lines.push(`   new sets: ${made.length ? made.join(', ') : 'none — existing sets reused'}`);
+    if (sharedList.length) {
+      lines.push(`   shared: ${sharedList.join(', ')} — the only set in that family, used by every loadout, so no new set was made.`);
+    }
+    const fmt = (label: string, set: any) =>
+      `   ${label}: ${set ? `"${set.title}" (#${set.id})` : 'no matching set'}`;
+    lines.push(
+      fmt('tree spec ', sel.treeSpec),
+      fmt('item set  ', sel.itemSet),
+      fmt('skill set ', sel.skillSet),
+      fmt('config set', sel.configSet),
+    );
+    if (!sel.complete) {
+      lines.push('', '⚠ Incomplete: a set family has no matching title.');
+    }
+    lines.push('', 'Stats have been recalculated for this loadout.');
+    return { content: [{ type: "text" as const, text: lines.join('\n') }] };
+  });
+}
+
+export interface CopyLoadoutParams {
+  from?: string | number;
+  to?: string;
+  activate?: boolean;
+  allowIncomplete?: boolean;
+}
+
+/**
+ * PoB derives a loadout name from a set title by stripping a "{a,b}" link block
+ * (Modules/Build.lua, SyncLoadouts). Mirror that so collision checks see the same
+ * name the loadout dropdown shows.
+ */
+function loadoutBaseName(title: string | undefined): string {
+  const base = String(title ?? '').replace(/\{[^}]*\}/, '').trim();
+  return base === '' ? 'Default' : base;
+}
+
+/**
+ * Duplicate an existing loadout under a new name. create_loadout can already copy
+ * from explicit set ids, but it is documented as "create", and its default source
+ * is whatever is active — copying loadout A while B is active would silently copy B.
+ * This resolves the source loadout's four set ids first, so the copy is taken from
+ * the requested loadout regardless of what is currently selected.
+ */
+export async function handleCopyLoadout(context: LuaHandlerContext, params: CopyLoadoutParams) {
+  return wrapHandler('copy loadout', async () => {
+    await context.ensureLuaClient();
+    const luaClient = context.getLuaClient();
+    if (!luaClient) throw new Error('Lua client not initialized');
+
+    const listing = await luaClient.listLoadouts();
+    const loadouts: any[] = listing?.loadouts ?? [];
+    if (loadouts.length === 0) {
+      throw new Error('No loadouts in this build — load a build first.');
+    }
+    const available = loadouts.map((l: any) => l.name).join(', ');
+
+    // Resolve the source loadout.
+    let source: any;
+    if (params?.from == null) {
+      source = loadouts.find((l: any) => l.active);
+      if (!source) {
+        throw new Error(
+          `No active loadout to copy from (the active sets are a mixed state). Pass from with one of: ${available}`,
+        );
+      }
+    } else if (typeof params.from === 'number') {
+      const index = Math.trunc(params.from);
+      source = loadouts[index - 1];
+      if (!source) {
+        throw new Error(`Loadout index out of range: ${params.from} (1..${loadouts.length})`);
+      }
+    } else {
+      const needle = String(params.from).trim().toLowerCase();
+      const exact = loadouts.filter(
+        (l: any) =>
+          (l.name ?? '').toLowerCase() === needle ||
+          (l.title ?? '').toLowerCase() === needle,
+      );
+      if (exact.length === 1) {
+        source = exact[0];
+      } else if (exact.length > 1) {
+        throw new Error(
+          `Loadout name "${params.from}" is ambiguous: ${exact.map((l: any) => l.name).join(', ')}. Use an index instead.`,
+        );
+      } else if (/^\d+$/.test(needle)) {
+        // No loadout is named like that, so a numeric string is an index.
+        const byIndex = loadouts[Number(needle) - 1];
+        if (byIndex) {
+          source = byIndex;
+        }
+      } else {
+        const partial = loadouts.filter((l: any) => (l.name ?? '').toLowerCase().includes(needle));
+        if (partial.length === 1) {
+          source = partial[0];
+        } else if (partial.length > 1) {
+          throw new Error(
+            `Loadout name "${params.from}" is ambiguous: ${partial.map((l: any) => l.name).join(', ')}. Use the exact name or an index.`,
+          );
+        }
+      }
+      if (!source) {
+        throw new Error(`Loadout not found: "${params.from}" (available: ${available})`);
+      }
+    }
+
+    const missing: string[] = [];
+    if (!source.treeSpec) missing.push('tree spec');
+    if (!source.itemSet) missing.push('item set');
+    if (!source.skillSet) missing.push('skill set');
+    if (!source.configSet) missing.push('config set');
+    if (missing.length > 0 && params?.allowIncomplete !== true) {
+      throw new Error(
+        `Loadout "${source.name}" is incomplete — it has no ${missing.join(', ')}. ` +
+        'Copying it would create those families EMPTY, not copy anything, so the result would not match the source. ' +
+        'Pass allowIncomplete: true to do that anyway.',
+      );
+    }
+
+    // Every title already in use, so create_loadout cannot silently REUSE a set
+    // instead of copying (it reuses any family set whose title matches).
+    const specs = await luaClient.listSpecs();
+    const itemSets = await luaClient.listItemSets();
+    const skillSets = await luaClient.listSkillSets();
+    const configSets = await luaClient.listConfigSets();
+
+    const taken = new Map<string, string>();
+    const noteTaken = (title: unknown, where: string) => {
+      const raw = String(title ?? '').trim();
+      const keys = [loadoutBaseName(raw).toLowerCase()];
+      if (raw) keys.push(raw.toLowerCase());
+      for (const key of keys) {
+        if (key && !taken.has(key)) taken.set(key, where);
+      }
+    };
+    for (const s of specs?.specs ?? []) noteTaken(s.title, `tree spec #${s.index}`);
+    for (const s of itemSets?.itemSets ?? []) noteTaken(s.title, `item set #${s.id}`);
+    for (const s of skillSets?.skillSets ?? []) noteTaken(s.title, `skill set #${s.id}`);
+    for (const s of configSets?.configSets ?? []) noteTaken(s.title, `config set #${s.id}`);
+
+    const sourceBase = source.name ?? loadoutBaseName(source.title);
+    let destination = typeof params?.to === 'string' ? params.to.trim() : '';
+    if (destination === '') {
+      const stem = `${sourceBase} (copy)`;
+      destination = stem;
+      let n = 2;
+      while (taken.has(destination.toLowerCase())) {
+        destination = `${stem} ${n}`;
+        n += 1;
+      }
+    } else {
+      const clash = taken.get(destination.toLowerCase());
+      if (clash) {
+        throw new Error(
+          `Cannot copy to "${destination}": ${clash} already uses that title. Nothing was changed — ` +
+          'pick another name, or omit "to" to auto-name the copy.',
+        );
+      }
+    }
+
+    const copyFrom = {
+      spec: source.treeSpec?.id,
+      items: source.itemSet?.id,
+      skills: source.skillSet?.id,
+      config: source.configSet?.id,
+    };
+    const activate = params?.activate !== false;
+    const result = await luaClient.createLoadout({ title: destination, copyFrom, activate });
+
+    // activate:false returns a bare summary, so re-list to report the new set ids.
+    const destRow = (result?.loadouts ?? (await luaClient.listLoadouts())?.loadouts ?? [])
+      .find((l: any) => l.name === destination);
+    const selected = result?.selected;
+    const created = result?.created ?? {};
+
+    const fmt = (srcSet: any, dstSet: any) =>
+      `${srcSet ? `"${srcSet.title}" (#${srcSet.id})` : '— (missing)'} → ${dstSet ? `"${dstSet.title}" (#${dstSet.id})` : 'not created'}`;
+    const dstOf = (picked: any, row: any) => picked ?? row;
+
+    const lines: string[] = [
+      activate
+        ? `✅ Copied loadout "${sourceBase}" → "${destination}" and switched to it.`
+        : `✅ Copied loadout "${sourceBase}" → "${destination}" (not activated).`,
+      `   tree spec : ${fmt(source.treeSpec, dstOf(selected?.treeSpec, destRow?.treeSpec))}`,
+      `   item set  : ${fmt(source.itemSet, dstOf(selected?.itemSet, destRow?.itemSet))}`,
+      `   skill set : ${fmt(source.skillSet, dstOf(selected?.skillSet, destRow?.skillSet))}`,
+      `   config set: ${fmt(source.configSet, dstOf(selected?.configSet, destRow?.configSet))}`,
+    ];
+
+    const shared = result?.shared ?? {};
+    const sharedList = (['items', 'skills', 'config'] as const).filter((k) => shared[k] === true);
+    const reused = (['spec', 'items', 'skills', 'config'] as const).filter((k) => created[k] !== true && shared[k] !== true);
+    if (sharedList.length > 0) {
+      lines.push(
+        '',
+        `   Shared, not copied: ${sharedList.join(', ')}. That family has a single set, which PoB uses for every ` +
+        'loadout; a second set would leave the other loadouts without one.',
+      );
+    }
+    if (reused.length > 0) {
+      lines.push(
+        '',
+        `⚠ Sets reused instead of copied for: ${reused.join(', ')}. The copy may share data with another loadout.`,
+      );
+    }
+    if (destRow && destRow.complete === false) {
+      lines.push('', '⚠ The copy is incomplete: a set family has no matching title.');
+    }
+    if (/\{[^}]*\}/.test(source.title ?? '')) {
+      lines.push(
+        '',
+        `   Note: link identifiers in the source title (${source.title}) were not carried over — the copy binds by the plain title "${destination}".`,
+      );
+    }
+    lines.push('', `   Source loadout "${sourceBase}" is unchanged.`);
+    if (!activate) {
+      lines.push(`   Use select_loadout with name "${destination}" to switch to it.`);
+    }
+    return { content: [{ type: "text" as const, text: lines.join('\n') }] };
+  });
+}
+
 export async function handleParseItem(context: LuaHandlerContext, text: string | undefined) {
   return wrapHandler('parse item', async () => {
     if (typeof text !== 'string' || text.trim() === '') {
